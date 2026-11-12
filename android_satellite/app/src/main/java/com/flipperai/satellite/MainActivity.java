@@ -413,7 +413,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     }
     return true;
   }
-  private void showStatus(String text){runOnUiThread(()->status.setText(text));}
+  private void showStatus(String text){runOnUiThread(()->{if(status!=null)status.setText(text);});}
   @Override public void status(String text){
     runOnUiThread(()->{
       if(connectionState==null)return;
