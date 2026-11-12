@@ -75,7 +75,7 @@ public final class GitHubActivity extends Activity {
           else for(int i=0;i<Math.min(array.length(),15);i++){
             JSONObject o=array.optJSONObject(i);if(o==null)continue;
             if("branches".equals(action))text.append(o.optString("name"));
-            if("commits".equals(action))text.append(o.optString("sha").substring(0,Math.min(9,o.optString("sha").length()))).append(" ").append(o.optJSONObject("commit")==null?"":o.optJSONObject("commit").optJSONObject("message")==null?o.optJSONObject("commit").optString("message"):o.optJSONObject("commit").optString("message"));
+            if("commits".equals(action))text.append(o.optString("sha").substring(0,Math.min(9,o.optString("sha").length()))).append(" ").append(o.optJSONObject("commit")==null?"":o.optJSONObject("commit").optString("message"));
             if("actions".equals(action))text.append(o.optString("name")).append(" — ").append(o.optString("status")).append(" / ").append(o.optString("conclusion")).append(" — ").append(o.optString("head_branch"));
             if("releases".equals(action))text.append(o.optString("tag_name")).append(" — ").append(o.optString("name"));
             text.append("\n");
