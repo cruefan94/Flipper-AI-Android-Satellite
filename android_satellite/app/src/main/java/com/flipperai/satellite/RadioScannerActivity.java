@@ -14,7 +14,9 @@ public final class RadioScannerActivity extends Activity {
   private static final String[] CATEGORIES={"AM broadcast","FM broadcast","CB","Fire","Police","Ham / amateur","Aircraft","Weather"};
   private final ArrayList<Station> stations=new ArrayList<>();
   private final ArrayList<String> recent=new ArrayList<>();
-  private Spinner category,stationList,source;
+  private Spinner category,stationList,source,directoryResults;
+  private final ArrayList<RadioStationDirectory.Entry> directoryEntries=new ArrayList<>();
+  private EditText directoryName,directoryCountry;
   private EditText name,url,search;
   private TextView status,info,ai;
   private BroadcastReceiver receiver;
@@ -29,7 +31,7 @@ public final class RadioScannerActivity extends Activity {
     ScrollView scroll=new ScrollView(this);
     LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(22,22,22,22);scroll.addView(root);setContentView(scroll);
     title(root,"RADIO SCANNER — PHONE FIRST");
-    label(root,"Receive-only internet streams. No preloaded feeds are claimed available. Add an HTTPS direct audio URL from a provider that permits listening.");
+    label(root,"Receive-only internet streams. Browse the public directory, or add your own permitted HTTPS stream. Directory listings do not guarantee playback.");
     source=spinner(root,new String[]{"ONLINE STREAMS","USB SDR (future)","FLIPPER ATTACHMENT (future)"});
     source.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
       public void onNothingSelected(android.widget.AdapterView<?> p){}
@@ -39,6 +41,16 @@ public final class RadioScannerActivity extends Activity {
     });
     status=label(root,"Radio: stopped");
     info=label(root,"Station: none");
+    title(root,"FIND ONLINE RADIO STATIONS");
+    label(root,"Search public stations by name and optional country. Uses the public Radio Browser directory; station availability and provider permissions are not guaranteed.");
+    directoryName=edit(root,"Station name (e.g. jazz, rock, CBC)");
+    directoryCountry=edit(root,"Country (optional, e.g. Canada)");
+    button(root,"FIND STATIONS ONLINE",()->findOnline());
+    button(root,"BROWSE CANADIAN STATIONS",()->{directoryCountry.setText("Canada");directoryName.setText("");findOnline();});
+    directoryResults=spinner(root,new String[]{"Search online to find stations"});
+    button(root,"USE SELECTED STATION",()->selectDirectoryStation(false));
+    button(root,"PLAY SELECTED ONLINE STATION",()->selectDirectoryStation(true));
+    label(root,"Favorites below are saved on your phone. Only stations with an HTTPS audio stream are shown.");
     category=spinner(root,CATEGORIES);
     search=edit(root,"Search saved stations by name, category or location keyword");
     button(root,"SEARCH SAVED STATIONS",()->refresh());
@@ -80,6 +92,30 @@ public final class RadioScannerActivity extends Activity {
     }};
     registerReceiver(receiver,new IntentFilter(RadioPlayerService.UPDATE),Context.RECEIVER_NOT_EXPORTED);
     send("status",null,null);
+  }
+  private void findOnline(){
+    if(source.getSelectedItemPosition()!=0){status.setText("Select ONLINE STREAMS before browsing.");return;}
+    String query=directoryName.getText().toString().trim(),countryName=directoryCountry.getText().toString().trim();
+    if(query.isEmpty()&&countryName.isEmpty()){status.setText("Enter a station name or country to search.");return;}
+    status.setText("Searching public station directory...");
+    RadioStationDirectory.search(query,countryName,"",(entries,error)->runOnUiThread(()->{
+      if(isFinishing()||isDestroyed())return;
+      directoryEntries.clear();directoryEntries.addAll(entries);
+      ArrayList<String> labels=new ArrayList<>();
+      for(RadioStationDirectory.Entry e:entries)labels.add(e.toString());
+      if(labels.isEmpty())labels.add("No compatible HTTPS stations found");
+      directoryResults.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
+      status.setText(error!=null?error:entries.size()+" directory entries found. Streams not yet verified.");
+    }));
+  }
+  private void selectDirectoryStation(boolean start){
+    int i=directoryResults.getSelectedItemPosition();
+    if(i<0||i>=directoryEntries.size()){status.setText("Choose a station from the online results.");return;}
+    RadioStationDirectory.Entry e=directoryEntries.get(i);
+    name.setText(e.name);url.setText(e.url);
+    info.setText("Directory: "+e.name+" — "+e.country+" ("+e.codec+"). Stream not verified.");
+    if(start)play();
+    else status.setText("Station selected. Press PLAY or SAVE / FAVORITE.");
   }
   private final ArrayList<Station> visible=new ArrayList<>();
   private void refresh(){
