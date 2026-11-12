@@ -8,7 +8,7 @@ public final class SatelliteProtocol {
     private SatelliteProtocol() {}
     public static final int MAX_BYTES = 180;
     public static String encode(String type, long id, String payload) {
-        if (!type.matches("[A-Z_]{1,16}") || id < 0 || id > 0xFFFFFFFFL) throw new IllegalArgumentException("header");
+        if (!type.matches("[A-Z_]{1,16}") || id <= 0 || id > 0xFFFFFFFFL) throw new IllegalArgumentException("header");
         if (payload == null || !validPayload(payload)) throw new IllegalArgumentException("payload");
         String packet = String.format(Locale.ROOT, "AI1|%s|%d|%s\n", type, id, payload);
         if (packet.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES) throw new IllegalArgumentException("packet too large");
@@ -26,6 +26,7 @@ public final class SatelliteProtocol {
         try { parsedId=Long.parseLong(fields[2]); }
         catch(NumberFormatException e) { throw new IllegalArgumentException("request id",e); }
         if(parsedId>0xFFFFFFFFL)throw new IllegalArgumentException("request id overflow");
+        if(parsedId==0)throw new IllegalArgumentException("request id zero");
         return fields;
     }
     private static boolean validPayload(String payload) {
