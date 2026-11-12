@@ -11,7 +11,7 @@ public final class ProtocolSession {
     public String dispatch(String frame,int maxFrameBytes,SatelliteRequestHandler handler) {
         final String[] fields;
         try {fields=SatelliteProtocol.decode(frame);}
-        catch(IllegalArgumentException e){return handler.error(0,"BAD_FRAME",maxFrameBytes);}
+        catch(IllegalArgumentException e){return handler.error(0,"request id overflow".equals(e.getMessage()) ? "BAD_ID" : "BAD_FRAME",maxFrameBytes);}
         final long id;
         try {id=Long.parseLong(fields[2]);
             if(id>0xFFFFFFFFL)throw new NumberFormatException("unsigned 32-bit ID overflow");}
