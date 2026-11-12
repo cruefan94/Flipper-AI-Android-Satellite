@@ -45,6 +45,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final WorkerCloudEngine cloud=new WorkerCloudEngine();
   private final LocalModelEngine localModel=new LocalModelEngine();
   private EmbeddedModelEngine embeddedModel;
+  private EditText trustedModelHash;
   private SelectedLocalEngine selectedModel;
   private final OfflineDiagnosticEngine diagnostics=new OfflineDiagnosticEngine();
   private InferenceRouter router;
@@ -195,7 +196,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
           ? SelectedLocalEngine.Provider.EMBEDDED:SelectedLocalEngine.Provider.LOCALHOST);
       showStatus("Selected: "+selectedModel.selected());
     });
+    trustedModelHash=new EditText(this);
+    trustedModelHash.setSingleLine(true);
+    trustedModelHash.setHint("Trusted SHA-256 (64 hex chars, optional)");
+    advancedSection.addView(trustedModelHash);
     advancedButton("Import and load .task model",()->{
+      try { ModelChecksumPolicy.normalizeExpected(trustedModelHash.getText().toString()); }
+      catch(IllegalArgumentException e) { showStatus(e.getMessage()); return; }
       android.content.Intent pick=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
       pick.setType("*/*");
       pick.addCategory(android.content.Intent.CATEGORY_OPENABLE);
@@ -293,13 +300,18 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     super.onActivityResult(requestCode,resultCode,data);
     if(requestCode!=61 || resultCode!=RESULT_OK || data==null || data.getData()==null)return;
     final android.net.Uri uri=data.getData();
+    final String expectedHash=trustedModelHash==null ? "" : trustedModelHash.getText().toString();
     showStatus("Importing selected offline model...");
     inferenceWorker.execute(()->{
       try {
+        // Fail closed on an invalid or incorrect user-supplied trusted checksum.
+        String normalizedHash=ModelChecksumPolicy.normalizeExpected(expectedHash);
         ImportedModelStore.Imported imported=ImportedModelStore.importTask(this,uri);
+        ModelChecksumPolicy.verify(normalizedHash,imported.sha256);
         embeddedModel.load(imported.file);
         selectedModel.select(SelectedLocalEngine.Provider.EMBEDDED);
-        showStatus("Embedded model loaded; SHA-256: "+imported.sha256.substring(0,16)+"... ("+imported.bytes+" bytes)");
+        showStatus((normalizedHash.isEmpty()?"Unverified model loaded":"Trusted checksum verified; model loaded")
+          +"; SHA-256: "+imported.sha256.substring(0,16)+"... ("+imported.bytes+" bytes)");
       }catch(Exception e){showStatus("Model import or load failed: "+e.getMessage());}
     });
   }
