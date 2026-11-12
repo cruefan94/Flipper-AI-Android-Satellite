@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -22,6 +23,12 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final LinkedHashMap<String,BluetoothDevice> discovered=new LinkedHashMap<>();
   private final LinkedHashMap<String,String> deviceLabels=new LinkedHashMap<>();
   private Spinner devices;
+  private Spinner nearbyDevices;
+  private TextView pairedHeading,nearbyHeading,deviceInfo;
+  private final LinkedHashMap<String,BluetoothDevice> nearby=new LinkedHashMap<>();
+  private final LinkedHashMap<String,String> nearbyNames=new LinkedHashMap<>();
+  private String selectedAddress;
+  private int scanEpoch;
   private boolean scanAfterPermission;
   private boolean refreshAfterPermission;
   private final String[] labels={"OFFLINE","HYBRID","ONLINE"};
@@ -52,7 +59,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     header.setTextSize(22);root.addView(header);
     status=new TextView(this);
     status.setText("Idle — no Flipper AI BLE service installed yet");root.addView(status);
+    pairedHeading=new TextView(this);pairedHeading.setText("PAIRED / CONNECTED DEVICES");root.addView(pairedHeading);
     devices=new Spinner(this);root.addView(devices);
+    button("Select paired device",()->selectFrom(devices,false));
+    nearbyHeading=new TextView(this);nearbyHeading.setText("DISCOVERABLE DEVICES");root.addView(nearbyHeading);
+    nearbyDevices=new Spinner(this);root.addView(nearbyDevices);
+    button("Select discovered device",()->selectFrom(nearbyDevices,true));
+    deviceInfo=new TextView(this);deviceInfo.setText("Select a device to view its details.");root.addView(deviceInfo);
     if(permissionsAlreadyGranted())showPairedDevices();
     button("Show paired devices",()->{
       if(permissions())showPairedDevices();
@@ -161,15 +174,15 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     root.addView(caveat);
   }
   private void beginScan(){
-    discovered.clear();
-    deviceLabels.clear();
-    devices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Scanning for nearby BLE devices..."}));
+    nearby.clear();nearbyNames.clear();
+    nearbyDevices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Scanning for nearby BLE devices..."}));
+    final int epoch=++scanEpoch;
     showPairedDevices();
     ble.startScan();
     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
-      if(isFinishing() || isDestroyed())return;
-      if(discovered.isEmpty())showStatus("Scan finished: no BLE devices found. Check Flipper Bluetooth, Android Nearby devices permission, and keep devices close.");
-      else showStatus("Found "+discovered.size()+" paired or nearby device(s). Select your Flipper by name.");
+      if(isFinishing() || isDestroyed() || epoch!=scanEpoch)return;
+      if(nearby.isEmpty())showStatus("No discoverable BLE devices found. Already paired devices remain listed above.");
+      else showStatus("Discovered "+nearby.size()+" nearby BLE device(s).");
     },12500);
   }
   @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
@@ -193,19 +206,69 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(bonded==null || bonded.isEmpty()){
         showStatus("No paired devices found. Pair your Flipper in Android Bluetooth settings.");return;
       }
-      for(BluetoothDevice device:bonded)device(device,null);
-      showStatus("Found "+discovered.size()+" paired device(s). Choose your Flipper by name.");
+      discovered.clear();deviceLabels.clear();
+      java.util.Set<String> connected=new java.util.HashSet<>();
+      try{
+        for(BluetoothDevice active:manager.getConnectedDevices(BluetoothProfile.GATT))
+          connected.add(active.getAddress());
+      }catch(SecurityException | IllegalArgumentException ignored){}
+      for(BluetoothDevice device:bonded){
+        String address=device.getAddress();
+        discovered.put(address,device);
+        deviceLabels.put(address,deviceName(device,null)+" — "+(connected.contains(address)?"GATT connected":"Paired"));
+      }
+      refreshList(devices,deviceLabels);
+      showStatus("Found "+bonded.size()+" paired device(s). GATT connection does not imply AI readiness.");
     }catch(SecurityException | IllegalStateException e){
       showStatus("Cannot list paired devices. Allow Nearby devices permission.");
     }
   }
+  private String deviceName(BluetoothDevice device,String advertised){
+    String name=null;
+    try{name=device.getName();}catch(SecurityException ignored){}
+    if(name==null || name.trim().isEmpty())name=advertised;
+    return name==null || name.trim().isEmpty()?"Unknown Bluetooth device":name.trim();
+  }
+  private void refreshList(Spinner spinner,LinkedHashMap<String,String> labels){
+    String[] values=labels.values().toArray(new String[0]);
+    spinner.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values));
+  }
+  private void selectFrom(Spinner spinner,boolean fromNearby){
+    String label=spinner.getSelectedItem()==null?null:spinner.getSelectedItem().toString();
+    LinkedHashMap<String,String> names=fromNearby?nearbyLabels():deviceLabels;
+    for(java.util.Map.Entry<String,String> entry:names.entrySet()){
+      if(entry.getValue().equals(label)){
+        selectedAddress=entry.getKey();
+        BluetoothDevice device=fromNearby?nearby.get(selectedAddress):discovered.get(selectedAddress);
+        if(device==null)return;
+        String kind="Unknown";
+        try{
+          int type=device.getType();
+          kind=type==BluetoothDevice.DEVICE_TYPE_LE?"Bluetooth Low Energy":
+            type==BluetoothDevice.DEVICE_TYPE_DUAL?"Bluetooth Classic + LE":
+            type==BluetoothDevice.DEVICE_TYPE_CLASSIC?"Bluetooth Classic":"Unknown Bluetooth type";
+        }catch(SecurityException ignored){}
+        int bond=BluetoothDevice.BOND_NONE;
+        try{bond=device.getBondState();}catch(SecurityException ignored){}
+        deviceInfo.setText("Selected: "+deviceName(device,null)+"\nType: "+kind+
+          "\nPairing: "+(bond==BluetoothDevice.BOND_BONDED?"Paired":bond==BluetoothDevice.BOND_BONDING?"Pairing":"Not paired")+
+          "\nSource: "+(fromNearby?"BLE discovery":"Android paired devices")+
+          "\nAI channel: "+(ble.isReady()?"Ready":"Not connected"));
+        return;
+      }
+    }
+    showStatus("Choose a device from the list first.");
+  }
+  private LinkedHashMap<String,String> nearbyLabels(){
+    LinkedHashMap<String,String> names=new LinkedHashMap<>();
+    for(java.util.Map.Entry<String,BluetoothDevice> e:nearby.entrySet())
+      names.put(e.getKey(),deviceName(e.getValue(),nearbyNames.get(e.getKey())));
+    return names;
+  }
   private BluetoothDevice selectedDevice(){
-    if(devices==null || devices.getSelectedItem()==null)return null;
-    // Lookup by the displayed address, not scan discovery order.
-    String label=devices.getSelectedItem().toString();
-    for(java.util.Map.Entry<String,String> entry:deviceLabels.entrySet())
-      if(entry.getValue().equals(label))return discovered.get(entry.getKey());
-    return null;
+    if(selectedAddress==null)return null;
+    BluetoothDevice device=discovered.get(selectedAddress);
+    return device!=null?device:nearby.get(selectedAddress);
   }
   private void button(String name,Runnable action){
     Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());root.addView(b);
@@ -281,42 +344,19 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   @Override public void device(BluetoothDevice device,String advertisedName){
     runOnUiThread(()->{
-      String address;
-      try{address=device.getAddress();}
-      catch(SecurityException unavailable){showStatus("Nearby devices permission required to display scan results");return;}
-      if(address==null)return;
-      String name=null;
-      try{name=device.getName();}
-      catch(SecurityException ignored){/* Name may be unavailable without CONNECT permission. */}
-      if(name==null || name.trim().isEmpty())name=advertisedName;
-      if(name==null || name.trim().isEmpty())name="Unknown BLE device";
-      // Keep the address visible to distinguish devices with the same name.
-      String display=name.trim();
-      // Include an address only when another device has the same name.
-      for(java.util.Map.Entry<String,String> entry:deviceLabels.entrySet()){
-        if(!address.equals(entry.getKey()) && display.equals(entry.getValue())){
-          display=display+" ("+address+")";
-          break;
+      try{
+        String address=device.getAddress();
+        if(address==null)return;
+        nearby.put(address,device);
+        if(advertisedName!=null && !advertisedName.trim().isEmpty())nearbyNames.put(address,advertisedName);
+        LinkedHashMap<String,String> labels=new LinkedHashMap<>();
+        for(java.util.Map.Entry<String,BluetoothDevice> e:nearby.entrySet()){
+          String name=deviceName(e.getValue(),nearbyNames.get(e.getKey()));
+          labels.put(e.getKey(),name);
         }
-      }
-      String previousAddress=null;
-      if(devices.getSelectedItem()!=null){
-        String previousLabel=devices.getSelectedItem().toString();
-        for(java.util.Map.Entry<String,String> entry:deviceLabels.entrySet())
-          if(previousLabel.equals(entry.getValue())){previousAddress=entry.getKey();break;}
-      }
-      discovered.put(address,device);
-      deviceLabels.put(address,display);
-      String[] values=deviceLabels.values().toArray(new String[0]);
-      devices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values));
-      if(previousAddress!=null){
-        int i=0;
-        for(String key:deviceLabels.keySet()){
-          if(previousAddress.equals(key)){devices.setSelection(i);break;}
-          i++;
-        }
-      }
-      showStatus("Found "+discovered.size()+" paired or nearby Bluetooth device(s).");
+        refreshList(nearbyDevices,labels);
+        showStatus("Discovered "+nearby.size()+" nearby BLE device(s).");
+      }catch(SecurityException e){showStatus("Allow Nearby devices permission to view results.");}
     });
   }
   @Override public void onDestroy(){
