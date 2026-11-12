@@ -68,7 +68,12 @@ public final class AiChatActivity extends Activity {
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
     button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;status.setText("Gemini Nano selected; check on-device AI availability.");});
-    button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;status.setText("Local server selected; configure a loopback endpoint.");});
+    button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;status.setText("Independent model selected; requires installed local runtime.");});
+    button(setup,"INDEPENDENT MODEL OPTIONS",()->{
+      StringBuilder choices=new StringBuilder("Model candidates (not installed):");
+      for(AiModelCatalog.Model item:AiModelCatalog.candidates())choices.append("\\n").append(item.family).append(" — ").append(item.format).append(" — ").append(item.note);
+      new android.app.AlertDialog.Builder(this).setTitle("Independent AI model roadmap").setMessage(choices.toString()).setPositiveButton("OK",null).show();
+    });
     button(setup,"CONFIGURE LOCAL MODEL",()->{
       try{model.configure(endpoint.getText().toString().trim(),modelName.getText().toString().trim());
         saved.edit().putString("endpoint",endpoint.getText().toString().trim()).putString("model",modelName.getText().toString().trim()).apply();
