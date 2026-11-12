@@ -8,6 +8,8 @@ javac -d "$DEST" "$SRC/SatelliteProtocol.java" "$SRC/FrameCodec.java" "$SRC/Tran
 java -cp "$DEST" SatelliteCoreTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HardwareDiagnosticCoverageTest.java"
 java -cp "$DEST" HardwareDiagnosticCoverageTest
+javac -cp "$DEST" -d "$DEST" "$SRC/SelectedLocalEngine.java" "$ROOT/android_satellite/tests/SelectedLocalEngineTest.java"
+java -cp "$DEST" SelectedLocalEngineTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SessionEpochTest.java"
 java -cp "$DEST" SessionEpochTest
 javac -cp "$DEST" -d "$DEST" "$SRC/WorkerEndpointPolicy.java" "$ROOT/android_satellite/tests/WorkerEndpointPolicyTest.java"
