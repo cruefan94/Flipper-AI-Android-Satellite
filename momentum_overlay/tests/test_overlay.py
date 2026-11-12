@@ -77,7 +77,7 @@ static void stop() {
         self.assertIn("ai_sat_replay_commit(&service->replay", source)
         self.assertIn("ai_sat_replay_reset(&s->replay)", source)
         self.assertIn("!ai_sat_valid_frame(frame, length)", source)
-        self.assertIn("ai_sat_valid_frame(changed->Attr_Data, changed->Attr_Data_Length)",source)
+        self.assertIn("ai_sat_replay_peek(&service->replay",source)
         self.assertIn("ble_profile_serial_ai_link_state(", installer)
 
     def test_ai_tx_cccd_subscription_events_are_observable(self):
