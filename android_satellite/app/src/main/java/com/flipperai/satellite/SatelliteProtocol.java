@@ -15,7 +15,7 @@ public final class SatelliteProtocol {
         return packet;
     }
     public static String[] decode(String packet) {
-        if (packet == null || packet.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES || !packet.endsWith("\n")) throw new IllegalArgumentException("frame");
+        if (packet == null || packet.getBytes(StandardCharsets.UTF_8).length < 11 || packet.getBytes(StandardCharsets.UTF_8).length > MAX_BYTES || !packet.endsWith("\n")) throw new IllegalArgumentException("frame");
         String[] fields = packet.substring(0, packet.length()-1).split("\\|", -1);
         if (fields.length != 4 || !fields[0].equals("AI1") || !fields[1].matches("[A-Z_]{1,16}") || !fields[2].matches("[0-9]{1,10}")) throw new IllegalArgumentException("protocol");
         // The C AI1 parser accepts exactly one terminal LF. Reject framing
