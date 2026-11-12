@@ -1,0 +1,9 @@
+App(
+    appid="ai_ble_smoke",
+    name="AI BLE API Link Smoke Test",
+    apptype=FlipperAppType.APP,
+    entry_point="ai_ble_smoke_app",
+    requires=["gui"],
+    stack_size=1024,
+    order=99,
+)
