@@ -19,6 +19,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private BleSatellite ble;
   private final SatelliteTransportCoordinator transports=new SatelliteTransportCoordinator();
   private TextView status;
+  private TextView connectionState;
+  private TextView connectionHistory;
+  private LinearLayout advancedSection;
+  private boolean advancedVisible=false;
+  private boolean suppressSelection=false;
   private LinearLayout root;
   private final LinkedHashMap<String,BluetoothDevice> discovered=new LinkedHashMap<>();
   private final LinkedHashMap<String,String> deviceLabels=new LinkedHashMap<>();
@@ -58,13 +63,23 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     header.setText("Flipper AI Satellite\nBLE-first development build");
     header.setTextSize(22);root.addView(header);
     status=new TextView(this);
-    status.setText("Idle — no Flipper AI BLE service installed yet");root.addView(status);
+    status.setText("No AI connection");root.addView(status);
+    connectionState=new TextView(this);connectionState.setTextSize(18);
+    connectionState.setText("AI CONNECTION: NOT CONNECTED");root.addView(connectionState);
+    connectionHistory=new TextView(this);
+    connectionHistory.setText("Bluetooth device discovery is separate from the AI channel.");
+    root.addView(connectionHistory);
     pairedHeading=new TextView(this);pairedHeading.setText("PAIRED / CONNECTED DEVICES");root.addView(pairedHeading);
     devices=new Spinner(this);root.addView(devices);
     button("Select paired device",()->selectFrom(devices,false));
     nearbyHeading=new TextView(this);nearbyHeading.setText("DISCOVERABLE DEVICES");root.addView(nearbyHeading);
     nearbyDevices=new Spinner(this);root.addView(nearbyDevices);
     button("Select discovered device",()->selectFrom(nearbyDevices,true));
+    button("Clear device selection",()->{
+      selectedAddress=null;
+      deviceInfo.setText("No device selected. Choose only one device from either list.");
+      connectionHistory.setText("Selection cleared. Existing Bluetooth session is unchanged; tap Disconnect to close it.");
+    });
     deviceInfo=new TextView(this);deviceInfo.setText("Select a device to view its details.");root.addView(deviceInfo);
     if(permissionsAlreadyGranted())showPairedDevices();
     button("Show paired devices",()->{
@@ -79,6 +94,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(!permissions())return;
       BluetoothDevice selected=selectedDevice();
       if(selected==null){showStatus("Scan and select a Flipper first");return;}
+      connectionState.setText("AI CONNECTION: CONNECTING...");
       ble.connect(selected);
     });
     button("Pair selected",()->{
@@ -89,29 +105,37 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     });
     button("Reconnect",()->{if(permissions())ble.reconnect();});
     button("Disconnect",()->{if(permissions())ble.disconnect();});
+    button("Show / hide AI settings and diagnostics",()->{
+      advancedVisible=!advancedVisible;
+      advancedSection.setVisibility(advancedVisible?android.view.View.VISIBLE:android.view.View.GONE);
+    });
+    advancedSection=new LinearLayout(this);
+    advancedSection.setOrientation(LinearLayout.VERTICAL);
+    advancedSection.setVisibility(android.view.View.GONE);
+    root.addView(advancedSection);
     mode=new Spinner(this);
     mode.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
-    root.addView(mode);
+    advancedSection.addView(mode);
     TextView localLabel=new TextView(this);
     localLabel.setText("Offline language model (optional): install a local OpenAI-compatible server and model on this phone. Only 127.0.0.1 is accepted; no internet URL is allowed.");
-    root.addView(localLabel);
+    advancedSection.addView(localLabel);
     EditText localUrl=new EditText(this);
     localUrl.setSingleLine(true);
     localUrl.setHint("http://127.0.0.1:8080/v1/chat/completions");
-    root.addView(localUrl);
+    advancedSection.addView(localUrl);
     EditText localName=new EditText(this);
     localName.setSingleLine(true);localName.setHint("Local model name (e.g. local)");
-    root.addView(localName);
-    button("Use installed offline model",()->{
+    advancedSection.addView(localName);
+    advancedButton("Use installed offline model",()->{
       try{
         localModel.configure(localUrl.getText().toString(),localName.getText().toString());
         showStatus("On-device local model endpoint configured; network access restricted to loopback");
       }catch(Exception e){showStatus(e.getMessage());}
     });
-    button("Disable local model",()->{
+    advancedButton("Disable local model",()->{
       localModel.clear();showStatus("Local model disabled; offline diagnostic rules remain available");
     });
-    button("Test local model connection",()->{
+    advancedButton("Test local model connection",()->{
       if(!localModel.ready()){
         showStatus("Configure the local on-device model endpoint first");return;
       }
@@ -127,13 +151,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     });
     TextView note=new TextView(this);
     note.setText("Optional cloud: ASK prompts go to your configured HTTPS Worker only when consent is enabled. Device tokens stay in memory; offline diagnostics use no internet.");
-    root.addView(note);
+    advancedSection.addView(note);
     EditText url=new EditText(this);
-    url.setSingleLine(true);url.setHint("https://YOUR-WORKER.workers.dev/ask");root.addView(url);
+    url.setSingleLine(true);url.setHint("https://YOUR-WORKER.workers.dev/ask");advancedSection.addView(url);
     EditText token=new EditText(this);
     token.setSingleLine(true);token.setHint("Worker device token (memory only)");
-    token.setInputType(129);root.addView(token);
-    button("Configure cloud endpoint",()->{
+    token.setInputType(129);advancedSection.addView(token);
+    advancedButton("Configure cloud endpoint",()->{
       try {cloud.configure(url.getText().toString(),token.getText().toString());token.setText("");showStatus("Cloud endpoint configured in memory");}
       catch(Exception e){cloud.clear();showStatus(e.getMessage());}
     });
@@ -144,11 +168,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       consentEpoch.changed();
       if(!checked)cloud.revokeActive();
     });
-    root.addView(cloudConsent);
-    button("Disable and clear cloud",()->{cloudConsent.setChecked(false);cloud.clear();showStatus("Cloud credentials cleared and consent revoked");});
+    advancedSection.addView(cloudConsent);
+    advancedButton("Disable and clear cloud",()->{cloudConsent.setChecked(false);cloud.clear();showStatus("Cloud credentials cleared and consent revoked");});
     EditText input=new EditText(this);
-    input.setHint("Protocol test text (no private data)");root.addView(input);
-    button("Run offline diagnostic",()->{
+    input.setHint("Protocol test text (no private data)");advancedSection.addView(input);
+    advancedButton("Run offline diagnostic",()->{
       final String prompt=input.getText().toString();
       showStatus("Running on-device inference...");
       inferenceWorker.execute(()->{
@@ -162,8 +186,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     });
     TextView transportNote=new TextView(this);
     transportNote.setText("AI transport: BLE only. Wi-Fi and USB-C relay adapters are reserved for future builds; no automatic fallback.");
-    root.addView(transportNote);
-    button("Check AI BLE channel",()->{
+    advancedSection.addView(transportNote);
+    advancedButton("Check AI BLE channel",()->{
       if(!permissions())return;
       showStatus(transports.isReady()
           ? "AI GATT connected; Flipper must initiate HELLO by notification"
@@ -171,11 +195,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     });
     TextView caveat=new TextView(this);
     caveat.setText("Momentum functions remain on Flipper. Offline LLM inference works only with a separately installed local model server; otherwise the app uses diagnostic rules. Localhost model requests never access the internet.");
-    root.addView(caveat);
+    advancedSection.addView(caveat);
   }
   private void beginScan(){
     nearby.clear();nearbyNames.clear();
-    nearbyDevices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Scanning for nearby BLE devices..."}));
+    nearbyDevices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"None — scanning for nearby devices..."}));
     final int epoch=++scanEpoch;
     showPairedDevices();
     ble.startScan();
@@ -230,15 +254,22 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     return name==null || name.trim().isEmpty()?"Unknown Bluetooth device":name.trim();
   }
   private void refreshList(Spinner spinner,LinkedHashMap<String,String> labels){
-    String[] values=labels.values().toArray(new String[0]);
+    java.util.ArrayList<String> values=new java.util.ArrayList<>();
+    values.add("None — no device selected");
+    values.addAll(labels.values());
     spinner.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values));
   }
   private void selectFrom(Spinner spinner,boolean fromNearby){
     String label=spinner.getSelectedItem()==null?null:spinner.getSelectedItem().toString();
+    if(label==null || label.startsWith("None —")){
+      selectedAddress=null;
+      deviceInfo.setText("No device selected.");return;
+    }
     LinkedHashMap<String,String> names=fromNearby?nearbyLabels():deviceLabels;
     for(java.util.Map.Entry<String,String> entry:names.entrySet()){
       if(entry.getValue().equals(label)){
         selectedAddress=entry.getKey();
+        (fromNearby?devices:nearbyDevices).setSelection(0);
         BluetoothDevice device=fromNearby?nearby.get(selectedAddress):discovered.get(selectedAddress);
         if(device==null)return;
         String kind="Unknown";
@@ -270,6 +301,9 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     BluetoothDevice device=discovered.get(selectedAddress);
     return device!=null?device:nearby.get(selectedAddress);
   }
+  private void advancedButton(String name,Runnable action){
+    Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());advancedSection.addView(b);
+  }
   private void button(String name,Runnable action){
     Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());root.addView(b);
   }
@@ -292,6 +326,16 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   private void showStatus(String text){runOnUiThread(()->status.setText(text));}
   @Override public void status(String text){
+    runOnUiThread(()->{
+      if(connectionState==null)return;
+      if(text.startsWith("AI BLE ready"))connectionState.setText("AI CONNECTION: CONNECTED / READY");
+      else if(text.startsWith("Connected;"))connectionState.setText("BLUETOOTH CONNECTED — CHECKING AI SERVICE");
+      else if(text.startsWith("Connecting") || text.contains("Retrying once"))connectionState.setText("AI CONNECTION: CONNECTING...");
+      else if(text.startsWith("Disconnected") || text.startsWith("GATT") || text.contains("service is not installed"))
+        connectionState.setText("AI CONNECTION: NOT CONNECTED");
+      if(text.startsWith("Disconnected") || text.startsWith("GATT") || text.startsWith("Connected;") || text.startsWith("AI BLE ready") || text.contains("service is not installed"))
+        connectionHistory.setText("Last connection event: "+text);
+    });
     if(text.startsWith("Disconnected") || text.startsWith("Connecting")){
       transports.invalidateSession();
       connectionEpoch.advance();
