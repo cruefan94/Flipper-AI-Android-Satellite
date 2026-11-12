@@ -33,7 +33,7 @@ class TrustedGapPatchTests(unittest.TestCase):
         self.assertIn("20u",modified)
         self.assertNotIn("current_profile_is_serial",modified)
         self.assertEqual(modified.count(
-            "bt->current_profile && bt->current_profile->config == ble_profile_serial"),3)
+            "bt->current_profile && bt->current_profile->config == ble_profile_serial"),4)
         self.assertEqual(modified.count("ble_profile_serial_ai_link_state("),4)
         self.assertIn("GapEventTypeAiRevoked",modified)
         self.assertIn("bt->ai_verified = false;",modified)
