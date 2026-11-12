@@ -37,7 +37,7 @@ public final class VerifiedModelImporter {
         while((count=in.read(buffer))!=-1){
           total+=count;
           if(total>limit)throw new IOException("Model exceeds 6 GiB import limit");
-          if(total>stat.getAvailableBytes()-128L*1024*1024)throw new IOException("Insufficient storage while importing");
+          if(new StatFs(folder.getAbsolutePath()).getAvailableBytes()<128L*1024*1024)throw new IOException("Insufficient storage while importing");
           sha.update(buffer,0,count);out.write(buffer,0,count);
         }
         out.getFD().sync();
