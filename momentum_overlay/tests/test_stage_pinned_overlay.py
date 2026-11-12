@@ -47,7 +47,7 @@ class StagePinnedOverlayTest(unittest.TestCase):
                 self.assertEqual(stager.stage(root,output),1)
             self.assertEqual(fixture.read_text(),"unchanged")
             self.assertEqual((output/"targets/f7/ble_glue/services/ai_satellite_service.h").read_bytes(),b"safe sample\n")
-            self.assertIn("NOT", (output/"OVERLAY_UNTESTED.txt").read_text())
+            self.assertIn("Do not flash", (output/"OVERLAY_UNTESTED.txt").read_text())
             with self.assertRaises(FileExistsError):
                 stager.stage(root,output)
 
