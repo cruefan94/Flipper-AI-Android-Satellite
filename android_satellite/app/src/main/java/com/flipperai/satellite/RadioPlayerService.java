@@ -80,7 +80,7 @@ public final class RadioPlayerService extends Service {
       .setContentTitle(station).setContentText(state).setContentIntent(content)
       .setStyle(new Notification.MediaStyle().setMediaSession(session.getSessionToken()))
       .addAction(android.R.drawable.ic_media_pause,"Play / Pause",togglePi)
-      .addAction(android.R.drawable.ic_media_stop,"Stop",stopPi).setOngoing("Playing".equals(state)).build();
+      .addAction(android.R.drawable.ic_delete,"Stop",stopPi).setOngoing("Playing".equals(state)).build();
   }
   private void publish(){
     Intent update=new Intent(UPDATE).setPackage(getPackageName()).putExtra(STATUS,state).putExtra(NAME,station);
