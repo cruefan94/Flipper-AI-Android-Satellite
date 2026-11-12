@@ -147,6 +147,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       ble.connect(selected);
     });
     button("Disconnect",()->{if(permissions())ble.disconnect();});
+    button("TEST MOMENTUM RPC PING",()->ble.sendStockRpcPing());
     button("Show / hide AI settings and diagnostics",()->{
       advancedVisible=!advancedVisible;
       advancedSection.setVisibility(advancedVisible?android.view.View.VISIBLE:android.view.View.GONE);
@@ -373,7 +374,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   @Override public void status(String text){
     runOnUiThread(()->{
       if(connectionState==null)return;
-      if(text.startsWith("Stock Momentum RPC indications enabled"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC INDICATIONS ACTIVE (AI NOT READY)");
+      if(text.startsWith("RPC PING RESPONSE RECEIVED"))connectionState.setText("MOMENTUM RPC PING RESPONSE RECEIVED — AI NOT READY");
+      else if(text.startsWith("Stock Momentum RPC indications enabled"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC INDICATIONS ACTIVE (AI NOT READY)");
       else if(text.startsWith("BLUETOOTH CONNECTED: Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — STOCK MOMENTUM RPC DETECTED (AI NOT READY)");
       else if(text.startsWith("AI BLE ready"))connectionState.setText("AI CONNECTION: CONNECTED / READY");
       else if(text.startsWith("Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC DETECTED (AI NOT READY)");
