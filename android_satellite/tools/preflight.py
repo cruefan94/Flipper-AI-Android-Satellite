@@ -9,7 +9,9 @@ needed = ['BleSatellite', 'MainActivity', 'SatelliteProtocol', 'ProtocolSession'
           'WorkerEndpointPolicy', 'OfflineDiagnosticEngine', 'TransportState',
           'BondGate', 'FrameCodec', 'GattProfilePolicy', 'SessionEpoch', 'SatelliteTransport', 'SatelliteTransportCoordinator', 'WifiRelayEndpointPolicy', 'WifiRelayEnvelope',
           'BleWriteGuard', 'ConsentEpoch', 'LocalModelEngine',
-          'LocalModelEndpointPolicy', 'OfflineModelOrDiagnostics']
+          'LocalModelEndpointPolicy', 'OfflineModelOrDiagnostics',
+          'EmbeddedModelEngine', 'SelectedLocalEngine', 'ImportedModelStore',
+          'ModelChecksumPolicy', 'ModelFileLibrary']
 missing = [str(package / (name + '.java')) for name in needed
            if not (package / (name + '.java')).is_file()]
 missing += [str(root / f) for f in ('settings.gradle', 'build.gradle',
