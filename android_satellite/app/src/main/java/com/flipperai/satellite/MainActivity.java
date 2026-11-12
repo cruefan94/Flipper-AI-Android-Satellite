@@ -87,8 +87,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     voiceTranscript.setText("You: (nothing spoken)");root.addView(voiceTranscript);
     voiceAnswer=new TextView(this);
     voiceAnswer.setText("AI: (no answer yet)");root.addView(voiceAnswer);
-    button("Talk to AI (phone microphone)",()->phoneVoice.startListening());
-    button("Stop listening / speaking",()->{voiceGeneration++;phoneVoice.stopListening();phoneVoice.stopSpeaking();});
+    button("Talk to AI (phone microphone)",()->{
+      if(phoneVoice.startListening())voiceTranscript.setText("You: listening...");
+    });
+    button("Stop listening / speaking",()->{
+      voiceGeneration++;phoneVoice.stopListening();phoneVoice.stopSpeaking();
+      voiceAnswer.setText("AI: stopped by user");
+    });
 
     TextView categoryPrompt=new TextView(this);
     categoryPrompt.setText("Choose ONE device source:");
@@ -261,6 +266,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     advancedSection.addView(caveat);
   }
   private void handleVoicePrompt(String spoken){
+    phoneVoice.stopSpeaking();
     voiceTranscript.setText("You: "+spoken);
     voiceAnswer.setText("AI: thinking...");
     final int generation=++voiceGeneration;
