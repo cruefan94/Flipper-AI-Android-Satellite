@@ -53,6 +53,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     status=new TextView(this);
     status.setText("Idle — no Flipper AI BLE service installed yet");root.addView(status);
     devices=new Spinner(this);root.addView(devices);
+    if(permissionsAlreadyGranted())showPairedDevices();
     button("Show paired devices",()->{
       if(permissions())showPairedDevices();
       else refreshAfterPermission=true;
@@ -192,7 +193,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(bonded==null || bonded.isEmpty()){
         showStatus("No paired devices found. Pair your Flipper in Android Bluetooth settings.");return;
       }
-      for(BluetoothDevice device:bonded)device(device);
+      for(BluetoothDevice device:bonded)device(device,null);
       showStatus("Found "+discovered.size()+" paired device(s). Choose your Flipper by name.");
     }catch(SecurityException | IllegalStateException e){
       showStatus("Cannot list paired devices. Allow Nearby devices permission.");
@@ -208,6 +209,12 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   private void button(String name,Runnable action){
     Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());root.addView(b);
+  }
+  private boolean permissionsAlreadyGranted(){
+    if(Build.VERSION.SDK_INT>=31)
+      return checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN)==PackageManager.PERMISSION_GRANTED &&
+        checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)==PackageManager.PERMISSION_GRANTED;
+    return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED;
   }
   private boolean permissions(){
     if(Build.VERSION.SDK_INT>=31){
@@ -272,7 +279,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       });
     });
   }
-  @Override public void device(BluetoothDevice device){
+  @Override public void device(BluetoothDevice device,String advertisedName){
     runOnUiThread(()->{
       String address;
       try{address=device.getAddress();}
@@ -281,6 +288,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       String name=null;
       try{name=device.getName();}
       catch(SecurityException ignored){/* Name may be unavailable without CONNECT permission. */}
+      if(name==null || name.trim().isEmpty())name=advertisedName;
       if(name==null || name.trim().isEmpty())name="Unknown BLE device";
       // Keep the address visible to distinguish devices with the same name.
       String display=name.trim();
