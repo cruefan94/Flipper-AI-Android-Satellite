@@ -104,10 +104,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     });
     deviceInfo=new TextView(this);deviceInfo.setText("No device selected.");root.addView(deviceInfo);
     button("Clear device selection",()->{
+      ble.disconnect();
       selectedAddress=null;
       deviceInfo.setText("No device selected.");
       showStatus("Device selection cleared.");
     });
+    pairedChoice.setId(android.view.View.generateViewId());
+    discoverableChoice.setId(android.view.View.generateViewId());
     sources.setOnCheckedChangeListener((group,id)->{
       boolean newDiscoverable=id==discoverableChoice.getId();
       if(discoverableMode!=newDiscoverable){
@@ -120,8 +123,6 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       pairedSection.setVisibility(discoverableMode?android.view.View.GONE:android.view.View.VISIBLE);
       discoverableSection.setVisibility(discoverableMode?android.view.View.VISIBLE:android.view.View.GONE);
     });
-    pairedChoice.setId(android.view.View.generateViewId());
-    discoverableChoice.setId(android.view.View.generateViewId());
     pairedChoice.setChecked(true);
     discoverableSection.setVisibility(android.view.View.GONE);
     if(permissionsAlreadyGranted())showPairedDevices();
@@ -138,7 +139,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(selected==null){showStatus("Scan and select a Flipper first");return;}
       ble.pair(selected);
     });
-    button("Reconnect",()->{if(permissions())ble.reconnect();});
+    button("Reconnect",()->{
+      if(!permissions())return;
+      BluetoothDevice selected=selectedDevice();
+      if(selected==null){showStatus("Select a device in the active category before reconnecting");return;}
+      connectionState.setText("AI CONNECTION: CONNECTING...");
+      ble.connect(selected);
+    });
     button("Disconnect",()->{if(permissions())ble.disconnect();});
     button("Show / hide AI settings and diagnostics",()->{
       advancedVisible=!advancedVisible;
