@@ -21,7 +21,7 @@ public final class DashboardActivity extends Activity {
     content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(18),dp(20),dp(18),dp(18));
     scroll.addView(content);frame.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
     LinearLayout nav=new LinearLayout(this);nav.setOrientation(LinearLayout.HORIZONTAL);nav.setBackgroundColor(PANEL);
-    navButton(nav,"HOME",DashboardActivity.class);navButton(nav,"FLIPPER",MainActivity.class);navButton(nav,"VOICE",MainActivity.class);navButton(nav,"RADIO",RadioScannerActivity.class);
+    navButton(nav,"HOME",DashboardActivity.class);navButton(nav,"AI",AiChatActivity.class);navButton(nav,"FLIPPER",MainActivity.class);navButton(nav,"RADIO",RadioScannerActivity.class);
     frame.addView(nav);setContentView(frame);render();
   }
   private void render(){
@@ -32,7 +32,8 @@ public final class DashboardActivity extends Activity {
     section("SYSTEM OVERVIEW");
     card("FLIPPER ZERO", "Open BLE connection, paired-device discovery, RPC diagnostics and manual reconnect.",MainActivity.class);
     card("PHONE COMPANION", "Phone battery, charging, Bluetooth, Wi-Fi and internet connectivity.",PhoneCompanionActivity.class);
-    card("AI ASSISTANT + VOICE", "Microphone, spoken answers, offline/hybrid/online inference and consent controls.",MainActivity.class);
+    card("AI ASSISTANT", "Dedicated private on-phone text chat with optional local model.",AiChatActivity.class);
+    card("VOICE ASSISTANT", "Working phone microphone and spoken AI responses. Cloud mode requires consent.",MainActivity.class);
     card("RADIO SCANNER", "Find online stations, favorites, recent streams and media playback.",RadioScannerActivity.class);
     card("GITHUB", "Public repositories, branches, commits, Actions and releases. Account linking not yet available.",GitHubActivity.class);
     space(12);
@@ -41,6 +42,7 @@ public final class DashboardActivity extends Activity {
     content.addView(label("GitHub OAuth, private repositories, Flipper PTT, notification sharing and USB SDR are not operational yet.",14,MUTED,false));
     space(12);
     section("QUICK ACCESS");
+    tile("OPEN AI CHAT",AiChatActivity.class);
     tile("FLIPPER CONNECTION / BLE",MainActivity.class);
     tile("RADIO STATION BROWSER",RadioScannerActivity.class);
     tile("PHONE STATUS",PhoneCompanionActivity.class);
