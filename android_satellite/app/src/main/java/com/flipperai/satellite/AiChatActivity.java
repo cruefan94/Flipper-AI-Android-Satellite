@@ -39,6 +39,7 @@ public final class AiChatActivity extends Activity {
     modelHint=label("Checking built-in Android Gemini Nano availability. No cloud prompt upload.",12,Color.LTGRAY);frame.addView(modelHint);
     try{nano=new NanoModelEngine();}catch(Throwable e){modelHint.setText("Gemini Nano initialization unavailable: "+e.getClass().getSimpleName());}
     button(frame,"CHECK ON-DEVICE AI",()->checkNano());
+    modelHint.setOnClickListener(v->{setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);});
     transcriptScroll=new ScrollView(this);history=label("Conversation will appear here. Configure a local model to begin.",15,Color.WHITE);history.setTextIsSelectable(true);history.setPadding(14,16,14,16);history.setBackgroundColor(panel);transcriptScroll.addView(history);
     frame.addView(transcriptScroll,new LinearLayout.LayoutParams(-1,0,1));
     LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.HORIZONTAL);frame.addView(actions);
@@ -66,8 +67,13 @@ public final class AiChatActivity extends Activity {
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
-    button(setup,"USE GEMINI NANO",()->{useNano=true;status.setText("Gemini Nano selected; check on-device AI availability.");});
-    button(setup,"USE LOCAL SERVER",()->{useNano=false;status.setText("Local server selected; configure a loopback endpoint.");});
+    button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;status.setText("Gemini Nano selected; check on-device AI availability.");});
+    button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;status.setText("Independent model selected; requires installed local runtime.");});
+    button(setup,"INDEPENDENT MODEL OPTIONS",()->{
+      StringBuilder choices=new StringBuilder("Model candidates (not installed):");
+      for(AiModelCatalog.Model item:AiModelCatalog.candidates())choices.append("\\n").append(item.family).append(" — ").append(item.format).append(" — ").append(item.note);
+      new android.app.AlertDialog.Builder(this).setTitle("Independent AI model roadmap").setMessage(choices.toString()).setPositiveButton("OK",null).show();
+    });
     button(setup,"CONFIGURE LOCAL MODEL",()->{
       try{model.configure(endpoint.getText().toString().trim(),modelName.getText().toString().trim());
         saved.edit().putString("endpoint",endpoint.getText().toString().trim()).putString("model",modelName.getText().toString().trim()).apply();
@@ -102,7 +108,7 @@ public final class AiChatActivity extends Activity {
     status.setText("Checking device model support...");
     worker.execute(()->{
       String result;
-      try{int state=nano.status();result=state==com.google.mlkit.genai.prompt.FeatureStatus.AVAILABLE?"Gemini Nano ready on this phone":state==com.google.mlkit.genai.prompt.FeatureStatus.DOWNLOADABLE?"Gemini Nano supported but model download required":state==com.google.mlkit.genai.prompt.FeatureStatus.DOWNLOADING?"Gemini Nano downloading":"Gemini Nano unavailable on this device";}
+      try{int state=nano.status();result=state==com.google.mlkit.genai.common.FeatureStatus.AVAILABLE?"Gemini Nano ready on this phone":state==com.google.mlkit.genai.common.FeatureStatus.DOWNLOADABLE?"Gemini Nano supported but model download required":state==com.google.mlkit.genai.common.FeatureStatus.DOWNLOADING?"Gemini Nano downloading":"Gemini Nano unavailable on this device";}
       catch(Exception e){result="Gemini Nano status failed: "+e.getMessage();}
       final String message=result;ui.post(()->{if(!isDestroyed())status.setText(message);});
     });
