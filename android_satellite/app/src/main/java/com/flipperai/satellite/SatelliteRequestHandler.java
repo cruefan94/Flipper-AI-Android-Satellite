@@ -4,6 +4,12 @@ package com.flipperai.satellite;
  * Commands never execute hardware operations. Responses are bounded to one GATT value.
  */
 public final class SatelliteRequestHandler {
+    /** Optional, explicitly authorized phone microphone action.
+     * Handler does not directly control Android permissions or the microphone.
+     */
+    public interface PhoneControl { boolean beginPushToTalk(); }
+    private volatile PhoneControl phoneControl;
+    public void setPhoneControl(PhoneControl control) { phoneControl=control; }
     private final InferenceRouter router;
     private InferenceRouter.Mode mode=InferenceRouter.Mode.OFFLINE;
     private boolean cloudConsent=false;
@@ -24,6 +30,13 @@ public final class SatelliteRequestHandler {
             switch(fields[1]){
                 case "HELLO":return fit("HELLO_ACK",id,"android-v1",maxFrameBytes);
                 case "PING":return fit("PONG",id,"ok",maxFrameBytes);
+                case "PTT":
+                    if(!"start".equals(fields[3]))
+                        return fit("ERROR",id,"BAD_PTT",maxFrameBytes);
+                    PhoneControl allowed=phoneControl;
+                    if(allowed==null || !allowed.beginPushToTalk())
+                        return fit("ERROR",id,"PTT_DENIED",maxFrameBytes);
+                    return fit("PTT_ACK",id,"accepted",maxFrameBytes);
                 case "ASK":
                     if(fields[3].trim().isEmpty())return fit("ERROR",id,"EMPTY_PROMPT",maxFrameBytes);
                     return fit("ANSWER",id,router.ask(fields[3],mode,cloudConsent),maxFrameBytes);
