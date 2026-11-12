@@ -16,7 +16,7 @@ public final class SatelliteRequestHandler {
         if(maxFrameBytes<16)return null;
         String[] fields;
         try {fields=SatelliteProtocol.decode(frame);}
-        catch(IllegalArgumentException ex){return fit("ERROR",0,"BAD_FRAME",maxFrameBytes);}
+        catch(IllegalArgumentException ex){return fit("ERROR",0,"request id overflow".equals(ex.getMessage()) ? "BAD_ID" : "BAD_FRAME",maxFrameBytes);}
         long id;
         try{id=Long.parseLong(fields[2]); if(id>0xFFFFFFFFL)throw new NumberFormatException("ID overflow");}
         catch(NumberFormatException ex){return fit("ERROR",0,"BAD_ID",maxFrameBytes);}
