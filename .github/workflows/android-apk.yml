@@ -1,0 +1,49 @@
+name: Android Satellite — public APK build
+on:
+  workflow_dispatch:
+  push:
+    branches: [develop/android-apk-build]
+    paths:
+      - 'android_satellite/**'
+      - '.github/workflows/android-apk.yml'
+  pull_request:
+    paths:
+      - 'android_satellite/**'
+      - '.github/workflows/android-apk.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Verify mirrored source
+        run: python3 android_satellite/tools/preflight.py
+      - name: JVM protocol and routing tests
+        run: sh android_satellite/tests/run_core_tests.sh
+      - name: Source security regression tests
+        run: python3 -m unittest discover -s android_satellite/tests -p 'test_*.py' -v
+      - name: Build debug APK
+        run: gradle -p android_satellite --no-daemon --stacktrace :app:assembleDebug
+      - name: Verify APK exists
+        run: test -s android_satellite/app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlipperAI-Android-Satellite-debug-UNTESTED
+          path: android_satellite/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
