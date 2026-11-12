@@ -47,6 +47,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private EmbeddedModelEngine embeddedModel;
   private EditText trustedModelHash;
   private Spinner savedModels;
+  private static final String OFFLINE_MODEL_PREF = "preferred_offline_task";
   private java.io.File[] savedModelFiles=new java.io.File[0];
   private SelectedLocalEngine selectedModel;
   private final OfflineDiagnosticEngine diagnostics=new OfflineDiagnosticEngine();
@@ -225,6 +226,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
           ModelFileLibrary.verify(getFilesDir(),chosen);
           embeddedModel.load(chosen);
           selectedModel.select(SelectedLocalEngine.Provider.EMBEDDED);
+          rememberPreferredModel(chosen);
           showStatus("Saved offline model integrity verified and loaded: "+chosen.getName().substring(0,12)+"...");
         }catch(Exception e){showStatus("Saved model rejected: "+e.getMessage());}
       });
@@ -240,6 +242,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
           inferenceWorker.execute(()->{
             try{
               ModelFileLibrary.delete(getFilesDir(),chosen,embeddedModel.selectedModel());
+              if(chosen.getName().equals(preferredModelName()))
+                getPreferences(MODE_PRIVATE).edit().remove(OFFLINE_MODEL_PREF).apply();
               showStatus("Selected saved model deleted");
               runOnUiThread(this::refreshSavedModels);
             }catch(Exception e){showStatus("Cannot delete model: "+e.getMessage());}
@@ -349,11 +353,21 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         ModelFileLibrary.verify(getFilesDir(),imported.file);
         embeddedModel.load(imported.file);
         selectedModel.select(SelectedLocalEngine.Provider.EMBEDDED);
+        rememberPreferredModel(imported.file);
         runOnUiThread(this::refreshSavedModels);
         showStatus((normalizedHash.isEmpty()?"Unverified model loaded":"Trusted checksum verified; model loaded")
           +"; SHA-256: "+imported.sha256.substring(0,16)+"... ("+imported.bytes+" bytes)");
       }catch(Exception e){showStatus("Model import or load failed: "+e.getMessage());}
     });
+  }
+  private String preferredModelName() {
+    return getPreferences(MODE_PRIVATE).getString(OFFLINE_MODEL_PREF, "");
+  }
+  private void rememberPreferredModel(java.io.File file) {
+    // Only persist a local content-addressed filename, never model text,
+    // credentials, cloud consent, source document URI or downloaded bytes.
+    if(file!=null && file.getName().matches("[0-9a-f]{64}\\.task"))
+      getPreferences(MODE_PRIVATE).edit().putString(OFFLINE_MODEL_PREF,file.getName()).apply();
   }
   private java.io.File selectedSavedModel() {
     if(savedModels==null)return null;
@@ -370,6 +384,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(names.isEmpty())names.add("No models imported");
       savedModels.setAdapter(new ArrayAdapter<String>(
           this,android.R.layout.simple_spinner_dropdown_item,names));
+      final String remembered=preferredModelName();
+      for(int i=0;i<savedModelFiles.length;i++) {
+        if(savedModelFiles[i].getName().equals(remembered)) {
+          savedModels.setSelection(i);
+          break;
+        }
+      }
     }catch(Exception e){showStatus("Cannot list stored models: "+e.getMessage());}
   }
   private void handleVoicePrompt(String spoken){
