@@ -39,6 +39,7 @@ public final class AiChatActivity extends Activity {
     modelHint=label("Checking built-in Android Gemini Nano availability. No cloud prompt upload.",12,Color.LTGRAY);frame.addView(modelHint);
     try{nano=new NanoModelEngine();}catch(Throwable e){modelHint.setText("Gemini Nano initialization unavailable: "+e.getClass().getSimpleName());}
     button(frame,"CHECK ON-DEVICE AI",()->checkNano());
+    modelHint.setOnClickListener(v->{setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);});
     transcriptScroll=new ScrollView(this);history=label("Conversation will appear here. Configure a local model to begin.",15,Color.WHITE);history.setTextIsSelectable(true);history.setPadding(14,16,14,16);history.setBackgroundColor(panel);transcriptScroll.addView(history);
     frame.addView(transcriptScroll,new LinearLayout.LayoutParams(-1,0,1));
     LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.HORIZONTAL);frame.addView(actions);
@@ -66,8 +67,8 @@ public final class AiChatActivity extends Activity {
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
-    button(setup,"USE GEMINI NANO",()->{useNano=true;status.setText("Gemini Nano selected; check on-device AI availability.");});
-    button(setup,"USE LOCAL SERVER",()->{useNano=false;status.setText("Local server selected; configure a loopback endpoint.");});
+    button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;status.setText("Gemini Nano selected; check on-device AI availability.");});
+    button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;status.setText("Local server selected; configure a loopback endpoint.");});
     button(setup,"CONFIGURE LOCAL MODEL",()->{
       try{model.configure(endpoint.getText().toString().trim(),modelName.getText().toString().trim());
         saved.edit().putString("endpoint",endpoint.getText().toString().trim()).putString("model",modelName.getText().toString().trim()).apply();
