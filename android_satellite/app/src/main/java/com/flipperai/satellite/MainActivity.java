@@ -44,8 +44,10 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private Spinner mode;
   private final WorkerCloudEngine cloud=new WorkerCloudEngine();
   private final LocalModelEngine localModel=new LocalModelEngine();
-  private final InferenceRouter router=new InferenceRouter(
-    new OfflineModelOrDiagnostics(localModel,new OfflineDiagnosticEngine()),cloud);
+  private EmbeddedModelEngine embeddedModel;
+  private SelectedLocalEngine selectedModel;
+  private final OfflineDiagnosticEngine diagnostics=new OfflineDiagnosticEngine();
+  private InferenceRouter router;
   private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
   private CheckBox cloudConsent;
   private final ConsentEpoch consentEpoch=new ConsentEpoch();
@@ -54,6 +56,9 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final SessionEpoch connectionEpoch=new SessionEpoch();
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
+    embeddedModel=new EmbeddedModelEngine(getApplicationContext());
+    selectedModel=new SelectedLocalEngine(embeddedModel,localModel);
+    router=new InferenceRouter(new OfflineModelOrDiagnostics(selectedModel,diagnostics),cloud);
     requests=new SatelliteRequestHandler(router);
     ble=new BleSatellite(this,this);
     phoneVoice=new PhoneVoiceAdapter(this,new PhoneVoiceAdapter.Events(){
@@ -178,6 +183,30 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     mode=new Spinner(this);
     mode.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
     advancedSection.addView(mode);
+    TextView embeddedLabel=new TextView(this);
+    embeddedLabel.setText("Embedded offline AI: import a compatible MediaPipe .task model from phone storage. Model files remain private on this device. A model may need significant RAM and storage.");
+    advancedSection.addView(embeddedLabel);
+    Spinner modelProvider=new Spinner(this);
+    modelProvider.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,
+        new String[]{"Embedded model (default)","Localhost server"}));
+    advancedSection.addView(modelProvider);
+    advancedButton("Select offline model provider",()->{
+      selectedModel.select(modelProvider.getSelectedItemPosition()==0
+          ? SelectedLocalEngine.Provider.EMBEDDED:SelectedLocalEngine.Provider.LOCALHOST);
+      showStatus("Selected: "+selectedModel.selected());
+    });
+    advancedButton("Import and load .task model",()->{
+      android.content.Intent pick=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+      pick.setType("*/*");
+      pick.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+      startActivityForResult(pick,61);
+    });
+    advancedButton("Unload embedded model",()->{
+      inferenceWorker.execute(()->{
+        embeddedModel.close();
+        showStatus("Embedded model unloaded (imported file retained)");
+      });
+    });
     TextView localLabel=new TextView(this);
     localLabel.setText("Offline language model (optional): install a local OpenAI-compatible server and model on this phone. Only 127.0.0.1 is accepted; no internet URL is allowed.");
     advancedSection.addView(localLabel);
@@ -198,13 +227,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       localModel.clear();showStatus("Local model disabled; offline diagnostic rules remain available");
     });
     advancedButton("Test local model connection",()->{
-      if(!localModel.ready()){
-        showStatus("Configure the local on-device model endpoint first");return;
+      if(!selectedModel.ready()){
+        showStatus("Import an embedded model or configure the selected local server first");return;
       }
-      showStatus("Testing local model response...");
+      showStatus("Testing selected offline model response...");
       inferenceWorker.execute(()->{
         try{
-          String sample=localModel.answer("Reply with OK.");
+          String sample=selectedModel.answer("Reply with OK.");
           showStatus("Local model responded: "+sample);
         }catch(Exception e){
           showStatus("Local model not responding: "+e.getMessage());
@@ -257,8 +286,22 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
           : "No authorized AI GATT or stock Momentum RPC session.");
     });
     TextView caveat=new TextView(this);
-    caveat.setText("Momentum functions remain on Flipper. Offline LLM inference works only with a separately installed local model server; otherwise the app uses diagnostic rules. Localhost model requests never access the internet.");
+    caveat.setText("Momentum functions remain on Flipper. Embedded inference requires user-imported compatible .task weights; localhost inference needs a separate server. Offline diagnostics work without a model. Neither offline provider contacts cloud.");
     advancedSection.addView(caveat);
+  }
+  @Override protected void onActivityResult(int requestCode,int resultCode,android.content.Intent data) {
+    super.onActivityResult(requestCode,resultCode,data);
+    if(requestCode!=61 || resultCode!=RESULT_OK || data==null || data.getData()==null)return;
+    final android.net.Uri uri=data.getData();
+    showStatus("Importing selected offline model...");
+    inferenceWorker.execute(()->{
+      try {
+        ImportedModelStore.Imported imported=ImportedModelStore.importTask(this,uri);
+        embeddedModel.load(imported.file);
+        selectedModel.select(SelectedLocalEngine.Provider.EMBEDDED);
+        showStatus("Embedded model loaded; SHA-256: "+imported.sha256.substring(0,16)+"... ("+imported.bytes+" bytes)");
+      }catch(Exception e){showStatus("Model import or load failed: "+e.getMessage());}
+    });
   }
   private void handleVoicePrompt(String spoken){
     voiceTranscript.setText("You: "+spoken);
