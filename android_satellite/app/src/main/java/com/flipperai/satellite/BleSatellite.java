@@ -282,7 +282,11 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   private void deliver(byte[] bytes){
-    try{events.received(FrameCodec.decode(bytes));}
+    try{
+      String frame=FrameCodec.decode(bytes);
+      SatelliteProtocol.decode(frame);
+      events.received(frame);
+    }
     catch(IllegalArgumentException invalid){events.status("Rejected malformed AI BLE frame");}
   }
   private final BluetoothGattCallback callback=new BluetoothGattCallback(){
