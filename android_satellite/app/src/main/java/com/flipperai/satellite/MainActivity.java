@@ -544,6 +544,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     if(phoneVoice!=null)phoneVoice.close();
     ble.stopScan();transports.close();
     cloud.clear();localModel.clear();inferenceWorker.shutdownNow();
+    if(embeddedModel!=null)embeddedModel.close();
     super.onDestroy();
   }
 }
