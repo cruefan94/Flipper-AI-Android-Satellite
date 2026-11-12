@@ -71,5 +71,15 @@ int main(void){
  assert(ai_ble_bridge_ptt(&ptt_link,5201)==AI_CLIENT_NOT_READY);
  ai_ble_bridge_tick(&ptt_link,5300,disconnect_cb,&silent);
  assert(silent.disconnects==1);
+ /* No protocol layer may admit controls rejected by authenticated GATT. */
+ char formatted[AI_WIRE_MAX_FRAME+1];size_t written=0;
+ const char bad_tab[]={'b','a','d',9,'t','a','b',0};
+ const char bad_del[]={'b','a','d',127,0};
+ assert(ai_wire_format(formatted,sizeof(formatted),"ASK",8,bad_tab,&written)==AI_WIRE_BAD_FRAME);
+ assert(ai_wire_format(formatted,sizeof(formatted),"ASK",8,bad_del,&written)==AI_WIRE_BAD_FRAME);
+ const uint8_t unsafe[]={'A','I','1','|','A','S','K','|','8','|','a',9,'b',10};
+ assert(ai_wire_parse(unsafe,sizeof(unsafe),&response)==AI_WIRE_BAD_FRAME);
+ const uint8_t unsafe_del[]={'A','I','1','|','A','S','K','|','8','|','a',127,'b',10};
+ assert(ai_wire_parse(unsafe_del,sizeof(unsafe_del),&response)==AI_WIRE_BAD_FRAME);
  puts("ai_ble_bridge native tests passed");
 }
