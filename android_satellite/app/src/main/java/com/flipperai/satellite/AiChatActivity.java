@@ -74,6 +74,19 @@ public final class AiChatActivity extends Activity {
     button(setup,"CHECK GEMINI NANO",this::checkNano);
     button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",true).apply();status.setText("Gemini Nano selected; check on-device AI availability.");});
     button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",false).apply();status.setText("Independent model selected; requires installed local runtime.");});
+    button(setup,"MANAGE IMPORTED MODELS",()->{
+      java.io.File[] models=VerifiedModelStore.list(this);
+      if(models.length==0){status.setText("No verified GGUF weights imported.");return;}
+      String[] entries=new String[models.length];
+      for(int i=0;i<models.length;i++)entries[i]=models[i].getName().substring(9,21)+"… ("+(models[i].length()/1048576)+" MiB)";
+      new android.app.AlertDialog.Builder(this).setTitle("Imported model weights").setItems(entries,(dialog,index)->{
+        final String name=models[index].getName();
+        new android.app.AlertDialog.Builder(this).setTitle("Remove imported model?").setMessage("Delete "+name+" from private app storage? This cannot be undone.").setNegativeButton("CANCEL",null).setPositiveButton("DELETE",(confirm,which)->{
+          try{boolean removed=VerifiedModelStore.delete(this,name);status.setText(removed?"Model weights deleted.":"Model already absent.");}
+          catch(Exception e){status.setText("Deletion failed: "+e.getMessage());}
+        }).show();
+      }).setNegativeButton("CLOSE",null).show();
+    });
     button(setup,"IMPORTED MODEL STATUS",()->{
       java.io.File folder=new java.io.File(getFilesDir(),"models");java.io.File[] files=folder.listFiles((dir,name)->name.startsWith("verified-")&&name.endsWith(".gguf"));
       status.setText(files==null||files.length==0?"No verified model weights imported.":"Verified model weights stored: "+files.length+". Native inference runtime still required.");
