@@ -69,9 +69,10 @@ public final class AiChatActivity extends Activity {
     modelName.setText(saved.getString("model",""));
     button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;status.setText("Gemini Nano selected; check on-device AI availability.");});
     button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;status.setText("Independent model selected; requires installed local runtime.");});
+    button(setup,"CHECK MODEL STORAGE",()->status.setText(LocalModelReadiness.inspect(getFilesDir(),2L*1024*1024*1024)));
     button(setup,"INDEPENDENT MODEL OPTIONS",()->{
       StringBuilder choices=new StringBuilder("Model candidates (not installed):");
-      for(AiModelCatalog.Model item:AiModelCatalog.candidates())choices.append("\\n").append(item.family).append(" — ").append(item.format).append(" — ").append(item.note);
+      for(AiModelCatalog.Model item:AiModelCatalog.candidates())choices.append("\n").append(item.family).append(" — ").append(item.format).append(" — ").append(item.note);
       new android.app.AlertDialog.Builder(this).setTitle("Independent AI model roadmap").setMessage(choices.toString()).setPositiveButton("OK",null).show();
     });
     button(setup,"CONFIGURE LOCAL MODEL",()->{
@@ -118,7 +119,7 @@ public final class AiChatActivity extends Activity {
     if(busy){status.setText("A response is already processing. Press Stop first.");return;}
     final String text=prompt.getText().toString().trim();
     if(text.isEmpty()){status.setText("Type a question first.");return;}
-    if(text.length()>127){status.setText("Maximum prompt length is 127 characters.");return;}
+    if(text.length()>(useNano?1500:127)){status.setText("Prompt too long for selected engine.");return;}
     prompt.setText("");
     request(text,true);
   }
