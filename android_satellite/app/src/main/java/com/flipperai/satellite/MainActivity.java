@@ -17,6 +17,9 @@ import java.util.LinkedHashMap;
 /** Native Android AI Satellite control surface. No language model is bundled. */
 public final class MainActivity extends Activity implements BleSatellite.Events {
   private BleSatellite ble;
+  private PhoneVoiceAdapter phoneVoice;
+  private TextView voiceTranscript,voiceAnswer;
+  private int voiceGeneration=0;
   private final SatelliteTransportCoordinator transports=new SatelliteTransportCoordinator();
   private TextView status;
   private TextView connectionState;
@@ -53,6 +56,10 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     super.onCreate(b);
     requests=new SatelliteRequestHandler(router);
     ble=new BleSatellite(this,this);
+    phoneVoice=new PhoneVoiceAdapter(this,new PhoneVoiceAdapter.Events(){
+      @Override public void state(String text){showStatus(text);}
+      @Override public void transcript(String text){handleVoicePrompt(text);}
+    });
     transports.register(ble);
     ScrollView scroller=new ScrollView(this);
     root=new LinearLayout(this);
@@ -70,6 +77,24 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     connectionHistory=new TextView(this);
     connectionHistory.setText("Bluetooth device discovery is separate from the AI channel.");
     root.addView(connectionHistory);
+    TextView voiceTitle=new TextView(this);
+    voiceTitle.setText("PHONE VOICE ASSISTANT — on-device microphone and local speech output");
+    voiceTitle.setTextSize(18);root.addView(voiceTitle);
+    TextView voicePrivacy=new TextView(this);
+    voicePrivacy.setText("Tap Talk to activate the phone microphone. On-device speech recognition is required. AI routing follows OFFLINE/HYBRID/ONLINE mode and separate cloud consent. Flipper button activation requires future authenticated firmware support.");
+    root.addView(voicePrivacy);
+    voiceTranscript=new TextView(this);
+    voiceTranscript.setText("You: (nothing spoken)");root.addView(voiceTranscript);
+    voiceAnswer=new TextView(this);
+    voiceAnswer.setText("AI: (no answer yet)");root.addView(voiceAnswer);
+    button("Talk to AI (phone microphone)",()->{
+      if(phoneVoice.startListening())voiceTranscript.setText("You: listening...");
+    });
+    button("Stop listening / speaking",()->{
+      voiceGeneration++;phoneVoice.stopListening();phoneVoice.stopSpeaking();
+      voiceAnswer.setText("AI: stopped by user");
+    });
+
     TextView categoryPrompt=new TextView(this);
     categoryPrompt.setText("Choose ONE device source:");
     root.addView(categoryPrompt);
@@ -147,7 +172,6 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       ble.connect(selected);
     });
     button("Disconnect",()->{if(permissions())ble.disconnect();});
-    button("TEST MOMENTUM RPC PING",()->ble.sendStockRpcPing());
     button("Show / hide AI settings and diagnostics",()->{
       advancedVisible=!advancedVisible;
       advancedSection.setVisibility(advancedVisible?android.view.View.VISIBLE:android.view.View.GONE);
@@ -240,6 +264,31 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     TextView caveat=new TextView(this);
     caveat.setText("Momentum functions remain on Flipper. Offline LLM inference works only with a separately installed local model server; otherwise the app uses diagnostic rules. Localhost model requests never access the internet.");
     advancedSection.addView(caveat);
+  }
+  private void handleVoicePrompt(String spoken){
+    phoneVoice.stopSpeaking();
+    voiceTranscript.setText("You: "+spoken);
+    voiceAnswer.setText("AI: thinking...");
+    final int generation=++voiceGeneration;
+    final InferenceRouter.Mode selected=InferenceRouter.Mode.valueOf(labels[mode.getSelectedItemPosition()]);
+    final boolean consent=cloudConsent.isChecked();
+    final int consentGeneration=consentEpoch.snapshot();
+    inferenceWorker.execute(()->{
+      String answer;
+      try{
+        if(consent && !consentEpoch.current(consentGeneration))return;
+        answer=router.ask(spoken,selected,consent);
+      }catch(Exception e){answer="AI could not answer: "+e.getMessage();}
+      final String finalAnswer=answer;
+      runOnUiThread(()->{
+        if(isFinishing() || isDestroyed() || generation!=voiceGeneration)return;
+        if(consent && (!cloudConsent.isChecked() || !consentEpoch.current(consentGeneration))){
+          voiceAnswer.setText("AI: Cloud consent changed; response discarded");return;
+        }
+        voiceAnswer.setText("AI: "+finalAnswer);
+        phoneVoice.speak(finalAnswer);
+      });
+    });
   }
   private void beginScan(){
     nearby.clear();nearbyNames.clear();
@@ -370,12 +419,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     }
     return true;
   }
-  private void showStatus(String text){runOnUiThread(()->status.setText(text));}
+  private void showStatus(String text){runOnUiThread(()->{if(status!=null)status.setText(text);});}
   @Override public void status(String text){
     runOnUiThread(()->{
       if(connectionState==null)return;
-      if(text.startsWith("RPC PING RESPONSE RECEIVED"))connectionState.setText("MOMENTUM RPC PING RESPONSE RECEIVED — AI NOT READY");
-      else if(text.startsWith("Stock Momentum RPC indications enabled"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC INDICATIONS ACTIVE (AI NOT READY)");
+      if(text.startsWith("Stock Momentum RPC indications enabled"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC INDICATIONS ACTIVE (AI NOT READY)");
       else if(text.startsWith("BLUETOOTH CONNECTED: Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — STOCK MOMENTUM RPC DETECTED (AI NOT READY)");
       else if(text.startsWith("AI BLE ready"))connectionState.setText("AI CONNECTION: CONNECTED / READY");
       else if(text.startsWith("Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC DETECTED (AI NOT READY)");
@@ -455,6 +503,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   @Override public void onDestroy(){
     connectionEpoch.advance();
+    voiceGeneration++;
+    if(phoneVoice!=null)phoneVoice.close();
     ble.stopScan();transports.close();
     cloud.clear();localModel.clear();inferenceWorker.shutdownNow();
     super.onDestroy();
