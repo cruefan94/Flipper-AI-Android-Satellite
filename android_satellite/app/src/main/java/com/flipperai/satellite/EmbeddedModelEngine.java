@@ -38,8 +38,7 @@ public final class EmbeddedModelEngine implements InferenceRouter.OfflineEngine,
     @Override public synchronized boolean ready() { return inference!=null; }
     @Override public synchronized String answer(String prompt) throws Exception {
         if(inference==null)throw new IllegalStateException("Import and load an offline model first");
-        if(prompt==null || prompt.trim().isEmpty() || prompt.length()>127)
-            throw new IllegalArgumentException("Prompt must be 1–127 characters");
+        PhonePromptPolicy.requireValid(prompt);
         String reply=inference.generateResponse(prompt);
         if(reply==null || reply.trim().isEmpty())
             throw new IllegalStateException("Embedded model returned an empty answer");
