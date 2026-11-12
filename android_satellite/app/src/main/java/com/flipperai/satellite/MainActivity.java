@@ -634,7 +634,17 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     if(phoneVoice!=null)phoneVoice.close();
     ble.stopScan();transports.close();
     cloud.clear();localModel.clear();inferenceWorker.shutdownNow();
-    if(embeddedModel!=null)embeddedModel.close();
+    // Native MediaPipe inference may still hold the synchronized engine lock.
+    // Closing it on the UI thread could block Activity teardown for seconds.
+    // Best-effort daemon cleanup releases native resources after any active
+    // inference finishes; no further model requests are accepted by the worker.
+    final EmbeddedModelEngine closingModel=embeddedModel;
+    embeddedModel=null;
+    if(closingModel!=null) {
+      Thread cleanup=new Thread(closingModel::close,"flipper-ai-model-cleanup");
+      cleanup.setDaemon(true);
+      cleanup.start();
+    }
     super.onDestroy();
   }
 }
