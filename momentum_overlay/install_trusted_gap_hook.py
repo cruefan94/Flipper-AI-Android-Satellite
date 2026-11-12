@@ -94,7 +94,7 @@ def patch_bt_c(s):
     s=one(s,"        bt->max_packet_size = event.data.max_packet_size;",
         """        bt->max_packet_size = event.data.max_packet_size;
         bt->ai_mtu_known = true;
-        if(current_profile_is_serial && bt->ai_verified)
+        if(bt->current_profile && bt->current_profile->config == ble_profile_serial && bt->ai_verified)
             ble_profile_serial_ai_link_state(bt->current_profile, true, true,
                                              bt->max_packet_size);""")
     return s
