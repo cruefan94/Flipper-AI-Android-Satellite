@@ -7,6 +7,7 @@
   <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
   <uses-permission android:name="android.permission.INTERNET"/>
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
   <queries><intent><action android:name="android.speech.RecognitionService"/></intent></queries>
   <application android:label="Flipper AI Satellite" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
