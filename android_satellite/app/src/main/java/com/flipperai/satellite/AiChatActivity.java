@@ -15,6 +15,9 @@ import java.util.concurrent.*;
 public final class AiChatActivity extends Activity {
   private final LocalModelEngine model=new LocalModelEngine();
   private NanoModelEngine nano;
+  private EmbeddedModelEngine embedded;
+  private boolean useEmbedded=true;
+  private static final int IMPORT_TASK=402;
   private boolean useNano=false;
   private final ExecutorService worker=Executors.newSingleThreadExecutor();
   private final Handler ui=new Handler(Looper.getMainLooper());
@@ -39,6 +42,7 @@ public final class AiChatActivity extends Activity {
     TextView title=label("AI ASSISTANT",22,cyan);frame.addView(title);
     status=label("OFFLINE • Independent model runtime not configured",13,Color.LTGRAY);frame.addView(status);
     modelHint=label("Independent offline AI is preferred. Configure a local runtime in Model Setup. Gemini Nano is optional.",12,Color.LTGRAY);frame.addView(modelHint);
+    embedded=new EmbeddedModelEngine(getApplicationContext());
     try{nano=new NanoModelEngine();}catch(Throwable e){modelHint.setText("Gemini Nano initialization unavailable: "+e.getClass().getSimpleName());}
 
     modelHint.setOnClickListener(v->{setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);});
@@ -68,12 +72,17 @@ public final class AiChatActivity extends Activity {
     modelName=new EditText(this);modelName.setSingleLine(true);modelName.setHint("Local model ID (required)");modelName.setTextColor(Color.WHITE);modelName.setHintTextColor(Color.LTGRAY);setup.addView(modelName);
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
     useNano=saved.getBoolean("use_nano",false);
+    useEmbedded=saved.getBoolean("use_embedded",true);
     if(useNano)modelHint.setText("Gemini Nano selected (optional). This device may not support it. Choose independent model in setup.");
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
+    button(setup,"IMPORT OFFLINE .TASK MODEL",()->{
+      Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);pick.setType("application/octet-stream");pick.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(pick,IMPORT_TASK);
+    });
+    button(setup,"USE EMBEDDED OFFLINE AI",()->{useEmbedded=true;useNano=false;saved.edit().putBoolean("use_embedded",true).putBoolean("use_nano",false).apply();status.setText(embedded.ready()?"Embedded AI ready":"Import a compatible .task model to start offline AI.");});
     button(setup,"CHECK GEMINI NANO",this::checkNano);
-    button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",true).apply();status.setText("Gemini Nano selected; check on-device AI availability.");});
-    button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",false).apply();status.setText("Independent model selected; requires installed local runtime.");});
+    button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;useEmbedded=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",true).putBoolean("use_embedded",false).apply();status.setText("Gemini Nano selected; check on-device AI availability.");});
+    button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;useEmbedded=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",false).putBoolean("use_embedded",false).apply();status.setText("Independent model selected; requires installed local runtime.");});
     button(setup,"MANAGE IMPORTED MODELS",()->{
       java.io.File[] models=VerifiedModelStore.list(this);
       if(models.length==0){status.setText("No verified GGUF weights imported.");return;}
@@ -127,7 +136,16 @@ public final class AiChatActivity extends Activity {
   private ScrollView setupScroll;
   @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){
     super.onActivityResult(requestCode,resultCode,data);
-    if(requestCode!=IMPORT_MODEL||resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+    if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+    if(requestCode==IMPORT_TASK){
+      status.setText("Importing and loading embedded AI model...");final android.net.Uri selected=data.getData();
+      worker.execute(()->{String message;
+        try{ImportedModelStore.Imported imported=ImportedModelStore.importTask(getApplicationContext(),selected);embedded.load(imported.file);message="Embedded offline AI loaded. Ready for chat.";
+        }catch(Exception e){message="Embedded model import/load failed: "+e.getMessage();}
+        final String outcome=message;ui.post(()->{if(!isDestroyed()&&!isFinishing())status.setText(outcome);});
+      });return;
+    }
+    if(requestCode!=IMPORT_MODEL)return;
     final android.net.Uri uri=data.getData();final String expected=expectedModelSha;expectedModelSha="";
     status.setText("Verifying model checksum locally...");
     worker.execute(()->{
@@ -158,7 +176,8 @@ public final class AiChatActivity extends Activity {
     });
   }
   private void ask(){
-    if(!useNano&&!model.ready()){status.setText("No independent model runtime is connected. Open Model Setup to configure a local server.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
+    if(useEmbedded&&!embedded.ready()){status.setText("Import and load a compatible .task model in Model Setup first.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
+    if(!useEmbedded&&!useNano&&!model.ready()){status.setText("No independent model runtime is connected. Open Model Setup to configure a local server.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
     if(busy){status.setText("A response is already processing. Press Stop first.");return;}
     final String text=prompt.getText().toString().trim();
     if(text.isEmpty()){status.setText("Type a question first.");return;}
@@ -175,7 +194,7 @@ public final class AiChatActivity extends Activity {
     send.setEnabled(false);
     worker.execute(()->{
       String response;boolean success=true;
-      try{response=useNano?(nano==null?missingNano():nano.answer(text)):model.answer(text);}
+      try{response=useEmbedded?embedded.answer(text):(useNano?(nano==null?missingNano():nano.answer(text)):model.answer(text));}
       catch(Exception e){response="Local model unavailable: "+e.getMessage();success=false;}
       final String result=response;final boolean ok=success;
       ui.post(()->{
@@ -191,5 +210,5 @@ public final class AiChatActivity extends Activity {
   private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
   private TextView label(String s,int size,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);v.setPadding(4,8,4,8);return v;}
   private Button button(LinearLayout parent,String title,Runnable action){Button b=new Button(this);b.setText(title);b.setTextSize(11);b.setAllCaps(false);b.setTextColor(cyan);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(panel));b.setMinHeight(dp(40));b.setMinimumHeight(dp(40));b.setPadding(dp(4),0,dp(4),0);b.setOnClickListener(v->action.run());LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(44),1);p.setMargins(dp(2),dp(2),dp(2),dp(2));parent.addView(b,p);return b;}
-  @Override protected void onDestroy(){generation++;worker.shutdownNow();model.clear();super.onDestroy();}
+  @Override protected void onDestroy(){generation++;worker.shutdownNow();model.clear();if(embedded!=null)embedded.close();super.onDestroy();}
 }
