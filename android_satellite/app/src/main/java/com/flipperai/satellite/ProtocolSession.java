@@ -28,7 +28,10 @@ public final class ProtocolSession {
         }
         if(!helloSeen)return handler.error(id,"HELLO_REQUIRED",maxFrameBytes);
         if(id<=lastRequestId)return handler.error(id,"REPLAY_ID",maxFrameBytes);
-        lastRequestId=id;
-        return handler.handle(frame,maxFrameBytes);
+        // Do not consume the request ID when the response cannot fit the link.
+        // A retried request must remain eligible after MTU negotiation changes.
+        String response=handler.handle(frame,maxFrameBytes);
+        if(response!=null)lastRequestId=id;
+        return response;
     }
 }
