@@ -76,12 +76,36 @@ public final class AiChatActivity extends Activity {
     useNano=saved.getBoolean("use_nano",false);
     useEmbedded=saved.getBoolean("use_embedded",true);
     java.io.File[] stored=new java.io.File(getFilesDir(),"ai_models").listFiles((dir,name)->name.matches("[a-f0-9]{64}\\.task"));
-    if(stored!=null&&stored.length==1){loadingEmbedded=true;final java.io.File restore=stored[0];status.setText("Restoring imported offline AI model...");worker.execute(()->{String message;try{embedded.load(restore);message="Embedded offline AI ready.";}catch(Exception e){message="Imported model could not load: "+e.getMessage();}final String result=message;loadingEmbedded=false;ui.post(()->{if(!isFinishing()&&!isDestroyed())status.setText(result);});});}
+    final String selectedModel=saved.getString("embedded_model","");
+    java.io.File restore=null;
+    if(stored!=null){for(java.io.File candidate:stored)if(candidate.getName().equals(selectedModel))restore=candidate;
+      if(restore==null&&stored.length==1)restore=stored[0];}
+    if(restore!=null){loadingEmbedded=true;final java.io.File selectedRestore=restore;status.setText("Restoring imported offline AI model...");worker.execute(()->{String message;try{embedded.load(selectedRestore);message="Embedded offline AI ready.";}catch(Exception e){message="Imported model could not load: "+e.getMessage();}final String result=message;loadingEmbedded=false;ui.post(()->{if(!isFinishing()&&!isDestroyed())status.setText(result);});});}
     if(useNano)modelHint.setText("Gemini Nano selected (optional). This device may not support it. Choose independent model in setup.");
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
     button(setup,"IMPORT OFFLINE .TASK MODEL",()->{
       Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);pick.setType("application/octet-stream");pick.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(pick,IMPORT_TASK);
+    });
+    button(setup,"SELECT IMPORTED .TASK MODEL",()->{
+      java.io.File folder=new java.io.File(getFilesDir(),"ai_models");
+      java.io.File[] choices=folder.listFiles((dir,name)->name.matches("[a-f0-9]{64}\\.task"));
+      if(choices==null||choices.length==0){status.setText("No .task model imported. Use IMPORT OFFLINE .TASK MODEL.");return;}
+      java.util.Arrays.sort(choices,(a,b)->a.getName().compareTo(b.getName()));
+      String[] labels=new String[choices.length];
+      for(int i=0;i<choices.length;i++)labels[i]=choices[i].getName().substring(0,12)+"… ("+(choices[i].length()/1048576)+" MiB)";
+      new android.app.AlertDialog.Builder(this).setTitle("Choose offline AI model").setItems(labels,(dialog,index)->{
+        if(busy||loadingEmbedded){status.setText("Wait for current inference or model loading.");return;}
+        final java.io.File chosen=choices[index];loadingEmbedded=true;status.setText("Loading selected offline model...");
+        worker.execute(()->{String message;boolean ok=false;
+          try{embedded.load(chosen);ok=true;message="Offline AI model loaded. Ready to chat.";}catch(Exception e){message="Model load failed: "+e.getMessage();}
+          final boolean loaded=ok;final String result=message;loadingEmbedded=false;
+          ui.post(()->{if(isFinishing()||isDestroyed())return;
+            if(loaded){useEmbedded=true;useNano=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("embedded_model",chosen.getName()).putBoolean("use_embedded",true).putBoolean("use_nano",false).apply();}
+            status.setText(result);
+          });
+        });
+      }).setNegativeButton("CANCEL",null).show();
     });
     button(setup,"TEST EMBEDDED AI",()->{
       if(loadingEmbedded){status.setText("Model loading; please wait.");return;}
@@ -151,7 +175,7 @@ public final class AiChatActivity extends Activity {
     if(requestCode==IMPORT_TASK){
       loadingEmbedded=true;status.setText("Importing and loading embedded AI model...");final android.net.Uri selected=data.getData();
       worker.execute(()->{String message;
-        try{ImportedModelStore.Imported imported=ImportedModelStore.importTask(getApplicationContext(),selected);embedded.load(imported.file);message="Embedded offline AI loaded. Ready for chat.";
+        try{ImportedModelStore.Imported imported=ImportedModelStore.importTask(getApplicationContext(),selected);embedded.load(imported.file);getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("embedded_model",imported.file.getName()).apply();message="Embedded offline AI loaded. Ready for chat.";
         }catch(Exception e){message="Embedded model import/load failed: "+e.getMessage();}
         final String outcome=message;loadingEmbedded=false;ui.post(()->{if(!isDestroyed()&&!isFinishing()){if(embedded.ready()){useEmbedded=true;useNano=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_embedded",true).putBoolean("use_nano",false).apply();}status.setText(outcome);}});
       });return;
