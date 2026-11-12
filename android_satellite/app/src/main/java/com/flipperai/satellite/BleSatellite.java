@@ -16,6 +16,9 @@ import java.util.UUID;
  */
 @SuppressLint("MissingPermission")
 public final class BleSatellite implements SatelliteTransport {
+  public static final UUID MOMENTUM_RPC_SERVICE=UUID.fromString("8fe5b3d5-2e7f-4a98-2a48-7acc60fe0000");
+  public static final UUID MOMENTUM_RPC_WRITE=UUID.fromString("19ed82ae-ed21-4c9d-4145-228e62fe0000");
+  public static final UUID MOMENTUM_RPC_NOTIFY=UUID.fromString("19ed82ae-ed21-4c9d-4145-228e61fe0000");
   public static final UUID SERVICE=UUID.fromString("c8c7ab10-6355-4ea8-a76a-0a4a64de0001");
   public static final UUID RX=UUID.fromString("c8c7ab10-6355-4ea8-a76a-0a4a64de0002");
   public static final UUID TX=UUID.fromString("c8c7ab10-6355-4ea8-a76a-0a4a64de0003");
@@ -34,6 +37,7 @@ public final class BleSatellite implements SatelliteTransport {
   private boolean retry147Used;
   /* Read by UI and written from Android Bluetooth Binder callbacks. */
   private volatile boolean authorized,subscribed,mtuPending;
+  private volatile boolean stockRpcDetected;
   private final BleWriteGuard writeGuard=new BleWriteGuard();
   private static final int MAX_QUEUED=8;
   private static final long GATT_WRITE_TIMEOUT_MS=6000L;
@@ -150,7 +154,7 @@ public final class BleSatellite implements SatelliteTransport {
   }
   public synchronized void disconnect(){
     connectionGeneration++;
-    state.disconnected();authorized=false;subscribed=false;mtuPending=false;writeGuard.reset();
+    state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;writeGuard.reset();
     pending.clear();BluetoothGatt old=gatt;gatt=null;
     events.status("Disconnected (local)");
     if(old!=null){
@@ -169,6 +173,7 @@ public final class BleSatellite implements SatelliteTransport {
   }
   public int maxFrameBytes(){return state.payloadLimit();}
   @Override public Kind kind(){return Kind.BLE;}
+  public boolean hasStockRpc(){return stockRpcDetected && gatt!=null && approved();}
   @Override public boolean isReady(){return subscribed && approved() && state.phase()==TransportState.Phase.READY;}
   @Override public boolean sendFrame(String data){return send(data);}
   @Override public void close(){stopScan();disconnect();}
@@ -300,8 +305,19 @@ public final class BleSatellite implements SatelliteTransport {
       if(link!=gatt)return;
       if(!approved()){disconnect();return;}
       BluetoothGattService service=link.getService(SERVICE);
-      if(code!=BluetoothGatt.GATT_SUCCESS || service==null){
-        events.status("Momentum AI BLE service is not installed");disconnect();return;
+      if(code!=BluetoothGatt.GATT_SUCCESS){
+        events.status("Bluetooth service discovery failed (GATT "+code+")");disconnect();return;
+      }
+      if(service==null){
+        BluetoothGattService rpc=link.getService(MOMENTUM_RPC_SERVICE);
+        if(rpc!=null && rpc.getCharacteristic(MOMENTUM_RPC_WRITE)!=null &&
+           rpc.getCharacteristic(MOMENTUM_RPC_NOTIFY)!=null){
+          stockRpcDetected=true;
+          events.status("BLUETOOTH CONNECTED: Stock Momentum RPC detected. AI channel not available yet.");
+          return;
+        }
+        events.status("Bluetooth connected, but neither stock Momentum RPC nor AI service was found.");
+        disconnect();return;
       }
       BluetoothGattCharacteristic tx=service.getCharacteristic(TX),rx=service.getCharacteristic(RX);
       if(tx==null || rx==null || !GattProfilePolicy.valid(rx.getProperties(),tx.getProperties(),tx.getDescriptor(CCCD)!=null)){
