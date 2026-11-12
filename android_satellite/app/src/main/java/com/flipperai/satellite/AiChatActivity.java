@@ -74,9 +74,13 @@ public final class AiChatActivity extends Activity {
     button(setup,"CHECK GEMINI NANO",this::checkNano);
     button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",true).apply();status.setText("Gemini Nano selected; check on-device AI availability.");});
     button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",false).apply();status.setText("Independent model selected; requires installed local runtime.");});
-    button(setup,"VERIFY GGUF MODEL FILE",()->{
+    button(setup,"IMPORTED MODEL STATUS",()->{
+      java.io.File folder=new java.io.File(getFilesDir(),"models");java.io.File[] files=folder.listFiles((dir,name)->name.startsWith("verified-")&&name.endsWith(".gguf"));
+      status.setText(files==null||files.length==0?"No verified model weights imported.":"Verified model weights stored: "+files.length+". Native inference runtime still required.");
+    });
+    button(setup,"VERIFY & IMPORT GGUF",()->{
       final EditText hash=new EditText(this);hash.setSingleLine(true);hash.setHint("Expected SHA-256 (64 hex characters)");
-      new android.app.AlertDialog.Builder(this).setTitle("Verify independent model").setMessage("Choose a GGUF file and supply the trusted publisher checksum. This verifies weights but does not install an inference runtime.").setView(hash).setNegativeButton("CANCEL",null).setPositiveButton("CHOOSE FILE",(d,w)->{
+      new android.app.AlertDialog.Builder(this).setTitle("Verify independent model").setMessage("Choose a GGUF file and supply its trusted publisher checksum. Verified weights will be copied to private app storage. This does not install an inference runtime.").setView(hash).setNegativeButton("CANCEL",null).setPositiveButton("CHOOSE FILE",(d,w)->{
         String value=hash.getText().toString().trim();if(!value.matches("[0-9a-fA-F]{64}")){status.setText("A trusted 64-character SHA-256 checksum is required.");return;}
         expectedModelSha=value;Intent intent=new Intent(Intent.ACTION_OPEN_DOCUMENT);intent.setType("application/octet-stream");intent.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(intent,IMPORT_MODEL);
       }).show();
@@ -116,15 +120,9 @@ public final class AiChatActivity extends Activity {
     worker.execute(()->{
       String message;
       try{
-        java.security.MessageDigest digest=java.security.MessageDigest.getInstance("SHA-256");long total=0;
-        try(java.io.InputStream in=getContentResolver().openInputStream(uri)){
-          if(in==null)throw new java.io.IOException("Cannot read selected file");
-          byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1){digest.update(buffer,0,n);total+=n;}
-        }
-        StringBuilder hex=new StringBuilder(64);for(byte b:digest.digest())hex.append(String.format(java.util.Locale.ROOT,"%02x",b&255));
-        if(total<1048576)throw new java.io.IOException("Selected model file is too small");
-        message=hex.toString().equalsIgnoreCase(expected)?"GGUF checksum verified ("+(total/1048576)+" MiB). Native inference runtime still required.":"Model checksum mismatch. File not trusted.";
-      }catch(Exception e){message="Model verification failed: "+e.getMessage();}
+        VerifiedModelImporter.Result imported=VerifiedModelImporter.importFile(getApplicationContext(),uri,expected);
+        message="Verified GGUF imported privately ("+(imported.bytes/1048576)+" MiB). Native inference runtime is not yet installed.";
+      }catch(Exception e){message="Model import failed: "+e.getMessage();}
       final String result=message;ui.post(()->{if(!isFinishing()&&!isDestroyed())status.setText(result);});
     });
   }
