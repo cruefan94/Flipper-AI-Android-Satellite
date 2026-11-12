@@ -3,3 +3,6 @@ android { namespace 'com.flipperai.satellite'; compileSdk 35
  defaultConfig { applicationId 'com.flipperai.satellite'; minSdk 26; targetSdk 35; versionCode 1; versionName '0.6.0-dev' }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
+
+// Optional on-device Gemini Nano via Android AICore; model support is device-dependent.
+dependencies { implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4' }
