@@ -76,6 +76,10 @@ public final class RadioScannerActivity extends Activity {
     button(root,"PLAY SELECTED OR ENTERED STREAM",()->play());
     button(root,"PAUSE",()->send("pause",null,null));
     button(root,"RESUME",()->send("resume",null,null));
+    button(root,"RETRY LAST STREAM",()->{
+      if(recentStations.isEmpty()){status.setText("No previous stream to retry.");return;}
+      Station last=recentStations.get(0);name.setText(last.name);url.setText(last.url);play();
+    });
     button(root,"STOP",()->send("stop",null,null));
     button(root,"ANDROID MEDIA VOLUME",()->{
       AudioManager audio=(AudioManager)getSystemService(AUDIO_SERVICE);
@@ -85,6 +89,7 @@ public final class RadioScannerActivity extends Activity {
     recentList=spinner(root,new String[]{"No recent streams"});
     button(root,"PLAY SELECTED RECENT STATION",()->playRecent());
     button(root,"CLEAR RECENT HISTORY",()->{recentStations.clear();recent.clear();persist();refreshRecent();status.setText("Recent station history cleared.");});
+    label(root,"If a stream fails: try Retry Last Stream, choose another result, or check the provider. Search results are not guaranteed live.");
     title(root,"AI RADIO INTELLIGENCE");
     ai=label(root,"Transcription and AI summaries are not enabled. No audio is recorded or uploaded. Actual audio capture and user consent must be implemented first.");
     button(root,"CHECK AI RADIO FEATURES",()->ai.setText("Unavailable: no authorized audio-capture/transcription pipeline or configured radio AI model. Playback is unaffected."));
