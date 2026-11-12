@@ -30,6 +30,8 @@ public final class BleSatellite implements SatelliteTransport {
   private volatile BluetoothGatt gatt;
   private volatile BluetoothDevice lastDevice;
   private int scanGeneration;
+  private int connectionGeneration;
+  private boolean retry147Used;
   /* Read by UI and written from Android Bluetooth Binder callbacks. */
   private volatile boolean authorized,subscribed,mtuPending;
   private final BleWriteGuard writeGuard=new BleWriteGuard();
@@ -80,6 +82,10 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   public synchronized void connect(BluetoothDevice device){
+    retry147Used=false;
+    openConnection(device);
+  }
+  private synchronized void openConnection(BluetoothDevice device){
     stopScan();disconnect();lastDevice=device;
     if(device==null)return;
     events.status("Connecting to selected Flipper");
@@ -143,6 +149,7 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   public synchronized void disconnect(){
+    connectionGeneration++;
     state.disconnected();authorized=false;subscribed=false;mtuPending=false;writeGuard.reset();
     pending.clear();BluetoothGatt old=gatt;gatt=null;
     events.status("Disconnected (local)");
@@ -267,7 +274,24 @@ public final class BleSatellite implements SatelliteTransport {
         if(!discoveryStarted)disconnect();
       }else{
         // Invalidate any request from this connection, including delayed callbacks.
-        disconnect();events.status("Disconnected (GATT "+code+")");
+        if(code==147 && !retry147Used && approved()){
+          retry147Used=true;
+          final BluetoothDevice retryDevice=lastDevice;
+          disconnect();
+          final int generation=connectionGeneration;
+          events.status("GATT 147: connection rejected. Retrying once after a short delay...");
+          ui.postDelayed(()->{
+            synchronized(BleSatellite.this){
+              if(generation!=connectionGeneration || retryDevice!=lastDevice)return;
+              openConnection(retryDevice);
+            }
+          },1800);
+        }else{
+          disconnect();
+          events.status(code==147
+            ? "GATT 147 persists: Bluetooth link rejected. Try the paired Flipper entry; AI service is still required."
+            : "Disconnected (GATT "+code+")");
+        }
       }
       }
     }
