@@ -46,6 +46,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final LocalModelEngine localModel=new LocalModelEngine();
   private EmbeddedModelEngine embeddedModel;
   private EditText trustedModelHash;
+  private Spinner savedModels;
+  private java.io.File[] savedModelFiles=new java.io.File[0];
   private SelectedLocalEngine selectedModel;
   private final OfflineDiagnosticEngine diagnostics=new OfflineDiagnosticEngine();
   private InferenceRouter router;
@@ -208,6 +210,42 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       pick.addCategory(android.content.Intent.CATEGORY_OPENABLE);
       startActivityForResult(pick,61);
     });
+    TextView savedLabel=new TextView(this);
+    savedLabel.setText("Imported models (stored privately on this phone)");
+    advancedSection.addView(savedLabel);
+    savedModels=new Spinner(this);
+    advancedSection.addView(savedModels);
+    refreshSavedModels();
+    advancedButton("Refresh model library",this::refreshSavedModels);
+    advancedButton("Load saved model",()->{
+      java.io.File chosen=selectedSavedModel();
+      if(chosen==null){showStatus("No stored model selected");return;}
+      inferenceWorker.execute(()->{
+        try{
+          ModelFileLibrary.verify(getFilesDir(),chosen);
+          embeddedModel.load(chosen);
+          selectedModel.select(SelectedLocalEngine.Provider.EMBEDDED);
+          showStatus("Saved offline model integrity verified and loaded: "+chosen.getName().substring(0,12)+"...");
+        }catch(Exception e){showStatus("Saved model rejected: "+e.getMessage());}
+      });
+    });
+    advancedButton("Delete saved model",()->{
+      java.io.File chosen=selectedSavedModel();
+      if(chosen==null){showStatus("No stored model selected");return;}
+      new android.app.AlertDialog.Builder(this)
+        .setTitle("Delete imported model?")
+        .setMessage("Delete the selected app-private model file? Unload it first if active.")
+        .setNegativeButton("Cancel",null)
+        .setPositiveButton("Delete",(dialog,which)->{
+          inferenceWorker.execute(()->{
+            try{
+              ModelFileLibrary.delete(getFilesDir(),chosen,embeddedModel.selectedModel());
+              showStatus("Selected saved model deleted");
+              runOnUiThread(this::refreshSavedModels);
+            }catch(Exception e){showStatus("Cannot delete model: "+e.getMessage());}
+          });
+        }).show();
+    });
     advancedButton("Unload embedded model",()->{
       inferenceWorker.execute(()->{
         embeddedModel.close();
@@ -308,12 +346,31 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         String normalizedHash=ModelChecksumPolicy.normalizeExpected(expectedHash);
         ImportedModelStore.Imported imported=ImportedModelStore.importTask(this,uri);
         ModelChecksumPolicy.verify(normalizedHash,imported.sha256);
+        ModelFileLibrary.verify(getFilesDir(),imported.file);
         embeddedModel.load(imported.file);
         selectedModel.select(SelectedLocalEngine.Provider.EMBEDDED);
+        runOnUiThread(this::refreshSavedModels);
         showStatus((normalizedHash.isEmpty()?"Unverified model loaded":"Trusted checksum verified; model loaded")
           +"; SHA-256: "+imported.sha256.substring(0,16)+"... ("+imported.bytes+" bytes)");
       }catch(Exception e){showStatus("Model import or load failed: "+e.getMessage());}
     });
+  }
+  private java.io.File selectedSavedModel() {
+    if(savedModels==null)return null;
+    int index=savedModels.getSelectedItemPosition();
+    return index>=0 && index<savedModelFiles.length ? savedModelFiles[index]:null;
+  }
+  private void refreshSavedModels() {
+    if(savedModels==null)return;
+    try{
+      savedModelFiles=ModelFileLibrary.list(getFilesDir());
+      java.util.ArrayList<String> names=new java.util.ArrayList<>();
+      for(java.io.File f:savedModelFiles)
+        names.add(f.getName().substring(0,12)+"... ("+(f.length()/1024/1024)+" MiB)");
+      if(names.isEmpty())names.add("No models imported");
+      savedModels.setAdapter(new ArrayAdapter<String>(
+          this,android.R.layout.simple_spinner_dropdown_item,names));
+    }catch(Exception e){showStatus("Cannot list stored models: "+e.getMessage());}
   }
   private void handleVoicePrompt(String spoken){
     voiceTranscript.setText("You: "+spoken);
