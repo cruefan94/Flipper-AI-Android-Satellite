@@ -257,7 +257,14 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       catch(SecurityException ignored){/* Name may be unavailable without CONNECT permission. */}
       if(name==null || name.trim().isEmpty())name="Unknown BLE device";
       // Keep the address visible to distinguish devices with the same name.
-      String display=name.trim()+" ("+address+")";
+      String display=name.trim();
+      // Include an address only when another device has the same name.
+      for(java.util.Map.Entry<String,String> entry:deviceLabels.entrySet()){
+        if(!address.equals(entry.getKey()) && display.equals(entry.getValue())){
+          display=display+" ("+address+")";
+          break;
+        }
+      }
       String previousAddress=null;
       if(devices.getSelectedItem()!=null){
         String previousLabel=devices.getSelectedItem().toString();
@@ -275,7 +282,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
           i++;
         }
       }
-      showStatus("Found "+discovered.size()+" nearby BLE device(s). Select Sarah or your Flipper's advertised name.");
+      showStatus("Found "+discovered.size()+" nearby BLE device(s). Select your device by its advertised name.");
     });
   }
   @Override public void onDestroy(){
