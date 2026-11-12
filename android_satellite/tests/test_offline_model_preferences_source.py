@@ -16,6 +16,12 @@ class OfflinePreferenceSourceTest(unittest.TestCase):
         self.assertIn('putString(OFFLINE_MODEL_PREF,file.getName())',UI)
         self.assertIn('getString(OFFLINE_MODEL_PREF, "")',UI)
         self.assertIn('savedModels.setSelection(i);',UI)
+    def test_native_model_cleanup_is_off_ui_thread(self):
+        self.assertIn('new Thread(closingModel::close,"flipper-ai-model-cleanup")',UI)
+        self.assertIn('cleanup.setDaemon(true);',UI)
+        self.assertIn('inferenceWorker.shutdownNow();',UI)
+        self.assertNotIn('if(embeddedModel!=null)embeddedModel.close();',UI)
+
     def test_cloud_consent_is_never_restored(self):
         self.assertIn("cloudConsent.setChecked(false);",UI)
         self.assertNotIn('putBoolean("cloudConsent"',UI)
