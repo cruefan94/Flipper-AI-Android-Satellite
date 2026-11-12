@@ -233,7 +233,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(!permissions())return;
       showStatus(transports.isReady()
           ? "AI GATT connected; Flipper must initiate HELLO by notification"
-          : ble.hasStockRpc() ? "Stock Momentum RPC detected over Bluetooth. AI bridge is not yet installed."
+          : ble.hasStockRpc() ? "Stock Momentum RPC detected. Notifications: "+(ble.isStockRpcSubscribed()?"enabled":"not enabled")+". Received: "+ble.stockRpcNotificationCount()+". AI bridge not installed."
           : "No authorized AI GATT or stock Momentum RPC session.");
     });
     TextView caveat=new TextView(this);
@@ -373,13 +373,14 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   @Override public void status(String text){
     runOnUiThread(()->{
       if(connectionState==null)return;
-      if(text.startsWith("BLUETOOTH CONNECTED: Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — STOCK MOMENTUM RPC DETECTED (AI NOT READY)");
+      if(text.startsWith("Stock Momentum RPC notifications enabled"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC NOTIFICATIONS ACTIVE (AI NOT READY)");
+      else if(text.startsWith("BLUETOOTH CONNECTED: Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — STOCK MOMENTUM RPC DETECTED (AI NOT READY)");
       else if(text.startsWith("AI BLE ready"))connectionState.setText("AI CONNECTION: CONNECTED / READY");
       else if(text.startsWith("Connected;"))connectionState.setText("BLUETOOTH CONNECTED — CHECKING AI SERVICE");
       else if(text.startsWith("Connecting") || text.contains("Retrying once"))connectionState.setText("AI CONNECTION: CONNECTING...");
       else if(text.startsWith("Disconnected") || text.startsWith("GATT") || text.contains("service is not installed"))
         connectionState.setText("AI CONNECTION: NOT CONNECTED");
-      if(text.startsWith("Disconnected") || text.startsWith("GATT") || text.startsWith("Connected;") || text.startsWith("AI BLE ready") || text.startsWith("BLUETOOTH CONNECTED: Stock Momentum RPC") || text.contains("service is not installed"))
+      if(text.startsWith("Disconnected") || text.startsWith("GATT") || text.startsWith("Connected;") || text.startsWith("AI BLE ready") || text.startsWith("BLUETOOTH CONNECTED: Stock Momentum RPC") || text.startsWith("Stock Momentum RPC") || text.contains("service is not installed"))
         connectionHistory.setText("Last connection event: "+text);
     });
     if(text.startsWith("Disconnected") || text.startsWith("Connecting")){
