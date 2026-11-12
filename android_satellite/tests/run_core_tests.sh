@@ -14,6 +14,8 @@ javac -cp "$DEST" -d "$DEST" "$SRC/SelectedLocalEngine.java" "$ROOT/android_sate
 java -cp "$DEST" SelectedLocalEngineTest
 javac -cp "$DEST" -d "$DEST" "$SRC/ModelChecksumPolicy.java" "$ROOT/android_satellite/tests/ModelChecksumPolicyTest.java"
 java -cp "$DEST" ModelChecksumPolicyTest
+javac -cp "$DEST" -d "$DEST" "$SRC/RadioStreamPolicy.java" "$ROOT/android_satellite/tests/RadioStreamPolicyTest.java"
+java -cp "$DEST" RadioStreamPolicyTest
 javac -cp "$DEST" -d "$DEST" "$SRC/ModelFileLibrary.java" "$ROOT/android_satellite/tests/ModelFileLibraryTest.java"
 java -cp "$DEST" ModelFileLibraryTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SessionEpochTest.java"
