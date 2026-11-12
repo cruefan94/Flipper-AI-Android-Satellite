@@ -8,7 +8,10 @@ static int type_valid(const char* s, size_t n) {
     return 1;
 }
 static int payload_valid(const char* s, size_t n) {
-    for(size_t i=0;i<n;i++) if(s[i]=='|' || s[i]=='\n' || s[i]=='\r' || s[i]=='\0') return 0;
+    for(size_t i=0;i<n;i++) {
+        unsigned char ch=(unsigned char)s[i];
+        if(ch=='|' || ch<0x20u || ch==0x7fu)return 0;
+    }
     return 1;
 }
 AiWireResult ai_wire_parse(const uint8_t* data,size_t length,AiWireMessage* out) {
