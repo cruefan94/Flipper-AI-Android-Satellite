@@ -213,5 +213,5 @@ public final class AiChatActivity extends Activity {
   private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
   private TextView label(String s,int size,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);v.setPadding(4,8,4,8);return v;}
   private Button button(LinearLayout parent,String title,Runnable action){Button b=new Button(this);b.setText(title);b.setTextSize(11);b.setAllCaps(false);b.setTextColor(cyan);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(panel));b.setMinHeight(dp(40));b.setMinimumHeight(dp(40));b.setPadding(dp(4),0,dp(4),0);b.setOnClickListener(v->action.run());LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(44),1);p.setMargins(dp(2),dp(2),dp(2),dp(2));parent.addView(b,p);return b;}
-  @Override protected void onDestroy(){generation++;closing=true;model.clear();worker.shutdown();worker.execute(()->{if(embedded!=null)embedded.close();});super.onDestroy();}
+  @Override protected void onDestroy(){generation++;closing=true;model.clear();worker.execute(()->{if(embedded!=null)embedded.close();});worker.shutdown();super.onDestroy();}
 }
