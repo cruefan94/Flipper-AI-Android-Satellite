@@ -77,6 +77,30 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     connectionHistory=new TextView(this);
     connectionHistory.setText("Bluetooth device discovery is separate from the AI channel.");
     root.addView(connectionHistory);
+    TextView companionTitle=new TextView(this);
+    companionTitle.setText("PHONE COMPANION");companionTitle.setTextSize(18);root.addView(companionTitle);
+    TextView companionInfo=new TextView(this);
+    companionInfo.setText("Phone status not yet refreshed");root.addView(companionInfo);
+    button("Refresh phone battery / Wi-Fi / Bluetooth",()->{
+      try {companionInfo.setText(PhoneCompanionStatus.snapshot(this));}
+      catch(SecurityException e){companionInfo.setText("Phone status unavailable due to Android permissions");}
+    });
+    companionInfo.setText(PhoneCompanionStatus.snapshot(this));
+    TextView githubTitle=new TextView(this);
+    githubTitle.setText("GITHUB — PUBLIC RELEASE CHECK");githubTitle.setTextSize(18);root.addView(githubTitle);
+    TextView githubInfo=new TextView(this);
+    githubInfo.setText("Read-only public releases. Private repository account linking is not yet implemented.");
+    root.addView(githubInfo);
+    button("Check Android Satellite public release",()->{
+      githubInfo.setText("Checking GitHub...");
+      inferenceWorker.execute(()->{
+        String result;
+        try {result=GithubPublicStatus.fetchLatest("cruefan94","Flipper-AI-Android-Satellite");}
+        catch(Exception e){result="Unable to check GitHub releases. Check network connection.";}
+        final String message=result;
+        runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())githubInfo.setText(message);});
+      });
+    });
     TextView voiceTitle=new TextView(this);
     voiceTitle.setText("PHONE VOICE ASSISTANT — on-device microphone and local speech output");
     voiceTitle.setTextSize(18);root.addView(voiceTitle);
