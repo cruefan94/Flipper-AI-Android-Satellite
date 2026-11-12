@@ -1,0 +1,39 @@
+name: Public Flipper PTT native protocol regression
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/ptt-native-contract-v01]
+    paths:
+      - 'flipper_app/satellite_protocol/**'
+      - 'tests/native/ai_*test.c'
+      - '.github/workflows/public-ptt-native-contract.yml'
+permissions:
+  contents: read
+jobs:
+  native-ptt:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile transport-only native PTT and AI1 protocol regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/flipper-ptt
+          for test in ai_ble_bridge_test ai_app_transport_test; do
+            cc -std=c11 -O1 -Wall -Wextra -Werror -pedantic -g \
+              -fsanitize=address,undefined -fno-omit-frame-pointer \
+              "tests/native/$test.c" \
+              flipper_app/satellite_protocol/ai_wire.c \
+              flipper_app/satellite_protocol/ai_client.c \
+              flipper_app/satellite_protocol/ai_link.c \
+              flipper_app/satellite_protocol/ai_ble_bridge.c \
+              flipper_app/satellite_protocol/ai_app_transport.c \
+              -o "/tmp/flipper-ptt/$test"
+          done
+          /tmp/flipper-ptt/ai_ble_bridge_test
+          /tmp/flipper-ptt/ai_app_transport_test
+      - name: Report verification scope
+        run: |
+          echo 'Native transport-only protocol tests passed.'
+          echo 'Private Flipper AI app UI, firmware integration, physical Bluetooth and phone microphone were NOT tested.'
