@@ -41,6 +41,7 @@ public final class BleSatellite implements SatelliteTransport {
   private volatile boolean stockRpcDetected,stockRpcSubscribed;
   private volatile int rpcNotificationsReceived;
   private volatile int rpcFlowCredits=-1;
+  private volatile boolean rpcPingPending=false;
   private final BleWriteGuard writeGuard=new BleWriteGuard();
   private static final int MAX_QUEUED=8;
   private static final long GATT_WRITE_TIMEOUT_MS=6000L;
@@ -157,7 +158,7 @@ public final class BleSatellite implements SatelliteTransport {
   }
   public synchronized void disconnect(){
     connectionGeneration++;
-    state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;stockRpcSubscribed=false;rpcNotificationsReceived=0;rpcFlowCredits=-1;writeGuard.reset();
+    state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;stockRpcSubscribed=false;rpcNotificationsReceived=0;rpcFlowCredits=-1;rpcPingPending=false;writeGuard.reset();
     pending.clear();BluetoothGatt old=gatt;gatt=null;
     events.status("Disconnected (local)");
     if(old!=null){
@@ -180,6 +181,22 @@ public final class BleSatellite implements SatelliteTransport {
   public boolean isStockRpcSubscribed(){return hasStockRpc() && stockRpcSubscribed;}
   public int stockRpcNotificationCount(){return rpcNotificationsReceived;}
   public int stockRpcFlowCredits(){return rpcFlowCredits;}
+  public synchronized boolean sendStockRpcPing(){
+    if(!isStockRpcSubscribed() || rpcFlowCredits<5 || rpcPingPending){events.status("RPC ping unavailable: connect and wait for flow-control value.");return false;}
+    BluetoothGattService service=gatt.getService(MOMENTUM_RPC_SERVICE);
+    BluetoothGattCharacteristic ch=service==null?null:service.getCharacteristic(MOMENTUM_RPC_WRITE);
+    if(ch==null){events.status("RPC write characteristic missing.");return false;}
+    byte[] payload=new byte[]{4,8,1,42,0}; // length-delimited PB.Main: command_id=1, system_ping_request={}
+    boolean started=false;
+    try{
+      if(Build.VERSION.SDK_INT>=33)started=gatt.writeCharacteristic(ch,payload,BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)==BluetoothStatusCodes.SUCCESS;
+      else {ch.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);ch.setValue(payload);started=gatt.writeCharacteristic(ch);}
+    }catch(SecurityException | IllegalStateException ignored){}
+    if(started){rpcPingPending=true;rpcFlowCredits-=payload.length;events.status("Momentum RPC ping sent; awaiting validated response.");}
+    else events.status("Momentum RPC ping write could not start.");
+    return started;
+  }
+
   @Override public boolean isReady(){return subscribed && approved() && state.phase()==TransportState.Phase.READY;}
   @Override public boolean sendFrame(String data){return send(data);}
   @Override public void close(){stopScan();disconnect();}
@@ -433,6 +450,19 @@ public final class BleSatellite implements SatelliteTransport {
       events.status("AI BLE ready, max frame "+state.payloadLimit()+" bytes");
       }
     }
+    private void receiveRpcIndication(byte[] data){
+      if(data==null || data.length==0)return;
+      // This initial parser only accepts a complete, single-frame ping response.
+      int len=data[0]&255;
+      if(len!=data.length-1){events.status("RPC indication received; fragmented/extended protobuf response requires framing.");return;}
+      boolean id=false,ping=false;
+      for(int i=1;i<data.length-1;i++){
+        if((data[i]&255)==8 && (data[i+1]&255)==1)id=true;
+        if((data[i]&255)==50 && (data[i+1]&255)==0)ping=true;
+      }
+      if(rpcPingPending && id && ping){rpcPingPending=false;events.status("RPC PING RESPONSE RECEIVED (command 1); basic envelope matched.");}
+      else events.status("Momentum RPC indication received; response not yet validated.");
+    }
     private void readRpcFlow(byte[] data){
       if(data==null || data.length!=4){events.status("RPC flow-control value length unexpected.");return;}
       long n=((long)data[0]&255L)|(((long)data[1]&255L)<<8)|(((long)data[2]&255L)<<16)|(((long)data[3]&255L)<<24);
@@ -446,6 +476,7 @@ public final class BleSatellite implements SatelliteTransport {
       if(Build.VERSION.SDK_INT<33){synchronized(BleSatellite.this){if(link==gatt && stockRpcSubscribed && ch!=null && MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(ch.getValue());}}
     }
     @Override public void onCharacteristicWrite(BluetoothGatt link,BluetoothGattCharacteristic ch,int code){
+      if(link==gatt && MOMENTUM_RPC_WRITE.equals(ch.getUuid())){if(code!=BluetoothGatt.GATT_SUCCESS){rpcPingPending=false;events.status("Momentum RPC ping write failed (GATT "+code+").");}return;}
       if(link!=gatt || !RX.equals(ch.getUuid()))return;
       synchronized(BleSatellite.this){
         if(!writeGuard.complete())return;
@@ -459,14 +490,14 @@ public final class BleSatellite implements SatelliteTransport {
     @Override public void onCharacteristicChanged(BluetoothGatt link,BluetoothGattCharacteristic ch,byte[] value){
       if(link==gatt && MOMENTUM_RPC_NOTIFY.equals(ch.getUuid()) && stockRpcSubscribed){
         rpcNotificationsReceived++;
-        events.status("Stock Momentum RPC notification received ("+rpcNotificationsReceived+"); protobuf decoding not yet enabled.");
+        receiveRpcIndication(value);
       }else if(link==gatt && TX.equals(ch.getUuid()) && isReady())deliver(value);
     }
     @Override public void onCharacteristicChanged(BluetoothGatt link,BluetoothGattCharacteristic ch){
       if(Build.VERSION.SDK_INT<33 && link==gatt){
         if(MOMENTUM_RPC_NOTIFY.equals(ch.getUuid()) && stockRpcSubscribed){
           rpcNotificationsReceived++;
-          events.status("Stock Momentum RPC notification received ("+rpcNotificationsReceived+"); protobuf decoding not yet enabled.");
+          receiveRpcIndication(ch.getValue());
         }else if(TX.equals(ch.getUuid()) && isReady())deliver(ch.getValue());
       }
     }
