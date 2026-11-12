@@ -14,6 +14,8 @@ public final class RadioScannerActivity extends Activity {
   private static final String[] CATEGORIES={"AM broadcast","FM broadcast","CB","Fire","Police","Ham / amateur","Aircraft","Weather"};
   private final ArrayList<Station> stations=new ArrayList<>();
   private final ArrayList<String> recent=new ArrayList<>();
+  private final ArrayList<Station> recentStations=new ArrayList<>();
+  private Spinner recentList, directoryCategory;
   private Spinner category,stationList,source,directoryResults;
   private final ArrayList<RadioStationDirectory.Entry> directoryEntries=new ArrayList<>();
   private EditText directoryName,directoryCountry;
@@ -47,6 +49,9 @@ public final class RadioScannerActivity extends Activity {
     directoryCountry=edit(root,"Country (optional, e.g. Canada)");
     button(root,"FIND STATIONS ONLINE",()->findOnline());
     button(root,"BROWSE CANADIAN STATIONS",()->{directoryCountry.setText("Canada");directoryName.setText("");findOnline();});
+    directoryCategory=spinner(root,new String[]{"All broadcast categories","News","Talk","Music","Jazz","Rock","Classical","Country","Weather"});
+    button(root,"BROWSE CATEGORY ONLINE",()->{if(directoryName.getText().toString().trim().isEmpty())directoryName.setText("");findOnline();});
+    button(root,"CLEAR ONLINE SEARCH",()->{directoryName.setText("");directoryCountry.setText("");directoryCategory.setSelection(0);status.setText("Search filters cleared.");});
     directoryResults=spinner(root,new String[]{"Search online to find stations"});
     button(root,"USE SELECTED STATION",()->selectDirectoryStation(false));
     button(root,"PLAY SELECTED ONLINE STATION",()->selectDirectoryStation(true));
@@ -76,14 +81,17 @@ public final class RadioScannerActivity extends Activity {
       AudioManager audio=(AudioManager)getSystemService(AUDIO_SERVICE);
       if(audio!=null)audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,AudioManager.ADJUST_SAME,AudioManager.FLAG_SHOW_UI);
     });
-    button(root,"RECENTLY PLAYED",()->status.setText(recent.isEmpty()?"No recent stations":android.text.TextUtils.join(" | ",recent)));
+    title(root,"RECENTLY PLAYED");
+    recentList=spinner(root,new String[]{"No recent streams"});
+    button(root,"PLAY SELECTED RECENT STATION",()->playRecent());
+    button(root,"CLEAR RECENT HISTORY",()->{recentStations.clear();recent.clear();persist();refreshRecent();status.setText("Recent station history cleared.");});
     title(root,"AI RADIO INTELLIGENCE");
     ai=label(root,"Transcription and AI summaries are not enabled. No audio is recorded or uploaded. Actual audio capture and user consent must be implemented first.");
     button(root,"CHECK AI RADIO FEATURES",()->ai.setText("Unavailable: no authorized audio-capture/transcription pipeline or configured radio AI model. Playback is unaffected."));
     title(root,"FLIPPER BLE CONTROL");
     label(root,"Not connected to an authenticated radio-control protocol. Radio playback works independently of Flipper. No signal-strength reading without an SDR receiver.");
     button(root,"BACK TO SATELLITE",()->finish());
-    load();refresh();
+    load();refresh();refreshRecent();
     receiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent intent){
       String state=intent.getStringExtra(RadioPlayerService.STATUS);
       String station=intent.getStringExtra(RadioPlayerService.NAME);
@@ -96,9 +104,10 @@ public final class RadioScannerActivity extends Activity {
   private void findOnline(){
     if(source.getSelectedItemPosition()!=0){status.setText("Select ONLINE STREAMS before browsing.");return;}
     String query=directoryName.getText().toString().trim(),countryName=directoryCountry.getText().toString().trim();
-    if(query.isEmpty()&&countryName.isEmpty()){status.setText("Enter a station name or country to search.");return;}
+    String tag=directoryCategory.getSelectedItemPosition()==0?"":directoryCategory.getSelectedItem().toString().toLowerCase(Locale.ROOT);
+    if(query.isEmpty()&&countryName.isEmpty()&&tag.isEmpty()){status.setText("Enter a station name, country or category to search.");return;}
     status.setText("Searching public station directory...");
-    RadioStationDirectory.search(query,countryName,"",(entries,error)->runOnUiThread(()->{
+    RadioStationDirectory.search(query,countryName,tag,(entries,error)->runOnUiThread(()->{
       if(isFinishing()||isDestroyed())return;
       directoryEntries.clear();directoryEntries.addAll(entries);
       ArrayList<String> labels=new ArrayList<>();
@@ -150,7 +159,21 @@ public final class RadioScannerActivity extends Activity {
     if(!valid(u)){status.setText("Invalid HTTPS stream URL. MP3/AAC direct streams are supported where Android can decode them.");return;}
     if(n.isEmpty())n="Radio stream";
     recent.remove(n);recent.add(0,n);if(recent.size()>15)recent.remove(recent.size()-1);
-    persist();send("play",u,n);status.setText("Connecting to "+n+"...");
+    for(int i=recentStations.size()-1;i>=0;i--)if(recentStations.get(i).url.equals(u))recentStations.remove(i);
+    recentStations.add(0,new Station(n,u,CATEGORIES[category.getSelectedItemPosition()]));
+    if(recentStations.size()>15)recentStations.remove(recentStations.size()-1);
+    persist();refreshRecent();send("play",u,n);status.setText("Connecting to "+n+"...");
+  }
+  private void refreshRecent(){
+    if(recentList==null)return;
+    ArrayList<String> labels=new ArrayList<>();for(Station station:recentStations)labels.add(station.name);
+    if(labels.isEmpty())labels.add("No recent streams");
+    recentList.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
+  }
+  private void playRecent(){
+    int i=recentList.getSelectedItemPosition();
+    if(i<0||i>=recentStations.size()){status.setText("No recent station to play.");return;}
+    Station station=recentStations.get(i);name.setText(station.name);url.setText(station.url);play();
   }
   private void send(String cmd,String u,String n){
     Intent intent=new Intent(this,RadioPlayerService.class).setAction(RadioPlayerService.ACTION).putExtra(RadioPlayerService.CMD,cmd);
@@ -165,13 +188,17 @@ public final class RadioScannerActivity extends Activity {
       JSONArray a=new JSONArray(p.getString("stations","[]"));
       for(int i=0;i<a.length();i++){JSONObject o=a.getJSONObject(i);String u=o.optString("url");if(valid(u))stations.add(new Station(o.optString("name"),u,o.optString("category")));}
       JSONArray r=new JSONArray(p.getString("recent","[]"));for(int i=0;i<r.length();i++)recent.add(r.optString(i));
+      JSONArray h=new JSONArray(p.getString("recentStations","[]"));
+      for(int i=0;i<h.length();i++){JSONObject o=h.optJSONObject(i);if(o!=null&&valid(o.optString("url")))recentStations.add(new Station(o.optString("name"),o.optString("url"),o.optString("category")));}
     }catch(JSONException ignored){status.setText("Saved radio stations could not be read.");}
   }
   private void persist(){
     JSONArray a=new JSONArray(),r=new JSONArray();
     for(Station s:stations){JSONObject o=new JSONObject();try{o.put("name",s.name);o.put("url",s.url);o.put("category",s.category);}catch(JSONException ignored){}a.put(o);}
     for(String s:recent)r.put(s);
-    getSharedPreferences("radio_favorites_v1",MODE_PRIVATE).edit().putString("stations",a.toString()).putString("recent",r.toString()).apply();
+    JSONArray h=new JSONArray();
+    for(Station station:recentStations){JSONObject o=new JSONObject();try{o.put("name",station.name);o.put("url",station.url);o.put("category",station.category);}catch(JSONException ignored){}h.put(o);}
+    getSharedPreferences("radio_favorites_v1",MODE_PRIVATE).edit().putString("stations",a.toString()).putString("recent",r.toString()).putString("recentStations",h.toString()).apply();
   }
   private TextView label(LinearLayout root,String s){TextView t=new TextView(this);t.setText(s);t.setTextSize(15);t.setPadding(0,8,0,8);root.addView(t);return t;}
   private void title(LinearLayout root,String s){TextView t=label(root,s);t.setTextSize(20);}
