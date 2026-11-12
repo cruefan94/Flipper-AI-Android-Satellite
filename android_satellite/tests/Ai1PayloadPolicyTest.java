@@ -11,7 +11,8 @@ public final class Ai1PayloadPolicyTest {
         String ok=SatelliteProtocol.encode("ANSWER",4294967295L,"normal ünicode text");
         require(SatelliteProtocol.decode(ok)[3].equals("normal ünicode text"));
         require(SatelliteProtocol.decode(SatelliteProtocol.encode("PING",0,""))[3].isEmpty());
-        for(String bad:new String[]{"a|b","a\tb","a\rb","a\nb","a\u0000b","a\u007fb"}) {
+        for(String bad:new String[]{"a|b","a"+(char)9+"b","a"+(char)13+"b",
+            "a"+(char)10+"b","a"+(char)0+"b","a"+(char)127+"b"}) {
             rejected(()->SatelliteProtocol.encode("ASK",1,bad));
             final String packet="AI1|ASK|1|"+bad+"\n";
             rejected(()->SatelliteProtocol.decode(packet));
