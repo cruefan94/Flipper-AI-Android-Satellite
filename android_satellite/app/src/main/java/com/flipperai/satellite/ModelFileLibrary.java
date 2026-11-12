@@ -43,7 +43,7 @@ public final class ModelFileLibrary {
      */
     public static String verify(File filesRoot,File candidate) throws Exception {
         File model=checked(filesRoot,candidate);
-        if(model.length()<1024*1024 || model.length()>ImportedModelStore.MAX_BYTES)
+        if(model.length()<1024*1024 || model.length()>3L*1024*1024*1024)
             throw new IllegalArgumentException("Unexpected stored model size");
         MessageDigest digest=MessageDigest.getInstance("SHA-256");
         try(FileInputStream in=new FileInputStream(model)) {
