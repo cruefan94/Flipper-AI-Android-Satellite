@@ -22,8 +22,8 @@ public final class AiChatActivity extends Activity {
   private static final String PREFS="ai_local_settings_v1";
   private int generation=0;
   private final int bg=Color.rgb(8,17,23),panel=Color.rgb(19,37,45),cyan=Color.rgb(50,231,218);
-  @Override public void onCreate(Bundle saved){
-    super.onCreate(saved);getWindow().setStatusBarColor(bg);getWindow().setNavigationBarColor(bg);
+  @Override public void onCreate(Bundle savedInstanceState){
+    super.onCreate(savedInstanceState);getWindow().setStatusBarColor(bg);getWindow().setNavigationBarColor(bg);
     LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);frame.setPadding(18,18,18,12);frame.setBackgroundColor(bg);setContentView(frame);
     TextView title=label("AI ASSISTANT",24,cyan);frame.addView(title);
     status=label("OFFLINE • No local language model configured",13,Color.LTGRAY);frame.addView(status);
