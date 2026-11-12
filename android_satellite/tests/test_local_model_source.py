@@ -26,11 +26,13 @@ class LocalModelSourceTest(unittest.TestCase):
         self.assertIn('conn.setReadTimeout(',ENGINE)
         self.assertIn('conn.disconnect()',ENGINE)
     def test_local_model_and_diagnostic_fallback_in_ui(self):
-        self.assertIn('new OfflineModelOrDiagnostics(localModel,new OfflineDiagnosticEngine())',UI)
+        self.assertIn('new SelectedLocalEngine(embeddedModel,localModel)',UI)
+        self.assertIn('new OfflineModelOrDiagnostics(selectedModel,diagnostics)',UI)
+        self.assertIn('new EmbeddedModelEngine(getApplicationContext())',UI)
+        self.assertIn('selectedModel.answer("Reply with OK.")',UI)
         self.assertIn('advancedButton("Use installed offline model"',UI)
         self.assertIn('advancedButton("Disable local model"',UI)
         self.assertIn('advancedButton("Test local model connection"',UI)
-        self.assertIn('localModel.answer("Reply with OK.")',UI)
         self.assertIn('inferenceWorker.execute(()->{',UI)
     def test_ble_notification_epoch_bound_before_ui_enqueue(self):
         self.assertIn("final int receivedEpoch=connectionEpoch.current();",UI)
