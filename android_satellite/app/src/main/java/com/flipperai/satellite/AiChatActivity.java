@@ -52,10 +52,10 @@ public final class AiChatActivity extends Activity {
     send=button(composer,"SEND",this::ask);
     LinearLayout tools=new LinearLayout(this);tools.setOrientation(LinearLayout.HORIZONTAL);frame.addView(tools);
     button(tools,"STOP",this::cancel);
-    button(tools,"MODEL SETUP",()->setup.setVisibility(setup.getVisibility()==View.VISIBLE?View.GONE:View.VISIBLE));
+    button(tools,"MODEL SETUP",()->{boolean show=setupScroll.getVisibility()!=View.VISIBLE;setupScroll.setVisibility(show?View.VISIBLE:View.GONE);setup.setVisibility(show?View.VISIBLE:View.GONE);});
     button(tools,"BACK",this::finish);
     setup=new LinearLayout(this);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);
-    ScrollView setupScroll=new ScrollView(this);setupScroll.addView(setup);frame.addView(setupScroll,new LinearLayout.LayoutParams(-1,0,0.8f));
+    setupScroll=new ScrollView(this);setupScroll.setVisibility(View.GONE);setupScroll.addView(setup);frame.addView(setupScroll,new LinearLayout.LayoutParams(-1,0,0.8f));
     TextView instructions=label("LOCAL AI SETUP: A compatible on-phone model server is required. This app does not install one. Enter a loopback URL and model ID only after installing a runtime. No cloud access is enabled here.",13,Color.LTGRAY);setup.addView(instructions);
     endpoint=new EditText(this);endpoint.setSingleLine(true);endpoint.setHint("http://127.0.0.1:8080/v1/chat/completions");endpoint.setTextColor(Color.WHITE);endpoint.setHintTextColor(Color.LTGRAY);setup.addView(endpoint);
     modelName=new EditText(this);modelName.setSingleLine(true);modelName.setHint("Local model ID (required)");modelName.setTextColor(Color.WHITE);modelName.setHintTextColor(Color.LTGRAY);setup.addView(modelName);
@@ -82,6 +82,7 @@ public final class AiChatActivity extends Activity {
 
   }
   private LinearLayout setup;
+  private ScrollView setupScroll;
   private void cancel(){
     generation++;
     model.revokeActive();
@@ -91,7 +92,7 @@ public final class AiChatActivity extends Activity {
   }
   private void setPrompt(String value){prompt.setText(value);prompt.setSelection(value.length());}
   private void ask(){
-    if(!model.ready()){status.setText("Install and configure an on-phone model server before sending.");setup.setVisibility(View.VISIBLE);return;}
+    if(!model.ready()){status.setText("Install and configure an on-phone model server before sending.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
     if(busy){status.setText("A response is already processing. Press Stop first.");return;}
     final String text=prompt.getText().toString().trim();
     if(text.isEmpty()){status.setText("Type a question first.");return;}
