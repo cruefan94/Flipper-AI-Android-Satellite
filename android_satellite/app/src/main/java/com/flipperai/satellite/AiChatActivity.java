@@ -15,7 +15,7 @@ import java.util.concurrent.*;
 public final class AiChatActivity extends Activity {
   private final LocalModelEngine model=new LocalModelEngine();
   private NanoModelEngine nano;
-  private boolean useNano=true;
+  private boolean useNano=false;
   private final ExecutorService worker=Executors.newSingleThreadExecutor();
   private final Handler ui=new Handler(Looper.getMainLooper());
   private TextView history,status;
@@ -33,12 +33,12 @@ public final class AiChatActivity extends Activity {
   @Override public void onCreate(Bundle savedInstanceState){
     super.onCreate(savedInstanceState);getWindow().setStatusBarColor(bg);getWindow().setNavigationBarColor(bg);
     LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);frame.setPadding(dp(14),dp(8),dp(14),dp(12));frame.setBackgroundColor(bg);
-    frame.setFitsSystemWindows(true);setContentView(frame);
+    frame.setFitsSystemWindows(true);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);setContentView(frame);
     TextView title=label("AI ASSISTANT",22,cyan);frame.addView(title);
     status=label("OFFLINE • No local language model configured",13,Color.LTGRAY);frame.addView(status);
-    modelHint=label("Checking built-in Android Gemini Nano availability. No cloud prompt upload.",12,Color.LTGRAY);frame.addView(modelHint);
+    modelHint=label("Independent offline AI is preferred. Configure a local runtime in Model Setup. Gemini Nano is optional.",12,Color.LTGRAY);frame.addView(modelHint);
     try{nano=new NanoModelEngine();}catch(Throwable e){modelHint.setText("Gemini Nano initialization unavailable: "+e.getClass().getSimpleName());}
-    button(frame,"CHECK ON-DEVICE AI",()->checkNano());
+
     modelHint.setOnClickListener(v->{setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);});
     transcriptScroll=new ScrollView(this);history=label("Conversation will appear here. Configure a local model to begin.",15,Color.WHITE);history.setTextIsSelectable(true);history.setPadding(14,16,14,16);history.setBackgroundColor(panel);transcriptScroll.addView(history);
     frame.addView(transcriptScroll,new LinearLayout.LayoutParams(-1,0,1));
@@ -65,10 +65,12 @@ public final class AiChatActivity extends Activity {
     endpoint=new EditText(this);endpoint.setSingleLine(true);endpoint.setHint("http://127.0.0.1:8080/v1/chat/completions");endpoint.setTextColor(Color.WHITE);endpoint.setHintTextColor(Color.LTGRAY);setup.addView(endpoint);
     modelName=new EditText(this);modelName.setSingleLine(true);modelName.setHint("Local model ID (required)");modelName.setTextColor(Color.WHITE);modelName.setHintTextColor(Color.LTGRAY);setup.addView(modelName);
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
+    useNano=saved.getBoolean("use_nano",false);
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
-    button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;status.setText("Gemini Nano selected; check on-device AI availability.");});
-    button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;status.setText("Independent model selected; requires installed local runtime.");});
+    button(setup,"CHECK GEMINI NANO",this::checkNano);
+    button(setup,"AI ENGINE: GEMINI NANO",()->{useNano=true;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",true).apply();status.setText("Gemini Nano selected; check on-device AI availability.");});
+    button(setup,"AI ENGINE: OWN LOCAL MODEL",()->{useNano=false;getSharedPreferences(PREFS,MODE_PRIVATE).edit().putBoolean("use_nano",false).apply();status.setText("Independent model selected; requires installed local runtime.");});
     button(setup,"CHECK MODEL STORAGE",()->status.setText(LocalModelReadiness.inspect(getFilesDir(),2L*1024*1024*1024)));
     button(setup,"INDEPENDENT MODEL OPTIONS",()->{
       StringBuilder choices=new StringBuilder("Model candidates (not installed):");
@@ -87,7 +89,7 @@ public final class AiChatActivity extends Activity {
       if(busy){status.setText("Wait for the current response or press Stop.");return;}
       request("Reply with OK.",false);
     });
-    button(setup,"DISABLE LOCAL MODEL",()->{cancel();model.clear();saved.edit().clear().apply();endpoint.setText("");modelName.setText("");status.setText("OFFLINE • Model disabled and settings cleared");});
+    button(setup,"DISABLE LOCAL MODEL",()->{cancel();model.clear();saved.edit().remove("endpoint").remove("model").apply();endpoint.setText("");modelName.setText("");status.setText("OFFLINE • Model disabled and settings cleared");});
     if(!saved.getString("endpoint","").isEmpty()&&!saved.getString("model","").isEmpty()){
       try{model.configure(saved.getString("endpoint",""),saved.getString("model",""));status.setText("OFFLINE • Saved local endpoint restored; not yet verified");}
       catch(Exception ignored){saved.edit().clear().apply();status.setText("OFFLINE • Saved model settings invalid");}
@@ -115,7 +117,7 @@ public final class AiChatActivity extends Activity {
     });
   }
   private void ask(){
-    if(!useNano&&!model.ready()){status.setText("Configure a local model server or switch to Gemini Nano.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
+    if(!useNano&&!model.ready()){status.setText("No independent model runtime is connected. Open Model Setup to configure a local server.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
     if(busy){status.setText("A response is already processing. Press Stop first.");return;}
     final String text=prompt.getText().toString().trim();
     if(text.isEmpty()){status.setText("Type a question first.");return;}
@@ -138,7 +140,7 @@ public final class AiChatActivity extends Activity {
       ui.post(()->{
         if(isFinishing()||isDestroyed()||request!=generation)return;
         busy=false;send.setEnabled(true);
-        if(visible){transcript.append("\nAI: ").append(result);completedRequests++;showTranscript();}
+        if(visible){transcript.append(ok?"\nAI: ":"\nSYSTEM: ").append(result);completedRequests++;showTranscript();}
         status.setText(ok?(visible?"OFFLINE • Response received":"OFFLINE • Model test responded: "+result):"OFFLINE • "+result);
       });
     });
@@ -147,6 +149,6 @@ public final class AiChatActivity extends Activity {
   private void showTranscript(){history.setText(transcript.toString());transcriptScroll.post(()->transcriptScroll.fullScroll(View.FOCUS_DOWN));}
   private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
   private TextView label(String s,int size,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);v.setPadding(4,8,4,8);return v;}
-  private Button button(LinearLayout parent,String title,Runnable action){Button b=new Button(this);b.setText(title);b.setTextSize(12);b.setAllCaps(false);b.setMinHeight(dp(42));b.setMinimumHeight(dp(42));b.setPadding(dp(8),0,dp(8),0);b.setOnClickListener(v->action.run());parent.addView(b,new LinearLayout.LayoutParams(0,dp(46),1));return b;}
+  private Button button(LinearLayout parent,String title,Runnable action){Button b=new Button(this);b.setText(title);b.setTextSize(11);b.setAllCaps(false);b.setTextColor(cyan);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(panel));b.setMinHeight(dp(40));b.setMinimumHeight(dp(40));b.setPadding(dp(4),0,dp(4),0);b.setOnClickListener(v->action.run());LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(44),1);p.setMargins(dp(2),dp(2),dp(2),dp(2));parent.addView(b,p);return b;}
   @Override protected void onDestroy(){generation++;worker.shutdownNow();model.clear();super.onDestroy();}
 }
