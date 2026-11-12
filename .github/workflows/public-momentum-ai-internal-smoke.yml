@@ -1,0 +1,76 @@
+name: Momentum AI internal BT API linkage smoke compile (experimental)
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/momentum-ai-internal-smoke-v01]
+    paths:
+      - 'momentum_overlay/**'
+      - '.github/workflows/public-momentum-ai-internal-smoke.yml'
+permissions:
+  contents: read
+concurrency:
+  group: public-momentum-ai-smoke-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  experimental-gatt-compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    env:
+      PINNED_MOMENTUM_SHA: d3f89dfe2ef6b01839201598e9be1590cba80322
+      FBT_GIT_SUBMODULE_SHALLOW: '1'
+    steps:
+      - name: Checkout reviewed public AI GATT test mirror
+        uses: actions/checkout@v4
+        with:
+          path: public-ai
+      - name: Host C and Python BLE policy regression tests
+        shell: bash
+        run: sh public-ai/momentum_overlay/tests/run_host_tests.sh
+      - name: Clone pinned public upstream Momentum
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none https://github.com/Next-Flip/Momentum-Firmware.git momentum-fw
+          cd momentum-fw
+          git checkout --detach "$PINNED_MOMENTUM_SHA"
+          test "$(git rev-parse HEAD)" = "$PINNED_MOMENTUM_SHA"
+          git switch -c flipper-ai-public-ci
+          git config branch.flipper-ai-public-ci.remote origin
+      - name: Check pinned upstream file fingerprints
+        run: python3 public-ai/momentum_overlay/preflight_pinned_source.py momentum-fw
+      - name: Stage reviewed source changes separately
+        run: python3 public-ai/momentum_overlay/stage_pinned_overlay.py momentum-fw staged-ai-ble
+      - name: Apply staged changes to disposable CI checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s staged-ai-ble/OVERLAY_UNTESTED.txt
+          rsync -a --exclude=OVERLAY_UNTESTED.txt staged-ai-ble/ momentum-fw/
+          python3 public-ai/momentum_overlay/mark_internal_api.py momentum-fw/targets/f7/api_symbols.csv
+          grep -Fq 'ble_svc_serial_start();' momentum-fw/targets/f7/ble_glue/profiles/serial_profile.c
+          grep -Fq 'ble_svc_ai_satellite_start();' momentum-fw/targets/f7/ble_glue/profiles/serial_profile.c
+          grep -Fq 'GapEventTypeAiRevoked' momentum-fw/targets/f7/ble_glue/gap.c
+          grep -Fq 'ai_sat_replay_peek' momentum-fw/targets/f7/ble_glue/services/ai_satellite_service.c
+      - name: Add minimal public internal Bluetooth API smoke app
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p momentum-fw/applications_user/ai_ble_smoke
+          cp public-ai/momentum_overlay/smoke_app/ai_ble_smoke.c momentum-fw/applications_user/ai_ble_smoke/
+          cp public-ai/momentum_overlay/smoke_app/application.fam momentum-fw/applications_user/ai_ble_smoke/
+          test ! -e momentum-fw/fbt_options_local.py
+          cat > momentum-fw/fbt_options_local.py <<'PY'
+          FIRMWARE_APPS["default"] = list(FIRMWARE_APPS["default"]) + ["ai_ble_smoke"]
+          PY
+          grep -Fq 'bt_ai_satellite_status(' momentum-fw/applications_user/ai_ble_smoke/ai_ble_smoke.c
+      - name: Compile pinned Momentum firmware and internal Bluetooth API smoke app
+        working-directory: momentum-fw
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./fbt TARGET_HW=7 COMPACT=1 updater_package -j2
+      - name: Report limited verification
+        run: |
+          echo 'Source overlay compiled against pinned Momentum; NO physical BLE validation.'
+          echo 'A PUBLIC minimal API-smoke app was compiled; the PRIVATE Flipper AI app and private firmware customizations were NOT included.'
+          echo 'Firmware is NOT uploaded for installation or flashing.'
