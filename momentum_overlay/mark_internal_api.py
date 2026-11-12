@@ -10,6 +10,8 @@ from pathlib import Path
 
 EXPECTED = {
     ("Header", "targets/f7/ble_glue/services/ai_satellite_queue.h", "", ""),
+    ("Header", "targets/f7/ble_glue/services/ai_satellite_frame.h", "", ""),
+    ("Header", "targets/f7/ble_glue/services/ai_satellite_replay.h", "", ""),
     ("Header", "targets/f7/ble_glue/services/ai_satellite_session.h", "", ""),
     ("Header", "targets/f7/ble_glue/services/ai_satellite_trust.h", "", ""),
     ("Header", "targets/f7/ble_glue/services/ai_satellite_service.h", "", ""),
