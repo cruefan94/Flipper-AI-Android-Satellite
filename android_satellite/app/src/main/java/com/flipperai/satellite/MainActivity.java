@@ -3,6 +3,8 @@ package com.flipperai.satellite;
 import android.Manifest;
 import android.app.Activity;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothManager;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -21,6 +23,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final LinkedHashMap<String,String> deviceLabels=new LinkedHashMap<>();
   private Spinner devices;
   private boolean scanAfterPermission;
+  private boolean refreshAfterPermission;
   private final String[] labels={"OFFLINE","HYBRID","ONLINE"};
   private Spinner mode;
   private final WorkerCloudEngine cloud=new WorkerCloudEngine();
@@ -50,6 +53,10 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     status=new TextView(this);
     status.setText("Idle — no Flipper AI BLE service installed yet");root.addView(status);
     devices=new Spinner(this);root.addView(devices);
+    button("Show paired devices",()->{
+      if(permissions())showPairedDevices();
+      else refreshAfterPermission=true;
+    });
     button("Scan for Flipper",()->{
       if(permissions())beginScan();
       else scanAfterPermission=true;
@@ -156,11 +163,12 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     discovered.clear();
     deviceLabels.clear();
     devices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Scanning for nearby BLE devices..."}));
+    showPairedDevices();
     ble.startScan();
     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
       if(isFinishing() || isDestroyed())return;
       if(discovered.isEmpty())showStatus("Scan finished: no BLE devices found. Check Flipper Bluetooth, Android Nearby devices permission, and keep devices close.");
-      else showStatus("Scan finished: "+discovered.size()+" BLE device(s) found. Select your Flipper by Bluetooth address.");
+      else showStatus("Found "+discovered.size()+" paired or nearby device(s). Select your Flipper by name.");
     },12500);
   }
   @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
@@ -168,9 +176,27 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     if(requestCode!=22)return;
     boolean granted=grantResults.length>0;
     for(int result:grantResults)if(result!=PackageManager.PERMISSION_GRANTED)granted=false;
-    if(!granted){scanAfterPermission=false;showStatus("Bluetooth scan requires Nearby devices permission (or Location on older Android).");return;}
-    if(scanAfterPermission){scanAfterPermission=false;beginScan();}
+    if(!granted){scanAfterPermission=false;refreshAfterPermission=false;showStatus("Bluetooth scan requires Nearby devices permission (or Location on older Android).");return;}
+    if(scanAfterPermission){scanAfterPermission=false;refreshAfterPermission=false;beginScan();}
+    else if(refreshAfterPermission){refreshAfterPermission=false;showPairedDevices();}
     else showStatus("Bluetooth permission granted. Tap Scan for Flipper.");
+  }
+  private void showPairedDevices(){
+    try{
+      BluetoothManager manager=(BluetoothManager)getSystemService(BLUETOOTH_SERVICE);
+      BluetoothAdapter adapter=manager==null?null:manager.getAdapter();
+      if(adapter==null || !adapter.isEnabled()){
+        showStatus("Enable Bluetooth to view paired devices");return;
+      }
+      java.util.Set<BluetoothDevice> bonded=adapter.getBondedDevices();
+      if(bonded==null || bonded.isEmpty()){
+        showStatus("No paired devices found. Pair your Flipper in Android Bluetooth settings.");return;
+      }
+      for(BluetoothDevice device:bonded)device(device);
+      showStatus("Found "+discovered.size()+" paired device(s). Choose your Flipper by name.");
+    }catch(SecurityException | IllegalStateException e){
+      showStatus("Cannot list paired devices. Allow Nearby devices permission.");
+    }
   }
   private BluetoothDevice selectedDevice(){
     if(devices==null || devices.getSelectedItem()==null)return null;
@@ -282,7 +308,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
           i++;
         }
       }
-      showStatus("Found "+discovered.size()+" nearby BLE device(s). Select your device by its advertised name.");
+      showStatus("Found "+discovered.size()+" paired or nearby Bluetooth device(s).");
     });
   }
   @Override public void onDestroy(){
