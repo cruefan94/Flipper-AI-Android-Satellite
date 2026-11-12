@@ -3,6 +3,8 @@ package com.flipperai.satellite;
 import android.app.*;
 import android.content.*;
 import android.media.*;
+import android.media.session.MediaSession;
+import android.media.session.PlaybackState;
 import android.os.*;
 import java.io.IOException;
 
