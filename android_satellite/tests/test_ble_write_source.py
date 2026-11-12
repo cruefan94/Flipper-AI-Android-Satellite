@@ -79,7 +79,7 @@ class WriteWatchdogSourceTests(unittest.TestCase):
     def test_connection_setup_timeout_is_bound_to_the_same_gatt(self):
         self.assertIn("GATT_SETUP_TIMEOUT_MS=25000L",BLE)
         self.assertIn("ui.postDelayed(()->expireSetup(link),GATT_SETUP_TIMEOUT_MS)",BLE)
-        self.assertIn("if(link!=gatt || isReady())return;",BLE)
+        self.assertIn("if(link!=gatt || isReady() || (stockRpcDetected && stockRpcSubscribed))return;",BLE)
         self.assertIn("catch(SecurityException | IllegalStateException failure)",BLE)
 
     def test_out_of_order_android_gatt_callbacks_fail_closed(self):
