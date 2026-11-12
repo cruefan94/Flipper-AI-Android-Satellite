@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 public final class MainActivity extends Activity implements BleSatellite.Events {
   private BleSatellite ble;
   private PhoneVoiceAdapter phoneVoice;
+  private OnlineRadioPlayer radioPlayer;
   private TextView voiceTranscript,voiceAnswer;
   private int voiceGeneration=0;
   private final SatelliteTransportCoordinator transports=new SatelliteTransportCoordinator();
@@ -70,6 +71,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       @Override public void transcript(String text){handleVoicePrompt(text);}
     });
     transports.register(ble);
+    radioPlayer=new OnlineRadioPlayer(this::showStatus);
     ScrollView scroller=new ScrollView(this);
     root=new LinearLayout(this);
     root.setPadding(26,30,26,30);
@@ -98,6 +100,22 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     voiceAnswer.setText("AI: (no answer yet)");root.addView(voiceAnswer);
     button("Talk to AI (phone microphone)",()->phoneVoice.startListening());
     button("Stop listening / speaking",()->{voiceGeneration++;phoneVoice.stopListening();phoneVoice.stopSpeaking();});
+    TextView radioHeading=new TextView(this);
+    radioHeading.setText("RADIO LISTENING — online streams (receive only)");
+    radioHeading.setTextSize(18);root.addView(radioHeading);
+    TextView radioInfo=new TextView(this);
+    radioInfo.setText("Paste a lawful, publicly available direct HTTPS audio-stream URL for AM/FM or other permitted feeds. This does not receive RF signals, decode CB traffic or discover emergency feeds. Playback starts only when you tap Play; no recording.");
+    root.addView(radioInfo);
+    EditText radioUrl=new EditText(this);
+    radioUrl.setSingleLine(true);
+    radioUrl.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
+    radioUrl.setHint("https://station.example/audio-stream");
+    root.addView(radioUrl);
+    button("Play selected online radio stream",()->{
+      try{radioPlayer.play(radioUrl.getText().toString());}
+      catch(Exception e){showStatus("Cannot play radio: "+e.getMessage());}
+    });
+    button("Stop radio listening",()->{radioPlayer.stop();showStatus("Online radio stopped");});
 
     TextView categoryPrompt=new TextView(this);
     categoryPrompt.setText("Choose ONE device source:");
@@ -632,6 +650,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     connectionEpoch.advance();
     voiceGeneration++;
     if(phoneVoice!=null)phoneVoice.close();
+    if(radioPlayer!=null)radioPlayer.close();
     ble.stopScan();transports.close();
     cloud.clear();localModel.clear();inferenceWorker.shutdownNow();
     // Native MediaPipe inference may still hold the synchronized engine lock.
