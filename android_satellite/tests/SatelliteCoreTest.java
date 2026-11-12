@@ -125,7 +125,7 @@ public final class SatelliteCoreTest {
     check(unsignedOverflow,"encode rejects request IDs above uint32 max");
     String overflowFrame="AI1|ASK|4294967296|battery\n";
     String overflowReply=unsignedSession.dispatch(overflowFrame,180,handler);
-    check(SatelliteProtocol.decode(overflowReply)[3].equals("BAD_ID"),"decode rejects uint32 overflow");
+    check(overflowReply==null,"invalid uint32 overflow cannot receive an AI1 reply with zero ID");
 
     boolean zeroEncodeRejected=false;
     try { SatelliteProtocol.encode("ASK",0,"battery"); }
@@ -136,7 +136,7 @@ public final class SatelliteCoreTest {
     catch(IllegalArgumentException expected) { zeroDecodeRejected=true; }
     check(zeroDecodeRejected,"zero request id cannot be decoded");
     String zeroReply=unsignedSession.dispatch("AI1|ASK|0|battery\\n",180,handler);
-    check(SatelliteProtocol.decode(zeroReply)[3].equals("BAD_ID"),"zero request id returns BAD_ID");
+    check(zeroReply==null,"zero request id cannot produce an invalid zero-ID AI1 response");
     System.out.println("Satellite core tests passed");
   }
 }
