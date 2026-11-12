@@ -1,7 +1,7 @@
 package com.flipperai.satellite;
 
 import com.google.mlkit.genai.prompt.Generation;
-import com.google.mlkit.genai.prompt.FeatureStatus;
+import com.google.mlkit.genai.common.FeatureStatus;
 import com.google.mlkit.genai.prompt.GenerateContentRequest;
 import com.google.mlkit.genai.prompt.GenerateContentResponse;
 import com.google.mlkit.genai.prompt.TextPart;
