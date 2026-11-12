@@ -37,7 +37,7 @@ public final class AiChatActivity extends Activity {
     LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);frame.setPadding(dp(14),dp(8),dp(14),dp(12));frame.setBackgroundColor(bg);
     frame.setFitsSystemWindows(true);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);setContentView(frame);
     TextView title=label("AI ASSISTANT",22,cyan);frame.addView(title);
-    status=label("OFFLINE • No local language model configured",13,Color.LTGRAY);frame.addView(status);
+    status=label("OFFLINE • Independent model runtime not configured",13,Color.LTGRAY);frame.addView(status);
     modelHint=label("Independent offline AI is preferred. Configure a local runtime in Model Setup. Gemini Nano is optional.",12,Color.LTGRAY);frame.addView(modelHint);
     try{nano=new NanoModelEngine();}catch(Throwable e){modelHint.setText("Gemini Nano initialization unavailable: "+e.getClass().getSimpleName());}
 
@@ -68,6 +68,7 @@ public final class AiChatActivity extends Activity {
     modelName=new EditText(this);modelName.setSingleLine(true);modelName.setHint("Local model ID (required)");modelName.setTextColor(Color.WHITE);modelName.setHintTextColor(Color.LTGRAY);setup.addView(modelName);
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
     useNano=saved.getBoolean("use_nano",false);
+    if(useNano)modelHint.setText("Gemini Nano selected (optional). This device may not support it. Choose independent model in setup.");
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
     button(setup,"CHECK GEMINI NANO",this::checkNano);
