@@ -2,7 +2,7 @@ name: Android Satellite — public APK build
 on:
   workflow_dispatch:
   push:
-    branches: [develop/android-apk-build]
+    branches: [develop/android-apk-build, fix/ai1-overflow-classification-v29]
     paths:
       - 'android_satellite/**'
       - '.github/workflows/android-apk.yml'
