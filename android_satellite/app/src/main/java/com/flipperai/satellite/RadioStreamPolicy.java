@@ -13,7 +13,8 @@ public final class RadioStreamPolicy {
 
     public static String validate(String userInput) {
         if(userInput == null) throw new IllegalArgumentException("Enter an HTTPS audio stream URL");
-        String input = userInput.trim();
+        // Do not trim CR/LF, tabs or other controls before validation.
+        String input = userInput.replaceAll("^ +| +$", "");
         if(input.length() < 12 || input.length() > 2048)
             throw new IllegalArgumentException("Invalid radio stream URL length");
         for(int i=0;i<input.length();i++) {
