@@ -37,6 +37,11 @@ public final class AiChatActivity extends Activity {
     button(frame,"QUICK PROMPT: EXPLAIN BLE",()->setPrompt("Explain Bluetooth Low Energy."));
     button(frame,"QUICK PROMPT: EXPLAIN GATT",()->setPrompt("What is a GATT service?"));
     button(frame,"STOP CURRENT RESPONSE",this::cancel);
+    button(frame,"COPY CONVERSATION",()->{
+      if(transcript.length()==0){status.setText("No conversation to copy.");return;}
+      android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+      if(clipboard!=null){clipboard.setPrimaryClip(android.content.ClipData.newPlainText("AI conversation",transcript.toString()));status.setText("Conversation copied to clipboard. Clipboard contents may be visible to other apps.");}
+    });
     button(frame,"CLEAR CONVERSATION",()->{cancel();transcript.setLength(0);completedRequests=0;history.setText("Conversation cleared. No messages saved.");status.setText("OFFLINE • Conversation cleared");});
     Button configure=button(frame,"SHOW / HIDE LOCAL MODEL SETUP",()->{int v=setup.getVisibility();setup.setVisibility(v==View.VISIBLE?View.GONE:View.VISIBLE);});
     setup=new LinearLayout(this);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);frame.addView(setup);
@@ -51,6 +56,7 @@ public final class AiChatActivity extends Activity {
         status.setText("OFFLINE • Local endpoint configured (not yet verified)");}
       catch(Exception e){status.setText("Model configuration failed: "+e.getMessage());}
     });
+    button(setup,"MODEL STATUS",()->status.setText(model.ready()?"OFFLINE • Local model endpoint configured; connection not verified":"OFFLINE • No local model configured"));
     button(setup,"TEST LOCAL MODEL",()->{
       if(!model.ready()){status.setText("Configure the local model first.");return;}
       if(busy){status.setText("Wait for the current response or press Stop.");return;}
@@ -73,7 +79,7 @@ public final class AiChatActivity extends Activity {
   }
   private void setPrompt(String value){prompt.setText(value);prompt.setSelection(value.length());}
   private void ask(){
-    if(!model.ready()){status.setText("Install and configure an on-phone model server before sending.");return;}
+    if(!model.ready()){status.setText("Install and configure an on-phone model server before sending.");setup.setVisibility(View.VISIBLE);return;}
     if(busy){status.setText("A response is already processing. Press Stop first.");return;}
     final String text=prompt.getText().toString().trim();
     if(text.isEmpty()){status.setText("Type a question first.");return;}
