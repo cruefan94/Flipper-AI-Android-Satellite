@@ -18,6 +18,8 @@ public final class AiChatActivity extends Activity {
   private EditText prompt,endpoint,modelName;
   private Button send;
   private boolean busy=false;
+  private ScrollView transcriptScroll;
+  private int completedRequests=0;
   private final StringBuilder transcript=new StringBuilder();
   private static final String PREFS="ai_local_settings_v1";
   private int generation=0;
@@ -28,12 +30,19 @@ public final class AiChatActivity extends Activity {
     TextView title=label("AI ASSISTANT",24,cyan);frame.addView(title);
     status=label("OFFLINE • No local language model configured",13,Color.LTGRAY);frame.addView(status);
     TextView note=label("Private text chat. A separately installed OpenAI-compatible model server must run on this phone at 127.0.0.1. No automatic cloud uploads.",13,Color.LTGRAY);frame.addView(note);
-    ScrollView scroll=new ScrollView(this);history=label("Conversation will appear here. Configure a local model to begin.",15,Color.WHITE);history.setTextIsSelectable(true);history.setPadding(14,16,14,16);history.setBackgroundColor(panel);scroll.addView(history);
-    frame.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+    transcriptScroll=new ScrollView(this);history=label("Conversation will appear here. Configure a local model to begin.",15,Color.WHITE);history.setTextIsSelectable(true);history.setPadding(14,16,14,16);history.setBackgroundColor(panel);transcriptScroll.addView(history);
+    frame.addView(transcriptScroll,new LinearLayout.LayoutParams(-1,0,1));
     prompt=new EditText(this);prompt.setSingleLine(false);prompt.setMaxLines(4);prompt.setHint("Ask your AI...");prompt.setHintTextColor(Color.LTGRAY);prompt.setTextColor(Color.WHITE);frame.addView(prompt);
     send=button(frame,"SEND TO OFFLINE AI",this::ask);
+    button(frame,"QUICK PROMPT: EXPLAIN BLE",()->setPrompt("Explain Bluetooth Low Energy."));
+    button(frame,"QUICK PROMPT: EXPLAIN GATT",()->setPrompt("What is a GATT service?"));
     button(frame,"STOP CURRENT RESPONSE",this::cancel);
-    button(frame,"CLEAR CONVERSATION",()->{transcript.setLength(0);history.setText("Conversation cleared. No messages saved.");status.setText("OFFLINE • Conversation cleared");});
+    button(frame,"COPY CONVERSATION",()->{
+      if(transcript.length()==0){status.setText("No conversation to copy.");return;}
+      android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+      if(clipboard!=null){clipboard.setPrimaryClip(android.content.ClipData.newPlainText("AI conversation",transcript.toString()));status.setText("Conversation copied to clipboard. Clipboard contents may be visible to other apps.");}
+    });
+    button(frame,"CLEAR CONVERSATION",()->{cancel();transcript.setLength(0);completedRequests=0;history.setText("Conversation cleared. No messages saved.");status.setText("OFFLINE • Conversation cleared");});
     Button configure=button(frame,"SHOW / HIDE LOCAL MODEL SETUP",()->{int v=setup.getVisibility();setup.setVisibility(v==View.VISIBLE?View.GONE:View.VISIBLE);});
     setup=new LinearLayout(this);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);frame.addView(setup);
     endpoint=new EditText(this);endpoint.setSingleLine(true);endpoint.setHint("http://127.0.0.1:8080/v1/chat/completions");endpoint.setTextColor(Color.WHITE);endpoint.setHintTextColor(Color.LTGRAY);setup.addView(endpoint);
@@ -47,6 +56,7 @@ public final class AiChatActivity extends Activity {
         status.setText("OFFLINE • Local endpoint configured (not yet verified)");}
       catch(Exception e){status.setText("Model configuration failed: "+e.getMessage());}
     });
+    button(setup,"MODEL STATUS",()->status.setText(model.ready()?"OFFLINE • Local model endpoint configured; connection not verified":"OFFLINE • No local model configured"));
     button(setup,"TEST LOCAL MODEL",()->{
       if(!model.ready()){status.setText("Configure the local model first.");return;}
       if(busy){status.setText("Wait for the current response or press Stop.");return;}
@@ -67,8 +77,9 @@ public final class AiChatActivity extends Activity {
     send.setEnabled(true);
     status.setText("OFFLINE • Request stopped");
   }
+  private void setPrompt(String value){prompt.setText(value);prompt.setSelection(value.length());}
   private void ask(){
-    if(!model.ready()){status.setText("Install and configure an on-phone model server before sending.");return;}
+    if(!model.ready()){status.setText("Install and configure an on-phone model server before sending.");setup.setVisibility(View.VISIBLE);return;}
     if(busy){status.setText("A response is already processing. Press Stop first.");return;}
     final String text=prompt.getText().toString().trim();
     if(text.isEmpty()){status.setText("Type a question first.");return;}
@@ -80,7 +91,7 @@ public final class AiChatActivity extends Activity {
     if(busy)return;
     busy=true;
     final int request=++generation;
-    if(visible){transcript.append("\\n\\nYOU: ").append(text);history.setText(transcript.toString());}
+    if(visible){transcript.append("\n\nYOU: ").append(text);showTranscript();}
     status.setText("OFFLINE • Processing on phone");
     send.setEnabled(false);
     worker.execute(()->{
@@ -91,11 +102,12 @@ public final class AiChatActivity extends Activity {
       ui.post(()->{
         if(isFinishing()||isDestroyed()||request!=generation)return;
         busy=false;send.setEnabled(true);
-        if(visible){transcript.append("\\nAI: ").append(result);history.setText(transcript.toString());}
+        if(visible){transcript.append("\nAI: ").append(result);completedRequests++;showTranscript();}
         status.setText(ok?(visible?"OFFLINE • Response received":"OFFLINE • Model test responded: "+result):"OFFLINE • "+result);
       });
     });
   }
+  private void showTranscript(){history.setText(transcript.toString());transcriptScroll.post(()->transcriptScroll.fullScroll(View.FOCUS_DOWN));}
   private TextView label(String s,int size,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);v.setPadding(4,8,4,8);return v;}
   private Button button(LinearLayout parent,String title,Runnable action){Button b=new Button(this);b.setText(title);b.setOnClickListener(v->action.run());parent.addView(b);return b;}
   @Override protected void onDestroy(){generation++;worker.shutdownNow();model.clear();super.onDestroy();}
