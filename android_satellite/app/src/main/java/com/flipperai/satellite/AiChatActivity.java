@@ -102,7 +102,7 @@ public final class AiChatActivity extends Activity {
     status.setText("Checking device model support...");
     worker.execute(()->{
       String result;
-      try{int state=nano.status();result=state==com.google.mlkit.genai.prompt.FeatureStatus.AVAILABLE?"Gemini Nano ready on this phone":state==com.google.mlkit.genai.prompt.FeatureStatus.DOWNLOADABLE?"Gemini Nano supported but model download required":state==com.google.mlkit.genai.prompt.FeatureStatus.DOWNLOADING?"Gemini Nano downloading":"Gemini Nano unavailable on this device";}
+      try{int state=nano.status();result=state==com.google.mlkit.genai.common.FeatureStatus.AVAILABLE?"Gemini Nano ready on this phone":state==com.google.mlkit.genai.common.FeatureStatus.DOWNLOADABLE?"Gemini Nano supported but model download required":state==com.google.mlkit.genai.common.FeatureStatus.DOWNLOADING?"Gemini Nano downloading":"Gemini Nano unavailable on this device";}
       catch(Exception e){result="Gemini Nano status failed: "+e.getMessage();}
       final String message=result;ui.post(()->{if(!isDestroyed())status.setText(message);});
     });
