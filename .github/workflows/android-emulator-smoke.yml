@@ -28,6 +28,18 @@ jobs:
           gradle-version: '8.9'
       - name: Build developer APK for emulator
         run: gradle -p android_satellite --no-daemon :app:assembleDebug
+      - name: Enable ephemeral runner KVM acceleration
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -e /dev/kvm ]; then
+            echo "Hosted runner has no KVM device; cannot validate emulator boot."
+            exit 1
+          fi
+          sudo chmod a+rw /dev/kvm
+          test -r /dev/kvm
+          test -w /dev/kvm
+          echo "KVM acceleration accessible for the temporary CI runner."
       - name: Install and start app on API 35 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
