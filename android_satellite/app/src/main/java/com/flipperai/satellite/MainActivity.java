@@ -21,6 +21,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private OnlineRadioPlayer radioPlayer;
   private TextView voiceTranscript,voiceAnswer;
   private int voiceGeneration=0;
+  private volatile boolean flipperPttAllowed=false;
+  private CheckBox flipperPttCheckbox;
   private final SatelliteTransportCoordinator transports=new SatelliteTransportCoordinator();
   private TextView status;
   private TextView connectionState;
@@ -65,6 +67,22 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     selectedModel=new SelectedLocalEngine(embeddedModel,localModel);
     router=new InferenceRouter(new OfflineModelOrDiagnostics(selectedModel,diagnostics),cloud);
     requests=new SatelliteRequestHandler(router);
+    requests.setPhoneControl(()->{
+      // A connected stock-RPC Flipper is NOT an authorized AI channel.
+      if(!flipperPttAllowed || !ble.isReady() ||
+         checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)
+        return false;
+      final int authorizedEpoch=connectionEpoch.current();
+      runOnUiThread(()->{
+        if(!isDestroyed() && !isFinishing() && flipperPttAllowed &&
+           connectionEpoch.matches(authorizedEpoch) && ble.isReady() &&
+           checkSelfPermission(Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED) {
+          phoneVoice.stopSpeaking();
+          phoneVoice.startListening();
+        }
+      });
+      return true;
+    });
     ble=new BleSatellite(this,this);
     phoneVoice=new PhoneVoiceAdapter(this,new PhoneVoiceAdapter.Events(){
       @Override public void state(String text){showStatus(text);}
@@ -100,6 +118,15 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     voiceAnswer.setText("AI: (no answer yet)");root.addView(voiceAnswer);
     button("Talk to AI (phone microphone)",()->phoneVoice.startListening());
     button("Stop listening / speaking",()->{voiceGeneration++;phoneVoice.stopListening();phoneVoice.stopSpeaking();});
+    flipperPttCheckbox=new CheckBox(this);
+    flipperPttCheckbox.setText("Allow authenticated Flipper AI push-to-talk to activate phone microphone (this session only)");
+    flipperPttCheckbox.setChecked(false);
+    flipperPttCheckbox.setOnCheckedChangeListener((button,checked)->{
+      flipperPttAllowed=checked;
+      if(checked)showStatus("Flipper PTT opt-in enabled; requires authenticated AI BLE, microphone permission and on-device speech recognition");
+      else showStatus("Flipper PTT authorization revoked");
+    });
+    root.addView(flipperPttCheckbox);
     TextView radioHeading=new TextView(this);
     radioHeading.setText("RADIO LISTENING — online streams (receive only)");
     radioHeading.setTextSize(18);root.addView(radioHeading);
@@ -580,6 +607,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         connectionHistory.setText("Last connection event: "+text);
     });
     if(text.startsWith("Disconnected") || text.startsWith("Connecting")){
+      flipperPttAllowed=false;
+      runOnUiThread(()->{
+        if(flipperPttCheckbox!=null && flipperPttCheckbox.isChecked())
+          flipperPttCheckbox.setChecked(false);
+      });
       transports.invalidateSession();
       connectionEpoch.advance();
       /* Android can dispatch delayed GATT callbacks while Activity is closing.
@@ -649,6 +681,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   @Override public void onDestroy(){
     connectionEpoch.advance();
     voiceGeneration++;
+    flipperPttAllowed=false;
     if(phoneVoice!=null)phoneVoice.close();
     if(radioPlayer!=null)radioPlayer.close();
     ble.stopScan();transports.close();
