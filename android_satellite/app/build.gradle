@@ -3,3 +3,6 @@ android { namespace 'com.flipperai.satellite'; compileSdk 35
  defaultConfig { applicationId 'com.flipperai.satellite'; minSdk 26; targetSdk 35; versionCode 1; versionName '0.6.0-dev' }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
+
+// First in-process model backend. Model weights are imported by the user, never bundled.
+dependencies { implementation 'com.google.mediapipe:tasks-genai:0.10.35' }
