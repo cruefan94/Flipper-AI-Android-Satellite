@@ -117,7 +117,7 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   private synchronized void expireSetup(BluetoothGatt link){
-    if(link!=gatt || isReady())return;
+    if(link!=gatt || isReady() || (stockRpcDetected && stockRpcSubscribed))return;
     events.status("AI GATT connection setup timed out");
     disconnect();
   }
