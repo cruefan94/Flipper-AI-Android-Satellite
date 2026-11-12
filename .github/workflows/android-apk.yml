@@ -40,10 +40,16 @@ jobs:
         run: gradle -p android_satellite --no-daemon --stacktrace :app:assembleDebug
       - name: Verify APK exists
         run: test -s android_satellite/app/build/outputs/apk/debug/app-debug.apk
+      - name: Give APK a unique download filename
+        run: |
+          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-8)"
+          BUILD_NAME="FlipperAI-Satellite-${{ github.run_number }}-${SHORT_SHA}-debug-UNTESTED.apk"
+          cp android_satellite/app/build/outputs/apk/debug/app-debug.apk "android_satellite/app/build/outputs/apk/debug/$BUILD_NAME"
+          echo "APK_NAME=$BUILD_NAME" >> "$GITHUB_ENV"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: FlipperAI-Android-Satellite-debug-UNTESTED
-          path: android_satellite/app/build/outputs/apk/debug/app-debug.apk
+          name: FlipperAI-Satellite-build-${{ github.run_number }}-${{ github.sha }}-UNTESTED
+          path: android_satellite/app/build/outputs/apk/debug/${{ env.APK_NAME }}
           if-no-files-found: error
           retention-days: 7
