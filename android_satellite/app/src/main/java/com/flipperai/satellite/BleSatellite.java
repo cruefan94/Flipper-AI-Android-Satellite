@@ -37,7 +37,8 @@ public final class BleSatellite implements SatelliteTransport {
   private boolean retry147Used;
   /* Read by UI and written from Android Bluetooth Binder callbacks. */
   private volatile boolean authorized,subscribed,mtuPending;
-  private volatile boolean stockRpcDetected;
+  private volatile boolean stockRpcDetected,stockRpcSubscribed;
+  private volatile int rpcNotificationsReceived;
   private final BleWriteGuard writeGuard=new BleWriteGuard();
   private static final int MAX_QUEUED=8;
   private static final long GATT_WRITE_TIMEOUT_MS=6000L;
@@ -154,7 +155,7 @@ public final class BleSatellite implements SatelliteTransport {
   }
   public synchronized void disconnect(){
     connectionGeneration++;
-    state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;writeGuard.reset();
+    state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;stockRpcSubscribed=false;rpcNotificationsReceived=0;writeGuard.reset();
     pending.clear();BluetoothGatt old=gatt;gatt=null;
     events.status("Disconnected (local)");
     if(old!=null){
@@ -174,6 +175,8 @@ public final class BleSatellite implements SatelliteTransport {
   public int maxFrameBytes(){return state.payloadLimit();}
   @Override public Kind kind(){return Kind.BLE;}
   public boolean hasStockRpc(){return stockRpcDetected && gatt!=null && approved();}
+  public boolean isStockRpcSubscribed(){return hasStockRpc() && stockRpcSubscribed;}
+  public int stockRpcNotificationCount(){return rpcNotificationsReceived;}
   @Override public boolean isReady(){return subscribed && approved() && state.phase()==TransportState.Phase.READY;}
   @Override public boolean sendFrame(String data){return send(data);}
   @Override public void close(){stopScan();disconnect();}
@@ -313,7 +316,29 @@ public final class BleSatellite implements SatelliteTransport {
         if(rpc!=null && rpc.getCharacteristic(MOMENTUM_RPC_WRITE)!=null &&
            rpc.getCharacteristic(MOMENTUM_RPC_NOTIFY)!=null){
           stockRpcDetected=true;
-          events.status("BLUETOOTH CONNECTED: Stock Momentum RPC detected. AI channel not available yet.");
+          BluetoothGattCharacteristic notify=rpc.getCharacteristic(MOMENTUM_RPC_NOTIFY);
+          BluetoothGattDescriptor cccd=notify.getDescriptor(CCCD);
+          if(cccd==null || (notify.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY)==0){
+            events.status("Stock Momentum RPC detected; notifications are unavailable.");
+            return;
+          }
+          boolean enabled=false;
+          try{
+            enabled=link.setCharacteristicNotification(notify,true);
+            if(enabled){
+              if(Build.VERSION.SDK_INT>=33)
+                enabled=link.writeDescriptor(cccd,BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)==BluetoothStatusCodes.SUCCESS;
+              else{
+                cccd.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                enabled=link.writeDescriptor(cccd);
+              }
+            }
+          }catch(SecurityException | IllegalStateException failure){
+            enabled=false;
+          }
+          events.status(enabled
+            ? "Stock Momentum RPC found; enabling RPC notifications..."
+            : "Stock Momentum RPC detected, but notification setup failed.");
           return;
         }
         events.status("Bluetooth connected, but neither stock Momentum RPC nor AI service was found.");
@@ -356,6 +381,13 @@ public final class BleSatellite implements SatelliteTransport {
        * connection setup; callbacks from other descriptors are ignored. */
       if(link!=gatt || d==null || !CCCD.equals(d.getUuid()))return;
       BluetoothGattCharacteristic owner=d.getCharacteristic();
+      if(owner!=null && MOMENTUM_RPC_NOTIFY.equals(owner.getUuid()) && stockRpcDetected){
+        stockRpcSubscribed=code==BluetoothGatt.GATT_SUCCESS;
+        events.status(stockRpcSubscribed
+          ? "Stock Momentum RPC notifications enabled; awaiting protocol messages (AI not ready)."
+          : "Stock Momentum RPC notification subscription failed (GATT "+code+").");
+        return;
+      }
       if(owner==null || !TX.equals(owner.getUuid()) ||
          state.phase()!=TransportState.Phase.SUBSCRIBING || mtuPending)return;
       if(code!=BluetoothGatt.GATT_SUCCESS){disconnect();return;}
@@ -399,10 +431,18 @@ public final class BleSatellite implements SatelliteTransport {
       }
     }
     @Override public void onCharacteristicChanged(BluetoothGatt link,BluetoothGattCharacteristic ch,byte[] value){
-      if(link==gatt && TX.equals(ch.getUuid()) && isReady())deliver(value);
+      if(link==gatt && MOMENTUM_RPC_NOTIFY.equals(ch.getUuid()) && stockRpcSubscribed){
+        rpcNotificationsReceived++;
+        events.status("Stock Momentum RPC notification received ("+rpcNotificationsReceived+"); protobuf decoding not yet enabled.");
+      }else if(link==gatt && TX.equals(ch.getUuid()) && isReady())deliver(value);
     }
     @Override public void onCharacteristicChanged(BluetoothGatt link,BluetoothGattCharacteristic ch){
-      if(Build.VERSION.SDK_INT<33 && link==gatt && TX.equals(ch.getUuid()) && isReady())deliver(ch.getValue());
+      if(Build.VERSION.SDK_INT<33 && link==gatt){
+        if(MOMENTUM_RPC_NOTIFY.equals(ch.getUuid()) && stockRpcSubscribed){
+          rpcNotificationsReceived++;
+          events.status("Stock Momentum RPC notification received ("+rpcNotificationsReceived+"); protobuf decoding not yet enabled.");
+        }else if(TX.equals(ch.getUuid()) && isReady())deliver(ch.getValue());
+      }
     }
   };
 }
