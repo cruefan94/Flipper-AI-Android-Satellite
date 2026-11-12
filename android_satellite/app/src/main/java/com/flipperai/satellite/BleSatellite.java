@@ -20,7 +20,7 @@ public final class BleSatellite implements SatelliteTransport {
   public static final UUID RX=UUID.fromString("c8c7ab10-6355-4ea8-a76a-0a4a64de0002");
   public static final UUID TX=UUID.fromString("c8c7ab10-6355-4ea8-a76a-0a4a64de0003");
   private static final UUID CCCD=UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
-  public interface Events { void status(String text);void device(BluetoothDevice device);void received(String frame); }
+  public interface Events { void status(String text);void device(BluetoothDevice device,String advertisedName);void received(String frame); }
   private final Context context;
   private final Events events;
   private final Handler ui=new Handler(Looper.getMainLooper());
@@ -39,7 +39,11 @@ public final class BleSatellite implements SatelliteTransport {
   public BleSatellite(Context context,Events events){this.context=context;this.events=events;}
   private final ScanCallback scan=new ScanCallback(){
     @Override public void onScanResult(int type,ScanResult item){
-      if(item.getDevice()!=null)events.device(item.getDevice());
+      if(item.getDevice()!=null){
+        ScanRecord record=item.getScanRecord();
+        String advertised=record==null?null:record.getDeviceName();
+        events.device(item.getDevice(),advertised);
+      }
     }
     @Override public void onScanFailed(int code){events.status("BLE scan failed: "+code);}
   };
