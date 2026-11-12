@@ -436,8 +436,8 @@ public final class BleSatellite implements SatelliteTransport {
     private void readRpcFlow(byte[] data){
       if(data==null || data.length!=4){events.status("RPC flow-control value length unexpected.");return;}
       long n=((long)data[0]&255L)|(((long)data[1]&255L)<<8)|(((long)data[2]&255L)<<16)|(((long)data[3]&255L)<<24);
-      if(n<=65536){rpcFlowCredits=(int)n;events.status("Momentum RPC flow-control: "+rpcFlowCredits+" credits; no command sent.");}
-      else {rpcFlowCredits=-1;events.status("Momentum RPC raw flow-control value: "+n+" (unsigned little-endian); format unverified. No command sent.");}
+      if(n<=1048576L){rpcFlowCredits=(int)n;events.status("Momentum RPC flow-control value: "+rpcFlowCredits+" (unsigned little-endian). No command sent.");}
+      else {rpcFlowCredits=-1;events.status("Momentum RPC raw flow-control value: "+n+" (unsigned little-endian); unusually large. No command sent.");}
     }
     @Override public void onCharacteristicRead(BluetoothGatt link,BluetoothGattCharacteristic ch,byte[] value,int code){
       synchronized(BleSatellite.this){if(link==gatt && stockRpcSubscribed && ch!=null && MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(value);}
