@@ -127,6 +127,16 @@ public final class SatelliteCoreTest {
     String overflowReply=unsignedSession.dispatch(overflowFrame,180,handler);
     check(SatelliteProtocol.decode(overflowReply)[3].equals("BAD_ID"),"decode rejects uint32 overflow");
 
+    boolean zeroEncodeRejected=false;
+    try { SatelliteProtocol.encode("ASK",0,"battery"); }
+    catch(IllegalArgumentException expected) { zeroEncodeRejected=true; }
+    check(zeroEncodeRejected,"zero request id cannot be encoded");
+    boolean zeroDecodeRejected=false;
+    try { SatelliteProtocol.decode("AI1|ASK|0|battery\\n"); }
+    catch(IllegalArgumentException expected) { zeroDecodeRejected=true; }
+    check(zeroDecodeRejected,"zero request id cannot be decoded");
+    String zeroReply=unsignedSession.dispatch("AI1|ASK|0|battery\\n",180,handler);
+    check(SatelliteProtocol.decode(zeroReply)[3].equals("BAD_ID"),"zero request id returns BAD_ID");
     System.out.println("Satellite core tests passed");
   }
 }
