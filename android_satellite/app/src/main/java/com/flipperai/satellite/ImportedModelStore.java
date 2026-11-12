@@ -29,6 +29,7 @@ public final class ImportedModelStore {
             throw new IllegalArgumentException("Select a model using Android's document picker");
         File dir=new File(context.getFilesDir(),"ai_models");
         if(!dir.isDirectory() && !dir.mkdirs())throw new IllegalStateException("Model storage unavailable");
+        if(new android.os.StatFs(dir.getAbsolutePath()).getAvailableBytes()<256L*1024*1024)throw new IllegalStateException("Insufficient storage for model import");
         File partial=File.createTempFile("model-", ".partial", dir);
         long copied=0;
         MessageDigest digest=MessageDigest.getInstance("SHA-256");
@@ -42,6 +43,7 @@ public final class ImportedModelStore {
                     if(n==0)continue;
                     copied+=n;
                     if(copied>MAX_BYTES)throw new IllegalArgumentException("Model exceeds 3 GiB import limit");
+                    if(new android.os.StatFs(dir.getAbsolutePath()).getAvailableBytes()<128L*1024*1024)throw new IllegalStateException("Storage critically low; model import stopped");
                     digest.update(buffer,0,n);
                     output.write(buffer,0,n);
                 }
@@ -51,7 +53,10 @@ public final class ImportedModelStore {
             StringBuilder hex=new StringBuilder(64);
             for(byte b:digest.digest())hex.append(String.format(java.util.Locale.ROOT,"%02x",b&255));
             File destination=new File(dir,hex+".task");
-            if(destination.isFile())return new Imported(destination,hex.toString(),copied);
+            if(destination.isFile()){
+                if(destination.length()!=copied)throw new IllegalStateException("Existing model has mismatched size");
+                return new Imported(destination,hex.toString(),copied);
+            }
             if(!partial.renameTo(destination))throw new IllegalStateException("Cannot finalize model import");
             return new Imported(destination,hex.toString(),copied);
         }finally{
