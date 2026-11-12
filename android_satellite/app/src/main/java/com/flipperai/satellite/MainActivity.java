@@ -18,6 +18,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private TextView status;
   private LinearLayout root;
   private final LinkedHashMap<String,BluetoothDevice> discovered=new LinkedHashMap<>();
+  private final LinkedHashMap<String,String> deviceLabels=new LinkedHashMap<>();
   private Spinner devices;
   private boolean scanAfterPermission;
   private final String[] labels={"OFFLINE","HYBRID","ONLINE"};
@@ -153,6 +154,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   private void beginScan(){
     discovered.clear();
+    deviceLabels.clear();
     devices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Scanning for nearby BLE devices..."}));
     ble.startScan();
     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
@@ -173,7 +175,10 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private BluetoothDevice selectedDevice(){
     if(devices==null || devices.getSelectedItem()==null)return null;
     // Lookup by the displayed address, not scan discovery order.
-    return discovered.get(devices.getSelectedItem().toString());
+    String label=devices.getSelectedItem().toString();
+    for(java.util.Map.Entry<String,String> entry:deviceLabels.entrySet())
+      if(entry.getValue().equals(label))return discovered.get(entry.getKey());
+    return null;
   }
   private void button(String name,Runnable action){
     Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());root.addView(b);
@@ -243,16 +248,34 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   @Override public void device(BluetoothDevice device){
     runOnUiThread(()->{
-      String address=device.getAddress();
-      if(!discovered.containsKey(address)){
-        discovered.put(address,device);
-        String previous=devices.getSelectedItem()==null?null:devices.getSelectedItem().toString();
-        String[] values=discovered.keySet().toArray(new String[0]);
-        devices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values));
-        if(previous!=null){
-          for(int i=0;i<values.length;i++)if(previous.equals(values[i])){devices.setSelection(i);break;}
+      String address;
+      try{address=device.getAddress();}
+      catch(SecurityException unavailable){showStatus("Nearby devices permission required to display scan results");return;}
+      if(address==null)return;
+      String name=null;
+      try{name=device.getName();}
+      catch(SecurityException ignored){/* Name may be unavailable without CONNECT permission. */}
+      if(name==null || name.trim().isEmpty())name="Unknown BLE device";
+      // Keep the address visible to distinguish devices with the same name.
+      String display=name.trim()+" ("+address+")";
+      String previousAddress=null;
+      if(devices.getSelectedItem()!=null){
+        String previousLabel=devices.getSelectedItem().toString();
+        for(java.util.Map.Entry<String,String> entry:deviceLabels.entrySet())
+          if(previousLabel.equals(entry.getValue())){previousAddress=entry.getKey();break;}
+      }
+      discovered.put(address,device);
+      deviceLabels.put(address,display);
+      String[] values=deviceLabels.values().toArray(new String[0]);
+      devices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values));
+      if(previousAddress!=null){
+        int i=0;
+        for(String key:deviceLabels.keySet()){
+          if(previousAddress.equals(key)){devices.setSelection(i);break;}
+          i++;
         }
       }
+      showStatus("Found "+discovered.size()+" nearby BLE device(s). Select Sarah or your Flipper's advertised name.");
     });
   }
   @Override public void onDestroy(){
