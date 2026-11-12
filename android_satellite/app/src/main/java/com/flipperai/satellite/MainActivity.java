@@ -19,6 +19,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private LinearLayout root;
   private final LinkedHashMap<String,BluetoothDevice> discovered=new LinkedHashMap<>();
   private Spinner devices;
+  private boolean scanAfterPermission;
   private final String[] labels={"OFFLINE","HYBRID","ONLINE"};
   private Spinner mode;
   private final WorkerCloudEngine cloud=new WorkerCloudEngine();
@@ -48,7 +49,10 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     status=new TextView(this);
     status.setText("Idle — no Flipper AI BLE service installed yet");root.addView(status);
     devices=new Spinner(this);root.addView(devices);
-    button("Scan for Flipper",()->{if(permissions())ble.startScan();});
+    button("Scan for Flipper",()->{
+      if(permissions())beginScan();
+      else scanAfterPermission=true;
+    });
     button("Connect selected",()->{
       if(!permissions())return;
       BluetoothDevice selected=selectedDevice();
@@ -146,6 +150,25 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     TextView caveat=new TextView(this);
     caveat.setText("Momentum functions remain on Flipper. Offline LLM inference works only with a separately installed local model server; otherwise the app uses diagnostic rules. Localhost model requests never access the internet.");
     root.addView(caveat);
+  }
+  private void beginScan(){
+    discovered.clear();
+    devices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Scanning for nearby BLE devices..."}));
+    ble.startScan();
+    new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
+      if(isFinishing() || isDestroyed())return;
+      if(discovered.isEmpty())showStatus("Scan finished: no BLE devices found. Check Flipper Bluetooth, Android Nearby devices permission, and keep devices close.");
+      else showStatus("Scan finished: "+discovered.size()+" BLE device(s) found. Select your Flipper by Bluetooth address.");
+    },12500);
+  }
+  @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grantResults){
+    super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+    if(requestCode!=22)return;
+    boolean granted=grantResults.length>0;
+    for(int result:grantResults)if(result!=PackageManager.PERMISSION_GRANTED)granted=false;
+    if(!granted){scanAfterPermission=false;showStatus("Bluetooth scan requires Nearby devices permission (or Location on older Android).");return;}
+    if(scanAfterPermission){scanAfterPermission=false;beginScan();}
+    else showStatus("Bluetooth permission granted. Tap Scan for Flipper.");
   }
   private BluetoothDevice selectedDevice(){
     if(devices==null || devices.getSelectedItem()==null)return null;
