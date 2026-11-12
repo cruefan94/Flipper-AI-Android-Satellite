@@ -77,6 +77,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     connectionHistory=new TextView(this);
     connectionHistory.setText("Bluetooth device discovery is separate from the AI channel.");
     root.addView(connectionHistory);
+    button("OPEN PHONE COMPANION",()->startActivity(new android.content.Intent(this,PhoneCompanionActivity.class)));
+    button("OPEN GITHUB",()->startActivity(new android.content.Intent(this,GitHubActivity.class)));
     button("OPEN RADIO SCANNER",()->startActivity(new android.content.Intent(this,RadioScannerActivity.class)));
     TextView voiceTitle=new TextView(this);
     voiceTitle.setText("PHONE VOICE ASSISTANT — on-device microphone and local speech output");
