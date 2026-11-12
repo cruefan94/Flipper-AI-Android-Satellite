@@ -23,7 +23,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private TextView connectionHistory;
   private LinearLayout advancedSection;
   private boolean advancedVisible=false;
-  private boolean suppressSelection=false;
+  private boolean discoverableMode=false;
+  private LinearLayout pairedSection,discoverableSection;
   private LinearLayout root;
   private final LinkedHashMap<String,BluetoothDevice> discovered=new LinkedHashMap<>();
   private final LinkedHashMap<String,String> deviceLabels=new LinkedHashMap<>();
@@ -69,27 +70,61 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     connectionHistory=new TextView(this);
     connectionHistory.setText("Bluetooth device discovery is separate from the AI channel.");
     root.addView(connectionHistory);
-    pairedHeading=new TextView(this);pairedHeading.setText("PAIRED / CONNECTED DEVICES");root.addView(pairedHeading);
-    devices=new Spinner(this);root.addView(devices);
-    button("Select paired device",()->selectFrom(devices,false));
-    nearbyHeading=new TextView(this);nearbyHeading.setText("DISCOVERABLE DEVICES");root.addView(nearbyHeading);
-    nearbyDevices=new Spinner(this);root.addView(nearbyDevices);
-    button("Select discovered device",()->selectFrom(nearbyDevices,true));
-    button("Clear device selection",()->{
-      selectedAddress=null;
-      deviceInfo.setText("No device selected. Choose only one device from either list.");
-      connectionHistory.setText("Selection cleared. Existing Bluetooth session is unchanged; tap Disconnect to close it.");
-    });
-    deviceInfo=new TextView(this);deviceInfo.setText("Select a device to view its details.");root.addView(deviceInfo);
-    if(permissionsAlreadyGranted())showPairedDevices();
-    button("Show paired devices",()->{
+    TextView categoryPrompt=new TextView(this);
+    categoryPrompt.setText("Choose ONE device source:");
+    root.addView(categoryPrompt);
+    RadioGroup sources=new RadioGroup(this);
+    sources.setOrientation(RadioGroup.HORIZONTAL);
+    RadioButton pairedChoice=new RadioButton(this);
+    pairedChoice.setText("Paired devices");
+    RadioButton discoverableChoice=new RadioButton(this);
+    discoverableChoice.setText("Discoverable devices");
+    sources.addView(pairedChoice);
+    sources.addView(discoverableChoice);
+    root.addView(sources);
+    pairedSection=new LinearLayout(this);
+    pairedSection.setOrientation(LinearLayout.VERTICAL);
+    root.addView(pairedSection);
+    pairedHeading=new TextView(this);pairedHeading.setText("PAIRED / CONNECTED DEVICES");pairedSection.addView(pairedHeading);
+    devices=new Spinner(this);pairedSection.addView(devices);
+    sectionButton(pairedSection,"Select paired device",()->selectFrom(devices,false));
+    sectionButton(pairedSection,"Refresh paired devices",()->{
       if(permissions())showPairedDevices();
       else refreshAfterPermission=true;
     });
-    button("Scan for Flipper",()->{
+    discoverableSection=new LinearLayout(this);
+    discoverableSection.setOrientation(LinearLayout.VERTICAL);
+    root.addView(discoverableSection);
+    nearbyHeading=new TextView(this);nearbyHeading.setText("DISCOVERABLE DEVICES");discoverableSection.addView(nearbyHeading);
+    nearbyDevices=new Spinner(this);discoverableSection.addView(nearbyDevices);
+    sectionButton(discoverableSection,"Select discovered device",()->selectFrom(nearbyDevices,true));
+    sectionButton(discoverableSection,"Scan for nearby devices",()->{
       if(permissions())beginScan();
       else scanAfterPermission=true;
     });
+    deviceInfo=new TextView(this);deviceInfo.setText("No device selected.");root.addView(deviceInfo);
+    button("Clear device selection",()->{
+      selectedAddress=null;
+      deviceInfo.setText("No device selected.");
+      showStatus("Device selection cleared.");
+    });
+    sources.setOnCheckedChangeListener((group,id)->{
+      boolean newDiscoverable=id==discoverableChoice.getId();
+      if(discoverableMode!=newDiscoverable){
+        ble.disconnect();
+        selectedAddress=null;
+        deviceInfo.setText("No device selected. Choose a device from this category.");
+        connectionState.setText("AI CONNECTION: NOT CONNECTED");
+      }
+      discoverableMode=newDiscoverable;
+      pairedSection.setVisibility(discoverableMode?android.view.View.GONE:android.view.View.VISIBLE);
+      discoverableSection.setVisibility(discoverableMode?android.view.View.VISIBLE:android.view.View.GONE);
+    });
+    pairedChoice.setId(android.view.View.generateViewId());
+    discoverableChoice.setId(android.view.View.generateViewId());
+    pairedChoice.setChecked(true);
+    discoverableSection.setVisibility(android.view.View.GONE);
+    if(permissionsAlreadyGranted())showPairedDevices();
     button("Connect selected",()->{
       if(!permissions())return;
       BluetoothDevice selected=selectedDevice();
@@ -201,11 +236,10 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     nearby.clear();nearbyNames.clear();
     nearbyDevices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"None — scanning for nearby devices..."}));
     final int epoch=++scanEpoch;
-    showPairedDevices();
     ble.startScan();
     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
       if(isFinishing() || isDestroyed() || epoch!=scanEpoch)return;
-      if(nearby.isEmpty())showStatus("No discoverable BLE devices found. Already paired devices remain listed above.");
+      if(nearby.isEmpty())showStatus("No discoverable BLE devices found. Switch to Paired devices to view previously paired devices.");
       else showStatus("Discovered "+nearby.size()+" nearby BLE device(s).");
     },12500);
   }
@@ -265,6 +299,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       selectedAddress=null;
       deviceInfo.setText("No device selected.");return;
     }
+    if(fromNearby!=discoverableMode){showStatus("Switch device category before selecting.");return;}
     LinkedHashMap<String,String> names=fromNearby?nearbyLabels():deviceLabels;
     for(java.util.Map.Entry<String,String> entry:names.entrySet()){
       if(entry.getValue().equals(label)){
@@ -298,8 +333,10 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   private BluetoothDevice selectedDevice(){
     if(selectedAddress==null)return null;
-    BluetoothDevice device=discovered.get(selectedAddress);
-    return device!=null?device:nearby.get(selectedAddress);
+    return discoverableMode?nearby.get(selectedAddress):discovered.get(selectedAddress);
+  }
+  private void sectionButton(LinearLayout section,String name,Runnable action){
+    Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());section.addView(b);
   }
   private void advancedButton(String name,Runnable action){
     Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());advancedSection.addView(b);
