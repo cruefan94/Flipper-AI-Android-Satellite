@@ -47,6 +47,9 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final InferenceRouter router=new InferenceRouter(
     new OfflineModelOrDiagnostics(localModel,new OfflineDiagnosticEngine()),cloud);
   private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
+  // Bound pending BLE inference to avoid unbounded work while a model is slow.
+  private final java.util.concurrent.atomic.AtomicInteger pendingBleRequests=new java.util.concurrent.atomic.AtomicInteger();
+  private static final int MAX_PENDING_BLE_REQUESTS=8;
   private CheckBox cloudConsent;
   private final ConsentEpoch consentEpoch=new ConsentEpoch();
   private SatelliteRequestHandler requests;
@@ -470,7 +473,14 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     final int epoch=receivedEpoch;
     int frameLimit=ble.maxFrameBytes();
     final long transportGeneration=transports.generation();
-    inferenceWorker.execute(()->{
+    int queued=pendingBleRequests.incrementAndGet();
+    if(queued>MAX_PENDING_BLE_REQUESTS){
+      pendingBleRequests.decrementAndGet();
+      showStatus("AI request queue full; reconnect or wait for pending responses");
+      return;
+    }
+    try { inferenceWorker.execute(()->{
+      try {
       if(!connectionEpoch.matches(epoch))return;
       /* The worker can be queued behind a slow model request. Never use a
        * stale UI consent snapshot to start a later cloud transmission. */
@@ -485,7 +495,10 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         if(response!=null && !transports.sendFrameIfCurrent(response,transportGeneration))
           showStatus("Cannot respond: AI transport changed or disconnected");
       });
-    });
+      } finally { pendingBleRequests.decrementAndGet(); }
+    }); } catch(java.util.concurrent.RejectedExecutionException shutdown) {
+      pendingBleRequests.decrementAndGet();
+    }
   }
   @Override public void device(BluetoothDevice device,String advertisedName){
     runOnUiThread(()->{
