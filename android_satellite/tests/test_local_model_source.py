@@ -27,9 +27,9 @@ class LocalModelSourceTest(unittest.TestCase):
         self.assertIn('conn.disconnect()',ENGINE)
     def test_local_model_and_diagnostic_fallback_in_ui(self):
         self.assertIn('new OfflineModelOrDiagnostics(localModel,new OfflineDiagnosticEngine())',UI)
-        self.assertIn('button("Use installed offline model"',UI)
-        self.assertIn('button("Disable local model"',UI)
-        self.assertIn('button("Test local model connection"',UI)
+        self.assertIn('advancedButton("Use installed offline model"',UI)
+        self.assertIn('advancedButton("Disable local model"',UI)
+        self.assertIn('advancedButton("Test local model connection"',UI)
         self.assertIn('localModel.answer("Reply with OK.")',UI)
         self.assertIn('inferenceWorker.execute(()->{',UI)
     def test_ble_notification_epoch_bound_before_ui_enqueue(self):
