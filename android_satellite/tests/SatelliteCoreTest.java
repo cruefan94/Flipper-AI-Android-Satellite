@@ -81,6 +81,15 @@ public final class SatelliteCoreTest {
     check(SatelliteProtocol.decode(hello)[1].equals("HELLO_ACK"),"hello");
     String reply=s.dispatch(SatelliteProtocol.encode("ASK",5,"battery"),180,handler);
     check(SatelliteProtocol.decode(reply)[1].equals("ANSWER"),"answer");
+    // A response that cannot fit the negotiated ATT limit must not consume
+    // the request ID; the same request can be retried when capacity recovers.
+    String tooSmall=s.dispatch(SatelliteProtocol.encode("ASK",6,"battery"),12,handler);
+    check(tooSmall==null,"undersized ATT response must not be sent");
+    String retried=s.dispatch(SatelliteProtocol.encode("ASK",6,"battery"),180,handler);
+    check(retried!=null && SatelliteProtocol.decode(retried)[1].equals("ANSWER"),
+      "retry succeeds after response-capacity recovery");
+    check(SatelliteProtocol.decode(s.dispatch(SatelliteProtocol.encode("ASK",6,"battery"),180,handler))[3].equals("REPLAY_ID"),
+      "successfully answered request ID cannot be replayed");
     InferenceRouter.OnlineEngine largeEngine=new InferenceRouter.OnlineEngine(){
       public boolean ready(){return true;}
       public String answer(String p){return "🔋".repeat(90)+" end";}
