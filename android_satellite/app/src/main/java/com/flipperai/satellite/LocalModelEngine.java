@@ -37,8 +37,7 @@ public final class LocalModelEngine implements InferenceRouter.OfflineEngine {
   public synchronized void clear(){revokeActive();endpoint="";model="local";}
   @Override public boolean ready(){return !endpoint.isEmpty();}
   @Override public String answer(String prompt) throws Exception {
-    if(prompt==null || prompt.trim().isEmpty() || prompt.length()>127)
-      throw new IllegalArgumentException("Local model prompt must be 1–127 characters");
+    PhonePromptPolicy.requireValid(prompt);
     final String target, selectedModel;
     final long requestGeneration;
     synchronized(this){
@@ -63,7 +62,7 @@ public final class LocalModelEngine implements InferenceRouter.OfflineEngine {
     JSONArray messages=new JSONArray().put(new JSONObject().put("role","user").put("content",prompt));
     byte[] body=new JSONObject().put("model",selectedModel).put("messages",messages)
       .put("stream",false).put("max_tokens",100).toString().getBytes(StandardCharsets.UTF_8);
-    if(body.length>1024)throw new IllegalArgumentException("Prompt exceeds local model request limit");
+    if(body.length>8192)throw new IllegalArgumentException("Prompt exceeds local model request limit");
       synchronized(this){
         if(generation!=requestGeneration)throw new IllegalStateException("Local model authorization revoked");
       }
