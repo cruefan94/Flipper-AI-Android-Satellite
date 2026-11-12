@@ -17,6 +17,7 @@ public final class AiChatActivity extends Activity {
   private NanoModelEngine nano;
   private EmbeddedModelEngine embedded;
   private boolean useEmbedded=true;
+  private volatile boolean closing=false;
   private static final int IMPORT_TASK=402;
   private boolean useNano=false;
   private final ExecutorService worker=Executors.newSingleThreadExecutor();
@@ -73,6 +74,8 @@ public final class AiChatActivity extends Activity {
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
     useNano=saved.getBoolean("use_nano",false);
     useEmbedded=saved.getBoolean("use_embedded",true);
+    java.io.File[] stored=new java.io.File(getFilesDir(),"ai_models").listFiles((dir,name)->name.matches("[a-f0-9]{64}\\.task"));
+    if(stored!=null&&stored.length==1){final java.io.File restore=stored[0];status.setText("Restoring imported offline AI model...");worker.execute(()->{String message;try{embedded.load(restore);message="Embedded offline AI ready.";}catch(Exception e){message="Imported model could not load: "+e.getMessage();}final String result=message;ui.post(()->{if(!isFinishing()&&!isDestroyed())status.setText(result);});});}
     if(useNano)modelHint.setText("Gemini Nano selected (optional). This device may not support it. Choose independent model in setup.");
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
@@ -210,5 +213,5 @@ public final class AiChatActivity extends Activity {
   private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
   private TextView label(String s,int size,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);v.setPadding(4,8,4,8);return v;}
   private Button button(LinearLayout parent,String title,Runnable action){Button b=new Button(this);b.setText(title);b.setTextSize(11);b.setAllCaps(false);b.setTextColor(cyan);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(panel));b.setMinHeight(dp(40));b.setMinimumHeight(dp(40));b.setPadding(dp(4),0,dp(4),0);b.setOnClickListener(v->action.run());LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(44),1);p.setMargins(dp(2),dp(2),dp(2),dp(2));parent.addView(b,p);return b;}
-  @Override protected void onDestroy(){generation++;worker.shutdownNow();model.clear();if(embedded!=null)embedded.close();super.onDestroy();}
+  @Override protected void onDestroy(){generation++;closing=true;model.clear();worker.shutdown();worker.execute(()->{if(embedded!=null)embedded.close();});super.onDestroy();}
 }
