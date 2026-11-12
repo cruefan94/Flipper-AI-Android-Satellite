@@ -6,3 +6,6 @@ android { namespace 'com.flipperai.satellite'; compileSdk 35
 
 // Optional on-device Gemini Nano via Android AICore; model support is device-dependent.
 dependencies { implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4' }
+
+// Embedded offline inference (MediaPipe .task models, no network required).
+dependencies { implementation 'com.google.mediapipe:tasks-genai:0.10.35' }
