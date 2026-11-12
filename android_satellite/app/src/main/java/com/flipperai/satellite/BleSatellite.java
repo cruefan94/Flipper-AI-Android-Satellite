@@ -18,6 +18,7 @@ import java.util.UUID;
 public final class BleSatellite implements SatelliteTransport {
   public static final UUID MOMENTUM_RPC_SERVICE=UUID.fromString("8fe5b3d5-2e7f-4a98-2a48-7acc60fe0000");
   public static final UUID MOMENTUM_RPC_WRITE=UUID.fromString("19ed82ae-ed21-4c9d-4145-228e62fe0000");
+  public static final UUID MOMENTUM_RPC_FLOW=UUID.fromString("19ed82ae-ed21-4c9d-4145-228e63fe0000");
   public static final UUID MOMENTUM_RPC_NOTIFY=UUID.fromString("19ed82ae-ed21-4c9d-4145-228e61fe0000");
   public static final UUID SERVICE=UUID.fromString("c8c7ab10-6355-4ea8-a76a-0a4a64de0001");
   public static final UUID RX=UUID.fromString("c8c7ab10-6355-4ea8-a76a-0a4a64de0002");
@@ -39,6 +40,7 @@ public final class BleSatellite implements SatelliteTransport {
   private volatile boolean authorized,subscribed,mtuPending;
   private volatile boolean stockRpcDetected,stockRpcSubscribed;
   private volatile int rpcNotificationsReceived;
+  private volatile int rpcFlowCredits=-1;
   private final BleWriteGuard writeGuard=new BleWriteGuard();
   private static final int MAX_QUEUED=8;
   private static final long GATT_WRITE_TIMEOUT_MS=6000L;
@@ -155,7 +157,7 @@ public final class BleSatellite implements SatelliteTransport {
   }
   public synchronized void disconnect(){
     connectionGeneration++;
-    state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;stockRpcSubscribed=false;rpcNotificationsReceived=0;writeGuard.reset();
+    state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;stockRpcSubscribed=false;rpcNotificationsReceived=0;rpcFlowCredits=-1;writeGuard.reset();
     pending.clear();BluetoothGatt old=gatt;gatt=null;
     events.status("Disconnected (local)");
     if(old!=null){
@@ -177,6 +179,7 @@ public final class BleSatellite implements SatelliteTransport {
   public boolean hasStockRpc(){return stockRpcDetected && gatt!=null && approved();}
   public boolean isStockRpcSubscribed(){return hasStockRpc() && stockRpcSubscribed;}
   public int stockRpcNotificationCount(){return rpcNotificationsReceived;}
+  public int stockRpcFlowCredits(){return rpcFlowCredits;}
   @Override public boolean isReady(){return subscribed && approved() && state.phase()==TransportState.Phase.READY;}
   @Override public boolean sendFrame(String data){return send(data);}
   @Override public void close(){stopScan();disconnect();}
@@ -389,6 +392,14 @@ public final class BleSatellite implements SatelliteTransport {
         events.status(stockRpcSubscribed
           ? "Stock Momentum RPC indications enabled; awaiting protocol messages (AI not ready)."
           : "Stock Momentum RPC indication subscription failed (GATT "+code+").");
+        if(stockRpcSubscribed){
+          BluetoothGattService rpc=link.getService(MOMENTUM_RPC_SERVICE);
+          BluetoothGattCharacteristic flow=rpc==null?null:rpc.getCharacteristic(MOMENTUM_RPC_FLOW);
+          if(flow!=null){
+            try{if(!link.readCharacteristic(flow))events.status("RPC flow-control read did not start.");}
+            catch(SecurityException | IllegalStateException e){events.status("RPC flow-control read unavailable.");}
+          }else events.status("RPC flow-control characteristic missing.");
+        }
         return;
       }
       if(owner==null || !TX.equals(owner.getUuid()) ||
@@ -421,6 +432,18 @@ public final class BleSatellite implements SatelliteTransport {
       subscribed=true;
       events.status("AI BLE ready, max frame "+state.payloadLimit()+" bytes");
       }
+    }
+    private void readRpcFlow(byte[] data){
+      if(data==null || data.length!=4){events.status("RPC flow-control value length unexpected.");return;}
+      long n=((long)data[0]&255L)|(((long)data[1]&255L)<<8)|(((long)data[2]&255L)<<16)|(((long)data[3]&255L)<<24);
+      if(n>0 && n<=65536){rpcFlowCredits=(int)n;events.status("Momentum RPC flow-control: "+rpcFlowCredits+" bytes available; no command sent.");}
+      else events.status("RPC flow-control value outside expected range.");
+    }
+    @Override public void onCharacteristicRead(BluetoothGatt link,BluetoothGattCharacteristic ch,byte[] value,int code){
+      synchronized(BleSatellite.this){if(link==gatt && stockRpcSubscribed && ch!=null && MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(value);}
+    }
+    @Override public void onCharacteristicRead(BluetoothGatt link,BluetoothGattCharacteristic ch,int code){
+      if(Build.VERSION.SDK_INT<33){synchronized(BleSatellite.this){if(link==gatt && stockRpcSubscribed && ch!=null && MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(ch.getValue());}}
     }
     @Override public void onCharacteristicWrite(BluetoothGatt link,BluetoothGattCharacteristic ch,int code){
       if(link!=gatt || !RX.equals(ch.getUuid()))return;
