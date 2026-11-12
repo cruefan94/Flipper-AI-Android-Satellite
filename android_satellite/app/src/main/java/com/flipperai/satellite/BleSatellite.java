@@ -203,6 +203,12 @@ public final class BleSatellite implements SatelliteTransport {
   public synchronized boolean send(String frame){
     if(frame==null || !isReady() || gatt==null){events.status("AI channel not ready");return false;}
     byte[] bytes=frame.getBytes(StandardCharsets.UTF_8);
+    // Validate all outbound frames before queuing a BLE GATT write.
+    try { SatelliteProtocol.decode(frame); }
+    catch(IllegalArgumentException invalidFrame) {
+      events.status("AI packet rejected: invalid protocol frame");
+      return false;
+    }
     if(!state.canWrite(bytes.length)){events.status("AI packet exceeds negotiated MTU");return false;}
     if(pending.size()>=MAX_QUEUED){events.status("AI output queue full");return false;}
     pending.addLast(bytes);return drain();
