@@ -14,6 +14,8 @@ import java.util.concurrent.*;
 /** Dedicated opt-in on-device AI chat. No prompts leave the phone. */
 public final class AiChatActivity extends Activity {
   private final LocalModelEngine model=new LocalModelEngine();
+  private NanoModelEngine nano;
+  private boolean useNano=true;
   private final ExecutorService worker=Executors.newSingleThreadExecutor();
   private final Handler ui=new Handler(Looper.getMainLooper());
   private TextView history,status;
@@ -34,7 +36,9 @@ public final class AiChatActivity extends Activity {
     frame.setFitsSystemWindows(true);setContentView(frame);
     TextView title=label("AI ASSISTANT",22,cyan);frame.addView(title);
     status=label("OFFLINE • No local language model configured",13,Color.LTGRAY);frame.addView(status);
-    modelHint=label("Private on-phone AI. A model runtime is not bundled yet.",12,Color.LTGRAY);frame.addView(modelHint);
+    modelHint=label("Checking built-in Android Gemini Nano availability. No cloud prompt upload.",12,Color.LTGRAY);frame.addView(modelHint);
+    try{nano=new NanoModelEngine();}catch(Throwable e){modelHint.setText("Gemini Nano initialization unavailable: "+e.getClass().getSimpleName());}
+    button(frame,"CHECK ON-DEVICE AI",()->checkNano());
     transcriptScroll=new ScrollView(this);history=label("Conversation will appear here. Configure a local model to begin.",15,Color.WHITE);history.setTextIsSelectable(true);history.setPadding(14,16,14,16);history.setBackgroundColor(panel);transcriptScroll.addView(history);
     frame.addView(transcriptScroll,new LinearLayout.LayoutParams(-1,0,1));
     LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.HORIZONTAL);frame.addView(actions);
@@ -62,6 +66,8 @@ public final class AiChatActivity extends Activity {
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
+    button(setup,"USE GEMINI NANO",()->{useNano=true;status.setText("Gemini Nano selected; check on-device AI availability.");});
+    button(setup,"USE LOCAL SERVER",()->{useNano=false;status.setText("Local server selected; configure a loopback endpoint.");});
     button(setup,"CONFIGURE LOCAL MODEL",()->{
       try{model.configure(endpoint.getText().toString().trim(),modelName.getText().toString().trim());
         saved.edit().putString("endpoint",endpoint.getText().toString().trim()).putString("model",modelName.getText().toString().trim()).apply();
@@ -91,8 +97,18 @@ public final class AiChatActivity extends Activity {
     status.setText("OFFLINE • Request stopped");
   }
   private void setPrompt(String value){prompt.setText(value);prompt.setSelection(value.length());}
+  private void checkNano(){
+    if(nano==null){status.setText("Gemini Nano SDK unavailable; use local server option.");return;}
+    status.setText("Checking device model support...");
+    worker.execute(()->{
+      String result;
+      try{int state=nano.status();result=state==com.google.mlkit.genai.prompt.FeatureStatus.AVAILABLE?"Gemini Nano ready on this phone":state==com.google.mlkit.genai.prompt.FeatureStatus.DOWNLOADABLE?"Gemini Nano supported but model download required":state==com.google.mlkit.genai.prompt.FeatureStatus.DOWNLOADING?"Gemini Nano downloading":"Gemini Nano unavailable on this device";}
+      catch(Exception e){result="Gemini Nano status failed: "+e.getMessage();}
+      final String message=result;ui.post(()->{if(!isDestroyed())status.setText(message);});
+    });
+  }
   private void ask(){
-    if(!model.ready()){status.setText("Install and configure an on-phone model server before sending.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
+    if(!useNano&&!model.ready()){status.setText("Configure a local model server or switch to Gemini Nano.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
     if(busy){status.setText("A response is already processing. Press Stop first.");return;}
     final String text=prompt.getText().toString().trim();
     if(text.isEmpty()){status.setText("Type a question first.");return;}
@@ -109,7 +125,7 @@ public final class AiChatActivity extends Activity {
     send.setEnabled(false);
     worker.execute(()->{
       String response;boolean success=true;
-      try{response=model.answer(text);}
+      try{response=useNano?(nano==null?missingNano():nano.answer(text)):model.answer(text);}
       catch(Exception e){response="Local model unavailable: "+e.getMessage();success=false;}
       final String result=response;final boolean ok=success;
       ui.post(()->{
@@ -120,6 +136,7 @@ public final class AiChatActivity extends Activity {
       });
     });
   }
+  private String missingNano(){throw new IllegalStateException("Gemini Nano unavailable. Select local server in Model Setup.");}
   private void showTranscript(){history.setText(transcript.toString());transcriptScroll.post(()->transcriptScroll.fullScroll(View.FOCUS_DOWN));}
   private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
   private TextView label(String s,int size,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);v.setPadding(4,8,4,8);return v;}
