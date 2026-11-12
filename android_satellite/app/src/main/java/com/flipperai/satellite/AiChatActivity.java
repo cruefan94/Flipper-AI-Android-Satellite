@@ -5,6 +5,8 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.*;
+import android.content.*;
+import android.graphics.drawable.*;
 import android.view.*;
 import android.widget.*;
 import java.util.concurrent.*;
@@ -19,6 +21,8 @@ public final class AiChatActivity extends Activity {
   private Button send;
   private boolean busy=false;
   private ScrollView transcriptScroll;
+
+  private TextView modelHint;
   private int completedRequests=0;
   private final StringBuilder transcript=new StringBuilder();
   private static final String PREFS="ai_local_settings_v1";
@@ -26,27 +30,35 @@ public final class AiChatActivity extends Activity {
   private final int bg=Color.rgb(8,17,23),panel=Color.rgb(19,37,45),cyan=Color.rgb(50,231,218);
   @Override public void onCreate(Bundle savedInstanceState){
     super.onCreate(savedInstanceState);getWindow().setStatusBarColor(bg);getWindow().setNavigationBarColor(bg);
-    LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);frame.setPadding(18,18,18,12);frame.setBackgroundColor(bg);setContentView(frame);
-    TextView title=label("AI ASSISTANT",24,cyan);frame.addView(title);
+    LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);frame.setPadding(dp(14),dp(8),dp(14),dp(12));frame.setBackgroundColor(bg);
+    frame.setFitsSystemWindows(true);setContentView(frame);
+    TextView title=label("AI ASSISTANT",22,cyan);frame.addView(title);
     status=label("OFFLINE • No local language model configured",13,Color.LTGRAY);frame.addView(status);
-    TextView note=label("Private text chat. A separately installed OpenAI-compatible model server must run on this phone at 127.0.0.1. No automatic cloud uploads.",13,Color.LTGRAY);frame.addView(note);
+    modelHint=label("Private on-phone AI. A model runtime is not bundled yet.",12,Color.LTGRAY);frame.addView(modelHint);
     transcriptScroll=new ScrollView(this);history=label("Conversation will appear here. Configure a local model to begin.",15,Color.WHITE);history.setTextIsSelectable(true);history.setPadding(14,16,14,16);history.setBackgroundColor(panel);transcriptScroll.addView(history);
     frame.addView(transcriptScroll,new LinearLayout.LayoutParams(-1,0,1));
-    prompt=new EditText(this);prompt.setSingleLine(false);prompt.setMaxLines(4);prompt.setHint("Ask your AI...");prompt.setHintTextColor(Color.LTGRAY);prompt.setTextColor(Color.WHITE);frame.addView(prompt);
-    send=button(frame,"SEND TO OFFLINE AI",this::ask);
-    button(frame,"QUICK PROMPT: EXPLAIN BLE",()->setPrompt("Explain Bluetooth Low Energy."));
-    button(frame,"QUICK PROMPT: EXPLAIN GATT",()->setPrompt("What is a GATT service?"));
-    button(frame,"STOP CURRENT RESPONSE",this::cancel);
-    button(frame,"COPY CONVERSATION",()->{
-      if(transcript.length()==0){status.setText("No conversation to copy.");return;}
-      android.content.ClipboardManager clipboard=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
-      if(clipboard!=null){clipboard.setPrimaryClip(android.content.ClipData.newPlainText("AI conversation",transcript.toString()));status.setText("Conversation copied to clipboard. Clipboard contents may be visible to other apps.");}
+    LinearLayout actions=new LinearLayout(this);actions.setOrientation(LinearLayout.HORIZONTAL);frame.addView(actions);
+    button(actions,"BLE",()->setPrompt("Explain Bluetooth Low Energy."));
+    button(actions,"GATT",()->setPrompt("What is a GATT service?"));
+    button(actions,"CLEAR",()->{cancel();transcript.setLength(0);completedRequests=0;history.setText("Conversation cleared.");});
+    button(actions,"COPY",()->{
+      if(transcript.length()==0){status.setText("Nothing to copy.");return;}
+      android.content.ClipboardManager cb=(android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+      if(cb!=null){cb.setPrimaryClip(android.content.ClipData.newPlainText("AI conversation",transcript.toString()));status.setText("Copied. Clipboard may be visible to other apps.");}
     });
-    button(frame,"CLEAR CONVERSATION",()->{cancel();transcript.setLength(0);completedRequests=0;history.setText("Conversation cleared. No messages saved.");status.setText("OFFLINE • Conversation cleared");});
-    Button configure=button(frame,"SHOW / HIDE LOCAL MODEL SETUP",()->{int v=setup.getVisibility();setup.setVisibility(v==View.VISIBLE?View.GONE:View.VISIBLE);});
-    setup=new LinearLayout(this);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);frame.addView(setup);
+    LinearLayout composer=new LinearLayout(this);composer.setOrientation(LinearLayout.HORIZONTAL);composer.setGravity(Gravity.BOTTOM);frame.addView(composer);
+    prompt=new EditText(this);prompt.setSingleLine(false);prompt.setMaxLines(3);prompt.setMinLines(1);prompt.setHint("Ask your AI...");prompt.setHintTextColor(Color.LTGRAY);prompt.setTextColor(Color.WHITE);
+    composer.addView(prompt,new LinearLayout.LayoutParams(0,-2,1));
+    send=button(composer,"SEND",this::ask);
+    LinearLayout tools=new LinearLayout(this);tools.setOrientation(LinearLayout.HORIZONTAL);frame.addView(tools);
+    button(tools,"STOP",this::cancel);
+    button(tools,"MODEL SETUP",()->{boolean show=setupScroll.getVisibility()!=View.VISIBLE;setupScroll.setVisibility(show?View.VISIBLE:View.GONE);setup.setVisibility(show?View.VISIBLE:View.GONE);});
+    button(tools,"BACK",this::finish);
+    setup=new LinearLayout(this);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);
+    setupScroll=new ScrollView(this);setupScroll.setVisibility(View.GONE);setupScroll.addView(setup);frame.addView(setupScroll,new LinearLayout.LayoutParams(-1,0,0.8f));
+    TextView instructions=label("LOCAL AI SETUP: A compatible on-phone model server is required. This app does not install one. Enter a loopback URL and model ID only after installing a runtime. No cloud access is enabled here.",13,Color.LTGRAY);setup.addView(instructions);
     endpoint=new EditText(this);endpoint.setSingleLine(true);endpoint.setHint("http://127.0.0.1:8080/v1/chat/completions");endpoint.setTextColor(Color.WHITE);endpoint.setHintTextColor(Color.LTGRAY);setup.addView(endpoint);
-    modelName=new EditText(this);modelName.setSingleLine(true);modelName.setHint("Local model name");modelName.setTextColor(Color.WHITE);modelName.setHintTextColor(Color.LTGRAY);setup.addView(modelName);
+    modelName=new EditText(this);modelName.setSingleLine(true);modelName.setHint("Local model ID (required)");modelName.setTextColor(Color.WHITE);modelName.setHintTextColor(Color.LTGRAY);setup.addView(modelName);
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
@@ -67,9 +79,10 @@ public final class AiChatActivity extends Activity {
       try{model.configure(saved.getString("endpoint",""),saved.getString("model",""));status.setText("OFFLINE • Saved local endpoint restored; not yet verified");}
       catch(Exception ignored){saved.edit().clear().apply();status.setText("OFFLINE • Saved model settings invalid");}
     }
-    button(frame,"BACK TO DASHBOARD",this::finish);
+
   }
   private LinearLayout setup;
+  private ScrollView setupScroll;
   private void cancel(){
     generation++;
     model.revokeActive();
@@ -79,7 +92,7 @@ public final class AiChatActivity extends Activity {
   }
   private void setPrompt(String value){prompt.setText(value);prompt.setSelection(value.length());}
   private void ask(){
-    if(!model.ready()){status.setText("Install and configure an on-phone model server before sending.");setup.setVisibility(View.VISIBLE);return;}
+    if(!model.ready()){status.setText("Install and configure an on-phone model server before sending.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
     if(busy){status.setText("A response is already processing. Press Stop first.");return;}
     final String text=prompt.getText().toString().trim();
     if(text.isEmpty()){status.setText("Type a question first.");return;}
@@ -108,7 +121,8 @@ public final class AiChatActivity extends Activity {
     });
   }
   private void showTranscript(){history.setText(transcript.toString());transcriptScroll.post(()->transcriptScroll.fullScroll(View.FOCUS_DOWN));}
+  private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
   private TextView label(String s,int size,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);v.setPadding(4,8,4,8);return v;}
-  private Button button(LinearLayout parent,String title,Runnable action){Button b=new Button(this);b.setText(title);b.setOnClickListener(v->action.run());parent.addView(b);return b;}
+  private Button button(LinearLayout parent,String title,Runnable action){Button b=new Button(this);b.setText(title);b.setTextSize(12);b.setAllCaps(false);b.setMinHeight(dp(42));b.setMinimumHeight(dp(42));b.setPadding(dp(8),0,dp(8),0);b.setOnClickListener(v->action.run());parent.addView(b,new LinearLayout.LayoutParams(0,dp(46),1));return b;}
   @Override protected void onDestroy(){generation++;worker.shutdownNow();model.clear();super.onDestroy();}
 }
