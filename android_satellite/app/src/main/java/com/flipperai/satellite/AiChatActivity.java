@@ -193,10 +193,18 @@ public final class AiChatActivity extends Activity {
     return item;
   }
   private void chooseMode(){
+    // Keep displayed options mapped explicitly to their modes: enum order differs.
+    final InferenceRouter.Mode[] displayedModes={
+      InferenceRouter.Mode.OFFLINE,InferenceRouter.Mode.HYBRID,InferenceRouter.Mode.ONLINE
+    };
     String[] choices={"OFFLINE • on this phone","HYBRID • offline then allowed cloud","ONLINE • requires cloud permission"};
+    int selected=0;
+    for(int i=0;i<displayedModes.length;i++){
+      if(displayedModes[i]==mode){selected=i;break;}
+    }
     new android.app.AlertDialog.Builder(this).setTitle("AI processing mode")
-      .setSingleChoiceItems(choices,mode.ordinal(),(dialog,which)->{
-        mode=InferenceRouter.Mode.values()[which];
+      .setSingleChoiceItems(choices,selected,(dialog,which)->{
+        mode=displayedModes[which];
         setStatus(mode+" • Cloud "+(consent?"allowed":"disabled"));
         dialog.dismiss();
       }).setNegativeButton("CANCEL",null).show();
