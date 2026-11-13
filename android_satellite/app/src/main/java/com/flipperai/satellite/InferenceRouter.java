@@ -10,6 +10,7 @@ public final class InferenceRouter {
   public String ask(String prompt, Mode mode, boolean cloudConsent) throws Exception {
     // An absent/invalid mode must never implicitly become HYBRID and reach cloud.
     if (mode == null) throw new IllegalArgumentException("Inference mode is required");
+    if (prompt == null || prompt.trim().isEmpty()) throw new IllegalArgumentException("Prompt is required");
     if (mode == Mode.OFFLINE) return offline(prompt);
     if (mode == Mode.ONLINE) {
       if (!cloudConsent) throw new IllegalStateException("Cloud transmission not approved");
