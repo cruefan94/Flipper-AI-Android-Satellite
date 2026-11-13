@@ -45,6 +45,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private InferenceRouter router;
   private static final int PICK_EMBEDDED_MODEL=4127;
   private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
+  private final BleSessionJobs bleSessionJobs=new BleSessionJobs(inferenceWorker);
   private CheckBox cloudConsent;
   private final ConsentEpoch consentEpoch=new ConsentEpoch();
   private SatelliteRequestHandler requests;
@@ -438,6 +439,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     if(text.startsWith("Disconnected") || text.startsWith("Connecting")){
       transports.invalidateSession();
       connectionEpoch.advance();
+      // Stop queued and running BLE requests and revoke any HTTP transmission.
+      // Unrelated Android model imports/tests stay on the same worker untouched.
+      bleSessionJobs.cancelAll();
+      cloud.revokeActive();
+      localModel.revokeActive();
       /* Android can dispatch delayed GATT callbacks while Activity is closing.
        * Never schedule work on a worker already shut down by onDestroy(). */
       if(!inferenceWorker.isShutdown()) {
@@ -468,7 +474,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     final int epoch=receivedEpoch;
     int frameLimit=ble.maxFrameBytes();
     final long transportGeneration=transports.generation();
-    inferenceWorker.execute(()->{
+    if(!bleSessionJobs.submit(()->{
       if(!connectionEpoch.matches(epoch))return;
       /* The worker can be queued behind a slow model request. Never use a
        * stale UI consent snapshot to start a later cloud transmission. */
@@ -483,7 +489,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         if(response!=null && !transports.sendFrameIfCurrent(response,transportGeneration))
           showStatus("Cannot respond: AI transport changed or disconnected");
       });
-    });
+    }))showStatus("BLE request rejected: AI worker has stopped");
   }
   @Override public void device(BluetoothDevice device,String advertisedName){
     runOnUiThread(()->{
@@ -523,6 +529,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   @Override public void onDestroy(){
     connectionEpoch.advance();
+    bleSessionJobs.close();
     ble.stopScan();transports.close();
     cloud.clear();localModel.clear();
     // Release native model after queued inference completes; never block UI.
