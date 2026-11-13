@@ -184,7 +184,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
         android.net.Uri.parse("https://huggingface.co/litert-community/Qwen3-0.6B")));
     });
-    advancedButton("Import embedded AI model (.litertlm)",()->{
+    advancedButton("Import offline model (.litertlm or ZIP)",()->{
       android.content.Intent picker=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
       picker.addCategory(android.content.Intent.CATEGORY_OPENABLE);
       picker.setType("*/*");
