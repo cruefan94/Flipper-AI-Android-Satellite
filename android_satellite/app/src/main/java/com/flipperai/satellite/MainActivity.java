@@ -170,7 +170,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     mode.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
     advancedSection.addView(mode);
     TextView builtInLabel=new TextView(this);
-    builtInLabel.setText("Embedded OFFLINE AI: download a compatible .litertlm model separately (for example Qwen3-0.6B), then import it from Android Files. LiteRT-LM runs inside this app on your phone. Weights are not included in the APK.");
+    builtInLabel.setText("Embedded OFFLINE AI: download Qwen3-0.6B.litertlm (586 MB; INT8) from the model page, then import it with Android Files. Do NOT choose the newer dynamic INT4 file, which requires a newer runtime. LiteRT-LM runs inside this app; model weights are not bundled.");
     advancedSection.addView(builtInLabel);
     advancedButton("Find compatible Qwen3-0.6B model",()->{
       startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
