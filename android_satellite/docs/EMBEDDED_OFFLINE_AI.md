@@ -10,7 +10,7 @@
 
 ## How to try on an Android phone
 1. Install a current debug APK produced from `develop/android-apk-build`.
-2. Download a compatible **LiteRT-LM** model, preferably the smaller **Qwen3-0.6B.litertlm** from https://huggingface.co/litert-community/Qwen3-0.6B . Check the actual model card, license and file compatibility. A generic GGUF or TFLite file will not work.
+2. Download the **Qwen3-0.6B.litertlm** INT8 file (~586 MB) from https://huggingface.co/litert-community/Qwen3-0.6B/tree/main . Check the model license and compatibility. Do **not** select the similarly named `Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm` file: its current external-weights version is documented to crash LiteRT-LM 0.18.x, which this app pins. A generic GGUF or TFLite file will not work.
 3. Open the app → **Show / hide AI settings and diagnostics** → **Import embedded AI model (.litertlm)**, then choose the downloaded file from Android Files.
 4. Ensure sufficient free space for an extra private copy of the model during import. A multi-GB model can take considerable storage and time.
 5. Tap **Test embedded AI inference**; only a response beginning **Verified LIVE embedded offline model response:** establishes that inference worked on the phone.
