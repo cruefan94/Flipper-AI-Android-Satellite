@@ -6,7 +6,7 @@ const base = "https://flipper-ai-satellite.example.workers.dev";
 const env = {
   DEVICE_TOKEN: "testonly-1234567890-1234567890",
   GEMINI_API_KEY: "example-api-key-not-real",
-  GEMINI_MODEL: "gemini-2.5-flash",
+  GEMINI_MODEL: "gemini-3.5-flash-lite",
 };
 const call = (path, token, message) => worker.fetch(new Request(base + path, {
   method: "POST",
@@ -52,7 +52,7 @@ test("forwards authorized requests using Gemini API and returns Android-compatib
   let called = false;
   globalThis.fetch = async (url, options) => {
     called = true;
-    assert.match(url, /generativelanguage.googleapis.com\/v1beta\/models\/gemini-2.5-flash:generateContent/);
+    assert.match(url, /generativelanguage.googleapis.com\/v1beta\/models\/gemini-3\.5-flash-lite:generateContent/);
     assert.equal(options.method, "POST");
     assert.equal(options.headers["x-goog-api-key"], env.GEMINI_API_KEY);
     assert.equal(JSON.parse(options.body).contents[0].parts[0].text, "Hello Flipper");
@@ -75,7 +75,7 @@ test("provider errors are sanitized and output stays beneath Android 4096-byte l
     globalThis.fetch = async () => new Response("provider internal error", { status: 429 });
     let response = await call("/ask", env.DEVICE_TOKEN, "test");
     assert.equal(response.status, 502);
-    assert.equal((await response.text()).includes("provider internal error"), false);
+    assert.deepEqual(await response.json(), { error: "ai_provider_quota_or_rate_limit" });
 
     globalThis.fetch = async () => new Response(JSON.stringify({
       candidates: [{ content: { parts: [{ text: "😀".repeat(2300) }] } }],
@@ -84,5 +84,23 @@ test("provider errors are sanitized and output stays beneath Android 4096-byte l
     assert.equal(response.status, 200);
     const bytes = Buffer.byteLength(await response.text(), "utf8");
     assert.ok(bytes < 4096, `response was ${bytes} bytes`);
+  } finally { globalThis.fetch = original; }
+});
+
+test("model access and credential errors are classified without leaking provider bodies", async () => {
+  const original = globalThis.fetch;
+  try {
+    for (const [status, error] of [
+      [400, "ai_provider_bad_request"],
+      [401, "ai_provider_key_invalid"],
+      [403, "ai_provider_access_denied"],
+      [404, "ai_provider_model_unavailable"],
+      [503, "ai_provider_overloaded"],
+    ]) {
+      globalThis.fetch = async () => new Response("SENSITIVE provider error text", { status });
+      const response = await call("/ask", env.DEVICE_TOKEN, "test");
+      assert.equal(response.status, 502);
+      assert.deepEqual(await response.json(), { error });
+    }
   } finally { globalThis.fetch = original; }
 });
