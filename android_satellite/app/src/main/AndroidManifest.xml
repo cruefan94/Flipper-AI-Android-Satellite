@@ -10,7 +10,7 @@
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
   <!-- Android 11+ visibility for installed, local text-to-speech engines. -->
   <queries><intent><action android:name="android.intent.action.TTS_SERVICE"/></intent></queries>
-  <application android:label="Flipper AI Satellite" android:theme="@style/FlipperAiTheme" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
+  <application android:label="Flipper AI Satellite Voice Test" android:theme="@style/FlipperAiTheme" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
     <uses-native-library android:name="libvndksupport.so" android:required="false"/>
     <uses-native-library android:name="libOpenCL.so" android:required="false"/>
     <activity android:name=".PhoneCompanionActivity" android:exported="false"/>
