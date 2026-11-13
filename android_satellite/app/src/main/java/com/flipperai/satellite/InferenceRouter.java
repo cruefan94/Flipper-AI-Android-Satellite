@@ -23,6 +23,7 @@ public final class InferenceRouter {
     if (mode == Mode.ONLINE) {
       if (!cloudConsent) throw new IllegalStateException("Cloud transmission not approved");
       if (!cloud.ready()) throw new IllegalStateException("Cloud unavailable");
+      if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
       return cloud.answer(prompt);
     }
     // An interrupted request must never initiate cloud fallback.
@@ -36,6 +37,7 @@ public final class InferenceRouter {
     }
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     if (cloudConsent && cloud.ready()) {
+      if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
       try { return cloud.answer(prompt); }
       catch (InterruptedException cancelled) { Thread.currentThread().interrupt(); throw cancelled; }
       catch (Exception cloudFailure) {
@@ -58,6 +60,7 @@ public final class InferenceRouter {
   }
   private String offline(String prompt) throws Exception {
     if (!local.ready()) throw new IllegalStateException("Install and configure an Android on-device model runtime");
+    if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     return local.answer(prompt);
   }
 }
