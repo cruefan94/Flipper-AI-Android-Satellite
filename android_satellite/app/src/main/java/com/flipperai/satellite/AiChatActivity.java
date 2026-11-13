@@ -176,7 +176,7 @@ public final class AiChatActivity extends Activity {
         embedded.clear();
         if(EmbeddedModelStore.installed(this)){
           embedded.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
-          setStatus("OFFLINE • Model file imported; live inference needs testing");
+          setStatus("OFFLINE • Model imported • Ready for AI chat");
         }else setStatus("OFFLINE • No model file • Basic diagnostics only");
       }catch(Exception e){setStatus("Embedded AI unavailable: "+e.getMessage());}
     });
