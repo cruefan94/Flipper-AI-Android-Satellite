@@ -62,14 +62,22 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     ble=new BleSatellite(this,this);
     transports.register(ble);
     ScrollView scroller=new ScrollView(this);
+    scroller.setBackgroundColor(SatelliteUi.BACKGROUND);
     root=new LinearLayout(this);
-    root.setPadding(26,30,26,30);
+    root.setPadding(SatelliteUi.dp(this,15),SatelliteUi.dp(this,15),
+      SatelliteUi.dp(this,15),SatelliteUi.dp(this,24));
     root.setOrientation(LinearLayout.VERTICAL);
     scroller.addView(root);
     setContentView(scroller);
     TextView header=new TextView(this);
-    header.setText("Flipper AI Satellite\nBLE-first development build");
-    header.setTextSize(22);root.addView(header);
+    header.setText("ᛒ  FLIPPER / BLE");
+    header.setTextColor(SatelliteUi.ORANGE);
+    header.setTextSize(25);root.addView(header);
+    SatelliteUi.backHome(this,root);
+    TextView sectionIntro=SatelliteUi.text(this,
+      "Pair and connect your Flipper Zero. AI model management and chat are on separate screens.",
+      14,SatelliteUi.MUTED,false);
+    root.addView(sectionIntro);
     status=new TextView(this);
     status.setText("No AI connection");root.addView(status);
     TextView offlineHelp=new TextView(this);
@@ -149,16 +157,9 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(selected==null){showStatus("Scan and select a Flipper first");return;}
       ble.pair(selected);
     });
-    button("Reconnect",()->{
-      if(!permissions())return;
-      BluetoothDevice selected=selectedDevice();
-      if(selected==null){showStatus("Select a device in the active category before reconnecting");return;}
-      connectionState.setText("AI CONNECTION: CONNECTING...");
-      ble.connect(selected);
-    });
     button("Disconnect",()->{if(permissions())ble.disconnect();});
     button("TEST MOMENTUM RPC PING",()->ble.sendStockRpcPing());
-    button("Show / hide AI settings and diagnostics",()->{
+    button("Advanced AI settings and diagnostics",()->{
       advancedVisible=!advancedVisible;
       advancedSection.setVisibility(advancedVisible?android.view.View.VISIBLE:android.view.View.GONE);
     });
