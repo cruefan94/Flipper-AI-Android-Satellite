@@ -80,9 +80,6 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     connectionHistory=new TextView(this);
     connectionHistory.setText("Bluetooth device discovery is separate from the AI channel.");
     root.addView(connectionHistory);
-    button("OPEN PHONE COMPANION",()->startActivity(new android.content.Intent(this,PhoneCompanionActivity.class)));
-    button("OPEN GITHUB",()->startActivity(new android.content.Intent(this,GitHubActivity.class)));
-    button("OPEN RADIO SCANNER",()->startActivity(new android.content.Intent(this,RadioScannerActivity.class)));
     TextView voiceTitle=new TextView(this);
     voiceTitle.setText("PHONE VOICE ASSISTANT — on-device microphone and local speech output");
     voiceTitle.setTextSize(18);root.addView(voiceTitle);
@@ -135,12 +132,6 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       else scanAfterPermission=true;
     });
     deviceInfo=new TextView(this);deviceInfo.setText("No device selected.");root.addView(deviceInfo);
-    button("Clear device selection",()->{
-      ble.disconnect();
-      selectedAddress=null;
-      deviceInfo.setText("No device selected.");
-      showStatus("Device selection cleared.");
-    });
     pairedChoice.setId(android.view.View.generateViewId());
     discoverableChoice.setId(android.view.View.generateViewId());
     sources.setOnCheckedChangeListener((group,id)->{
@@ -165,18 +156,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       connectionState.setText("AI CONNECTION: CONNECTING...");
       ble.connect(selected);
     });
-    button("Pair selected",()->{
+    button("Pair selected (if required)",()->{
       if(!permissions())return;
       BluetoothDevice selected=selectedDevice();
-      if(selected==null){showStatus("Scan and select a Flipper first");return;}
+      if(selected==null){showStatus("Select a Flipper first");return;}
       ble.pair(selected);
-    });
-    button("Reconnect",()->{
-      if(!permissions())return;
-      BluetoothDevice selected=selectedDevice();
-      if(selected==null){showStatus("Select a device in the active category before reconnecting");return;}
-      connectionState.setText("AI CONNECTION: CONNECTING...");
-      ble.connect(selected);
     });
     button("Disconnect",()->{if(permissions())ble.disconnect();});
     button("Show / hide AI settings and diagnostics",()->{
