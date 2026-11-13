@@ -47,6 +47,7 @@ public final class InferenceRouter {
       catch (Exception cloudFailure) {
         if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
         if(local.ready()) {
+          if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
           try { return local.answer(prompt); }
           catch(InterruptedException cancelled) { Thread.currentThread().interrupt(); throw cancelled; }
           catch(Exception offlineFailure) { cloudFailure.addSuppressed(offlineFailure); }
@@ -57,7 +58,10 @@ public final class InferenceRouter {
     // Diagnostic fallback stays on-device when consent is absent, or when a
     // model fails and no approved cloud endpoint is available.
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
-    if (local.ready()) return local.answer(prompt);
+    if (local.ready()) {
+      if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
+      return local.answer(prompt);
+    }
     if (localFailure != null)
       throw new IllegalStateException("Local inference failed; cloud fallback disabled or unavailable", localFailure);
     throw new IllegalStateException("No local model available; cloud disabled or unavailable");
