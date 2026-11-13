@@ -118,7 +118,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     root.addView(pairedSection);
     pairedHeading=new TextView(this);pairedHeading.setText("PAIRED / CONNECTED DEVICES");pairedSection.addView(pairedHeading);
     devices=new Spinner(this);pairedSection.addView(devices);
-    sectionButton(pairedSection,"Select paired device",()->selectFrom(devices,false));
+    // Selecting a device in the list now locks it in; no second confirmation button.
+    devices.setOnItemSelectedListener(deviceSelection(false));
     sectionButton(pairedSection,"Refresh paired devices",()->{
       if(permissions())showPairedDevices();
       else refreshAfterPermission=true;
@@ -128,7 +129,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     root.addView(discoverableSection);
     nearbyHeading=new TextView(this);nearbyHeading.setText("DISCOVERABLE DEVICES");discoverableSection.addView(nearbyHeading);
     nearbyDevices=new Spinner(this);discoverableSection.addView(nearbyDevices);
-    sectionButton(discoverableSection,"Select discovered device",()->selectFrom(nearbyDevices,true));
+    nearbyDevices.setOnItemSelectedListener(deviceSelection(true));
     sectionButton(discoverableSection,"Scan for nearby devices",()->{
       if(permissions())beginScan();
       else scanAfterPermission=true;
@@ -356,6 +357,15 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     values.add("None — no device selected");
     values.addAll(labels.values());
     spinner.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values));
+  }
+  private android.widget.AdapterView.OnItemSelectedListener deviceSelection(boolean fromNearby){
+    return new android.widget.AdapterView.OnItemSelectedListener(){
+      @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+      @Override public void onItemSelected(android.widget.AdapterView<?> parent,android.view.View view,int position,long id){
+        if(position>0 && deviceInfo!=null && fromNearby==discoverableMode)
+          selectFrom(fromNearby?nearbyDevices:devices,fromNearby);
+      }
+    };
   }
   private void selectFrom(Spinner spinner,boolean fromNearby){
     String label=spinner.getSelectedItem()==null?null:spinner.getSelectedItem().toString();
