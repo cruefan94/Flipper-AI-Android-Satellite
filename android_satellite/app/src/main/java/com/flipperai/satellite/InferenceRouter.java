@@ -17,6 +17,8 @@ public final class InferenceRouter {
     // An absent/invalid mode must never implicitly become HYBRID and reach cloud.
     if (mode == null) throw new IllegalArgumentException("Inference mode is required");
     if (mode == Mode.OFFLINE) return offline(prompt);
+    // Cancellation must be honored in every mode, including direct ONLINE.
+    if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     if (mode == Mode.ONLINE) {
       if (!cloudConsent) throw new IllegalStateException("Cloud transmission not approved");
       if (!cloud.ready()) throw new IllegalStateException("Cloud unavailable");
