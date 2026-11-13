@@ -39,6 +39,9 @@ public final class DashboardActivity extends Activity {
     content.addView(label("ANDROID COMPANION  •  MOMENTUM",13,MUTED,false));
     space(20);
     section("CONTROL CENTER");
+    content.addView(label("FLIPPER CONNECTION  •  Check live BLE status in Manage",14,Color.WHITE,true));
+    content.addView(label("AI ENGINE  •  Model not confirmed installed; AI channel not ready",13,MUTED,false));
+    space(12);
     card("FLIPPER / BLE", "Pair or connect your Flipper. Momentum RPC connection does not mean AI is ready.",MainActivity.class);
     card("PHONE COMPANION", "Phone battery, charging, Bluetooth, Wi-Fi and internet connectivity.",PhoneCompanionActivity.class);
     card("AI CHAT & MODELS", "Offline AI requires a compatible installed model. Open model setup inside chat.",AiChatActivity.class);
@@ -46,10 +49,25 @@ public final class DashboardActivity extends Activity {
     card("RADIO SCANNER", "Browse broadcasts, favorites, recent stations and playable online streams.",RadioScannerActivity.class);
     card("GITHUB", "Public repositories, branches, commits, Actions and releases. Account linking not yet available.",GitHubActivity.class);
     space(12);
+    section("QUICK RADIO");
+    radioTiles();
     section("CONNECTION & SECURITY");
     content.addView(label("Bluetooth: connection details are shown inside Flipper Connection. This dashboard does not claim a live AI session.",14,MUTED,false));
     content.addView(label("GitHub OAuth, private repositories, Flipper PTT, notification sharing and USB SDR are not operational yet.",14,MUTED,false));
 
+  }
+  private void radioTiles(){
+    String[] names={"AM","FM","POLICE","FIRE / EMS","HAM","CB","AVIATION","WEATHER"};
+    LinearLayout row=null;
+    for(int i=0;i<names.length;i++){
+      if(i%2==0){row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);content.addView(row);}
+      final int category=i;
+      TextView tile=label(names[i]+"  ›",14,Color.WHITE,true);
+      tile.setGravity(Gravity.CENTER);tile.setPadding(dp(8),dp(18),dp(8),dp(18));
+      GradientDrawable g=new GradientDrawable();g.setColor(PANEL);g.setCornerRadius(dp(8));g.setStroke(dp(1),Color.rgb(129,81,28));tile.setBackground(g);
+      LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(3),dp(3),dp(3),dp(3));row.addView(tile,lp);
+      tile.setOnClickListener(v->{Intent intent=new Intent(this,RadioScannerActivity.class);intent.putExtra("quick_category",category);startActivity(intent);});
+    }
   }
   private void navButton(LinearLayout parent,String title,Class<?> screen){
     TextView v=label(title,11,screen==DashboardActivity.class?CYAN:Color.WHITE,true);
