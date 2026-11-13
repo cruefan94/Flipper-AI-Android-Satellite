@@ -30,3 +30,7 @@ This contract was checked against the existing Android `WorkerCloudEngine` and `
 The Worker requires a device token, accepts only POST /ask, limits body and message size, uses timeouts, does not log secrets/prompts, and never runs Flipper hardware commands. The Gemini API key is kept server-side in Cloudflare runtime secrets. Workers are publicly reachable endpoints even when token-protected: consider Cloudflare rate limiting, monitor quota/cost, and rotate the device token if exposed. A device token is a shared secret, not full per-device identity management.
 
 Current offline model and Flipper BLE testing remain separate. Production functionality is **not** verified by these source files or by a mock test. Do not enable cloud requests without the Android user's explicit consent.
+
+## Connected-build verification
+
+After selecting GitHub `main`, enabling builds, and setting `cloudflare_worker` as the root directory in Cloudflare, a new commit under this directory can trigger a fresh Cloudflare build. Confirm an actual **GitHub-triggered** successful deployment in Cloudflare Deployments or Builds; the existing **manually deployed** Hello World version does not establish that the Worker has updated. The online AI flow remains unconfigured until runtime secrets `DEVICE_TOKEN` and `GEMINI_API_KEY` are saved in Cloudflare.
