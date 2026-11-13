@@ -38,8 +38,10 @@ public final class InferenceRouter {
         throw cloudFailure;
       }
     }
-    // Diagnostic fallback stays on-device when consent is absent, or when a
-    // model fails and no approved cloud endpoint is available.
+    // Do not retry a failed local model without consent: repeating inference
+    // can waste battery, block BLE responses and conceal the original error.
+    if (localFailure != null) throw new IllegalStateException("Local inference failed; cloud fallback disabled or unavailable", localFailure);
+    // Diagnostic fallback stays on-device when no supported local answer was attempted.
     if (local.ready()) return local.answer(prompt);
     if (localFailure != null)
       throw new IllegalStateException("Local inference failed; cloud fallback disabled or unavailable", localFailure);
