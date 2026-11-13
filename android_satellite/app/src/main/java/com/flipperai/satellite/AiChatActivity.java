@@ -36,7 +36,7 @@ public final class AiChatActivity extends Activity {
   private final StringBuilder transcript=new StringBuilder();
   private static final String PREFS="ai_local_settings_v1";
   private int generation=0;
-  private final int bg=Color.rgb(8,17,23),panel=Color.rgb(19,37,45),cyan=Color.rgb(50,231,218);
+  private final int bg=Color.rgb(10,12,16),panel=Color.rgb(28,32,39),cyan=Color.rgb(255,151,22);
   @Override public void onCreate(Bundle savedInstanceState){
     super.onCreate(savedInstanceState);getWindow().setStatusBarColor(bg);getWindow().setNavigationBarColor(bg);
     LinearLayout frame=new LinearLayout(this);frame.setOrientation(LinearLayout.VERTICAL);frame.setPadding(dp(14),dp(8),dp(14),dp(12));frame.setBackgroundColor(bg);
