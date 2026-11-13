@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <style name="FlipperAiTheme" parent="android:style/Theme.Material.NoActionBar">
+    <item name="android:colorAccent">#ff9614</item>
+    <item name="android:statusBarColor">#080b10</item>
+    <item name="android:navigationBarColor">#080b10</item>
+    <item name="android:windowLightStatusBar">false</item>
+    <item name="android:windowBackground">#080b10</item>
+  </style>
+</resources>
