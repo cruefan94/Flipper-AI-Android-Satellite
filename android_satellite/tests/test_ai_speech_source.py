@@ -42,6 +42,11 @@ class AiSpeechSourceGuards(unittest.TestCase):
         self.assertIn("speech.stop();",CHAT)
         self.assertIn("speech.close();",CHAT)
 
+    def test_voice_preview_keeps_working_app_and_its_model_untouched(self):
+        gradle=(ROOT/"build.gradle").read_text()
+        self.assertIn("applicationIdSuffix '.voicepreview'",gradle)
+        self.assertIn('Flipper AI Satellite Voice Test',MANIFEST)
+
     def test_chat_respects_android_system_bars_and_ime(self):
         self.assertIn("WindowInsets.Type.systemBars()",CHAT)
         self.assertIn("WindowInsets.Type.displayCutout()",CHAT)
