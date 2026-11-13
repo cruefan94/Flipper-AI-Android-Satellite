@@ -57,7 +57,7 @@ class NavigationRegressionTests(unittest.TestCase):
         import re
         dialog=CHAT.split("private void chooseMode()",1)[1].split("private void cloudSettings()",1)[0]
         before_labels,after_labels=dialog.split("String[] choices=",1)
-        actual_modes=re.findall(r"InferenceRouter\\.Mode\\.(OFFLINE|ONLINE|HYBRID)",before_labels)
+        actual_modes=re.findall(r"InferenceRouter\.Mode\.(OFFLINE|ONLINE|HYBRID)",before_labels)
         actual_labels=re.findall(r'"(OFFLINE|ONLINE|HYBRID) •',after_labels.split(";",1)[0])
         self.assertEqual(actual_modes,["OFFLINE","HYBRID","ONLINE"])
         self.assertEqual(actual_modes,actual_labels)
