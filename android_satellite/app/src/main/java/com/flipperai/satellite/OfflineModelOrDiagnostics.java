@@ -4,9 +4,9 @@ package com.flipperai.satellite;
  * No cloud calls are made by this class, including when local inference fails.
  */
 public final class OfflineModelOrDiagnostics implements InferenceRouter.OfflineEngine {
-  private final LocalModelEngine model;
+  private final InferenceRouter.OfflineEngine model;
   private final OfflineDiagnosticEngine diagnostic;
-  public OfflineModelOrDiagnostics(LocalModelEngine model,OfflineDiagnosticEngine diagnostic){
+  public OfflineModelOrDiagnostics(InferenceRouter.OfflineEngine model,OfflineDiagnosticEngine diagnostic){
     if(model==null || diagnostic==null)
       throw new IllegalArgumentException("Local model and diagnostic fallback are required");
     this.model=model;this.diagnostic=diagnostic;
