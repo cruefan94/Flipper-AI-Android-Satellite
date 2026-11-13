@@ -26,7 +26,7 @@ class LocalModelSourceTest(unittest.TestCase):
         self.assertIn('conn.setReadTimeout(',ENGINE)
         self.assertIn('conn.disconnect()',ENGINE)
     def test_local_model_and_diagnostic_fallback_in_ui(self):
-        self.assertIn('new OfflineModelOrDiagnostics(localModel,new OfflineDiagnosticEngine())',UI)
+        self.assertIn('new OfflineModelOrDiagnostics(new EmbeddedOrLocalEngine(embeddedModel,localModel)',UI)
         self.assertIn('advancedButton("Use installed offline model"',UI)
         self.assertIn('advancedButton("Disable local model"',UI)
         self.assertIn('advancedButton("Test local model connection"',UI)
