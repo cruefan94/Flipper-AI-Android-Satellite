@@ -254,16 +254,23 @@ public final class AiChatActivity extends Activity {
     worker.execute(()->{
       String result, completionStatus;
       try{
-        if(requestedMode==InferenceRouter.Mode.OFFLINE && !embedded.ready()
-            && !new OfflineDiagnosticEngine().supports(question))
-          throw new IllegalStateException("Import a compatible model for general questions.");
-        InferenceRouter.Reply reply=router.askWithSource(question,requestedMode,approved);
-        result=reply.text;
-        if(reply.source==InferenceRouter.Source.OFFLINE_FALLBACK)
-          completionStatus="HYBRID • Cloud unavailable • On-device fallback";
-        else if(reply.source==InferenceRouter.Source.ONLINE)
-          completionStatus=requestedMode+" • Cloud response complete";
-        else completionStatus=requestedMode+" • On-device response complete";
+        // Clear, direct phone-info questions are handled locally in every AI mode.
+        // No cloud prompt, telemetry, device identifier or extra permission is used.
+        if(PhoneFacts.classify(question)!=PhoneFacts.Query.NONE) {
+          result=PhoneFacts.answer(question,AndroidPhoneFacts.snapshot(this));
+          completionStatus="PHONE • On-device answer (not sent to cloud)";
+        } else {
+          if(requestedMode==InferenceRouter.Mode.OFFLINE && !embedded.ready()
+              && !new OfflineDiagnosticEngine().supports(question))
+            throw new IllegalStateException("Import a compatible model for general questions.");
+          InferenceRouter.Reply reply=router.askWithSource(question,requestedMode,approved);
+          result=reply.text;
+          if(reply.source==InferenceRouter.Source.OFFLINE_FALLBACK)
+            completionStatus="HYBRID • Cloud unavailable • On-device fallback";
+          else if(reply.source==InferenceRouter.Source.ONLINE)
+            completionStatus=requestedMode+" • Cloud response complete";
+          else completionStatus=requestedMode+" • On-device response complete";
+        }
       }catch(Exception e){
         result="AI unavailable: "+e.getMessage();
         completionStatus=requestedMode+" • Request failed";
