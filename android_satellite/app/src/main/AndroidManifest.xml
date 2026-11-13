@@ -8,8 +8,13 @@
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-  <!-- Android 11+ discovery of locally installed offline TTS voices. -->
-  <queries><intent><action android:name="android.intent.action.TTS_SERVICE"/></intent></queries>
+  <!-- Prompted only by an explicit TALK button; never recorded in the background. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+  <!-- Android 11+ discovery of offline TTS and on-device recognition services. -->
+  <queries>
+    <intent><action android:name="android.intent.action.TTS_SERVICE"/></intent>
+    <intent><action android:name="android.speech.RecognitionService"/></intent>
+  </queries>
   <application android:label="Flipper AI Satellite" android:theme="@style/FlipperAiTheme" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
     <uses-native-library android:name="libvndksupport.so" android:required="false"/>
     <uses-native-library android:name="libOpenCL.so" android:required="false"/>
