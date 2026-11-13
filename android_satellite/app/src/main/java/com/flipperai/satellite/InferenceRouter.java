@@ -67,7 +67,10 @@ public final class InferenceRouter {
     throw new IllegalStateException("No local model available; cloud disabled or unavailable");
   }
   private String offline(String prompt) throws Exception {
-    if (!local.ready()) throw new IllegalStateException("Install and configure an Android on-device model runtime");
+    boolean ready = local.ready();
+    // A readiness probe may interrupt the request even when it reports unavailable.
+    if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
+    if (!ready) throw new IllegalStateException("Install and configure an Android on-device model runtime");
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     return local.answer(prompt);
   }
