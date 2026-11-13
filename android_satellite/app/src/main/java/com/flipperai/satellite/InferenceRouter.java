@@ -11,20 +11,31 @@ public final class InferenceRouter {
       throw new IllegalArgumentException("Offline and online engines are required");
     this.local=local; this.cloud=cloud;
   }
+  /** Origin is reported so the UI never labels an offline fallback as a cloud response. */
+  public enum Source { OFFLINE, ONLINE, OFFLINE_FALLBACK }
+  public static final class Reply {
+    public final String text;
+    public final Source source;
+    private Reply(String text, Source source) { this.text=text; this.source=source; }
+  }
+  /** Compatibility entry point for BLE and other existing callers. */
   public String ask(String prompt, Mode mode, boolean cloudConsent) throws Exception {
+    return askWithSource(prompt, mode, cloudConsent).text;
+  }
+  public Reply askWithSource(String prompt, Mode mode, boolean cloudConsent) throws Exception {
     // Enforce a single bounded prompt policy before any offline or cloud dispatch.
     PromptLimits.validate(prompt);
     // An absent/invalid mode must never implicitly become HYBRID and reach cloud.
     if (mode == null) throw new IllegalArgumentException("Inference mode is required");
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
-    if (mode == Mode.OFFLINE) return offline(prompt);
+    if (mode == Mode.OFFLINE) return new Reply(offline(prompt), Source.OFFLINE);
     // Cancellation must be honored in every mode, including direct ONLINE.
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     if (mode == Mode.ONLINE) {
       if (!cloudConsent) throw new IllegalStateException("Cloud transmission not approved");
       if (!cloud.ready()) throw new IllegalStateException("Cloud unavailable");
       if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
-      return cloud.answer(prompt);
+      return new Reply(cloud.answer(prompt), Source.ONLINE);
     }
     // An interrupted request must never initiate cloud fallback.
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
@@ -35,20 +46,20 @@ public final class InferenceRouter {
     if (localReady && local.supports(prompt)) {
       // supports() can be slow or cancel the request; never dispatch afterward.
       if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
-      try { return local.answerForHybrid(prompt); }
+      try { return new Reply(local.answerForHybrid(prompt), Source.OFFLINE); }
       catch (InterruptedException cancelled) { Thread.currentThread().interrupt(); throw cancelled; }
       catch (Exception e) { localFailure = e; }
     }
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     if (cloudConsent && cloud.ready()) {
       if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
-      try { return cloud.answer(prompt); }
+      try { return new Reply(cloud.answer(prompt), Source.ONLINE); }
       catch (InterruptedException cancelled) { Thread.currentThread().interrupt(); throw cancelled; }
       catch (Exception cloudFailure) {
         if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
         if(local.ready()) {
           if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
-          try { return local.answer(prompt); }
+          try { return new Reply(local.answer(prompt), Source.OFFLINE_FALLBACK); }
           catch(InterruptedException cancelled) { Thread.currentThread().interrupt(); throw cancelled; }
           catch(Exception offlineFailure) { cloudFailure.addSuppressed(offlineFailure); }
         }
@@ -60,7 +71,7 @@ public final class InferenceRouter {
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     if (local.ready()) {
       if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
-      return local.answer(prompt);
+      return new Reply(local.answer(prompt), cloudConsent ? Source.OFFLINE_FALLBACK : Source.OFFLINE);
     }
     if (localFailure != null)
       throw new IllegalStateException("Local inference failed; cloud fallback disabled or unavailable", localFailure);
