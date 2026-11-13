@@ -54,11 +54,22 @@ public final class SatelliteUi {
     v.setGravity(Gravity.CENTER_VERTICAL);
     v.setPadding(dp(a,15),dp(a,14),dp(a,15),dp(a,14));
     v.setBackground(panel(a,false));
+    // One consistently sized, accessible touch surface across app screens.
+    v.setMinHeight(dp(a,52));
+    v.setFocusable(true);
+    v.setClickable(true);
+    v.setContentDescription(title);
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
     lp.bottomMargin=dp(a,10);
     parent.addView(v,lp);
     v.setOnClickListener(x->callback.run());
     return v;
+  }
+  public static TextView sectionTitle(Activity a,LinearLayout parent,String heading){
+    TextView label=text(a,heading,15,ORANGE,true);
+    label.setPadding(dp(a,4),dp(a,14),dp(a,4),dp(a,9));
+    parent.addView(label);
+    return label;
   }
   public static void open(Activity from,Class<?> destination){
     if(!from.getClass().equals(destination))
