@@ -105,13 +105,16 @@ public final class DashboardActivity extends Activity {
         ? "Model file imported on this phone. Run the live test to confirm that inference works."
         : "No imported .litertlm model detected. Import a compatible LiteRT-LM model to enable full offline responses.",
       "INSTALL / TEST",ModelsActivity.class);
+    panelCard(content,"♫","RADIO LISTENING",
+      "Find public internet AM/FM streams, play permitted feeds, and manage favorites. Receive-only; no SDR or Flipper radio attachment yet.",
+      "OPEN RADIO",RadioScannerActivity.class);
     panelCard(content,"▥","PHONE COMPANION",
       "Check battery, network and Bluetooth device status. No hidden permissions or automatic device control.",
       "PHONE STATUS",PhoneCompanionActivity.class);
     panelCard(content,"⌘","GITHUB BUILDS",
       "Read-only public repository builds, commits and releases. Private account access is not enabled in this app.",
       "OPEN GITHUB",GitHubActivity.class);
-    TextView future=text("COMING LATER  ·  Radio scanner and voice integration remain separate development priorities.",
+    TextView future=text("COMING LATER  ·  SDR reception, Flipper radio attachments and radio transcription.",
       13,SatelliteUi.MUTED,false);
     future.setPadding(dp(5),dp(6),dp(5),dp(7));
     content.addView(future);
