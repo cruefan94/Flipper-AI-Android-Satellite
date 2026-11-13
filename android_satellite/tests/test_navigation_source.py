@@ -42,7 +42,8 @@ class NavigationRegressionTests(unittest.TestCase):
                             "ModelsActivity.class","PhoneCompanionActivity.class",
                             "GitHubActivity.class"]:
             self.assertIn(destination,DASH)
-        self.assertNotIn("RadioScannerActivity.class",DASH)
+        self.assertIn("RadioScannerActivity.class",DASH)
+        self.assertIn('android:name=".RadioScannerActivity"',M.read_text())
         self.assertNotIn('nav.addView(text("QUICK NAVIGATION"',DASH)
 
     def test_imported_model_does_not_show_stale_untested_warning(self):
