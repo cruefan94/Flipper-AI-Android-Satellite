@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.Proxy;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import javax.net.ssl.HttpsURLConnection;
@@ -41,7 +42,7 @@ public final class WorkerCloudEngine implements InferenceRouter.OnlineEngine {
       url=endpoint;auth=token;requestGeneration=generation;
     }
     if(url.isEmpty() || auth.isEmpty())throw new IllegalStateException("Cloud Worker not configured");
-    HttpsURLConnection conn=(HttpsURLConnection)new URI(url).toURL().openConnection();
+    HttpsURLConnection conn=(HttpsURLConnection)new URI(url).toURL().openConnection(Proxy.NO_PROXY);
     synchronized(this) {
       if(generation!=requestGeneration) {conn.disconnect();throw new IllegalStateException("Cloud authorization revoked");}
       // One in-flight request per engine: otherwise a second request can
