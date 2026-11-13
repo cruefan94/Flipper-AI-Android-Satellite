@@ -76,7 +76,7 @@ public final class LocalModelEngine implements InferenceRouter.OfflineEngine {
       try(InputStream in=conn.getInputStream()){
         byte[] block=new byte[512];int n;
         while((n=in.read(block))!=-1){
-          if(data.size()+n>8192)throw new IllegalStateException("Local model output too large");
+          if(data.size()+n>65536)throw new IllegalStateException("Local model output too large");
           data.write(block,0,n);
         }
       }
