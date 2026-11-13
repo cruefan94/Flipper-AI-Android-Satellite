@@ -57,7 +57,7 @@ public final class RadioPlayerService extends Service {
         else if(what==MediaPlayer.MEDIA_INFO_BUFFERING_END){state="Playing";publish();}
         return false;
       });
-      player.setOnErrorListener((mp,what,extra)->{state="Stream error ("+what+"/"+extra+"); check URL, format or availability";stopPlayer();publish();return true;});
+      player.setOnErrorListener((mp,what,extra)->{state=describeStreamError(what,extra);stopPlayer();publish();return true;});
       player.setOnCompletionListener(mp->{state="Stream ended";stopPlayer();publish();});
       player.prepareAsync();
       startForeground(NOTIFICATION,notification());
@@ -65,6 +65,17 @@ public final class RadioPlayerService extends Service {
     }catch(IOException | IllegalArgumentException | IllegalStateException | SecurityException e){
       state="Cannot open stream: "+e.getClass().getSimpleName();stopPlayer();publish();
     }
+  }
+  /** Preserve Android error codes so failed stations can be diagnosed without guesswork. */
+  private static String describeStreamError(int what,int extra){
+    String reason;
+    if(extra==MediaPlayer.MEDIA_ERROR_IO)reason="Network or stream I/O failure";
+    else if(extra==MediaPlayer.MEDIA_ERROR_MALFORMED)reason="Malformed or unsupported stream";
+    else if(extra==MediaPlayer.MEDIA_ERROR_UNSUPPORTED)reason="Audio format unsupported by this phone";
+    else if(extra==MediaPlayer.MEDIA_ERROR_TIMED_OUT)reason="Station connection timed out";
+    else if(what==MediaPlayer.MEDIA_ERROR_SERVER_DIED)reason="Android media service stopped";
+    else reason="Playback failure";
+    return "Stream error ("+what+"/"+extra+"): "+reason+". Try a different HTTPS MP3/AAC station.";
   }
   private void pause(){if(player!=null)try{if(player.isPlaying())player.pause();state="Paused";publish();}catch(IllegalStateException ignored){}}
   private void stopPlayer(){if(player!=null){try{player.reset();}catch(Exception ignored){}player.release();player=null;}}
