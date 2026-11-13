@@ -7,6 +7,10 @@ ENGINE=(ROOT/"WorkerCloudEngine.java").read_text()
 UI=(ROOT/"MainActivity.java").read_text()
 
 class CloudRevocationSourceTest(unittest.TestCase):
+    def test_cloud_does_not_inherit_system_proxy(self):
+        self.assertIn('import java.net.Proxy;', ENGINE)
+        self.assertIn('new URI(url).toURL().openConnection(Proxy.NO_PROXY)', ENGINE)
+
     def test_consent_loss_cancels_in_flight_http(self):
         self.assertIn("if(!checked)cloud.revokeActive();",UI)
         self.assertIn("public synchronized void revokeActive()",ENGINE)
