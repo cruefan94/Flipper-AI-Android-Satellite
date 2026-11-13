@@ -34,7 +34,9 @@ public final class WorkerCloudEngine implements InferenceRouter.OnlineEngine {
   public synchronized void clear() {revokeActive();endpoint="";token="";}
   @Override public boolean ready() {return !endpoint.isEmpty() && !token.isEmpty();}
   @Override public String answer(String prompt) throws Exception {
-    if(prompt==null || prompt.isEmpty() || prompt.length()>127)
+    // Apply shared Unicode and blank-input checks before any network dispatch.
+    PromptLimits.validate(prompt);
+    if(prompt.length()>127)
       throw new IllegalArgumentException("Cloud Worker supports prompts of 1–127 characters");
     final String url,auth;
     final long requestGeneration;
