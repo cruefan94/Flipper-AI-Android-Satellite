@@ -37,6 +37,13 @@ public final class SatelliteCoreTest {
     boolean missingModeRejected=false;
     try{nullModeRouter.ask("private prompt",null,true);}
     catch(IllegalArgumentException expected){missingModeRejected=true;}
+    for (String blankPrompt : new String[]{null, "", "  ", "\\t"}) {
+      boolean rejectedBlank=false;
+      try { nullModeRouter.ask(blankPrompt,InferenceRouter.Mode.ONLINE,true); }
+      catch(IllegalArgumentException expected) { rejectedBlank=true; }
+      check(rejectedBlank,"blank prompt must fail before cloud routing");
+    }
+    check(unexpectedCloudCalls[0]==0,"blank prompts must not reach cloud");
     check(missingModeRejected && unexpectedCloudCalls[0]==0,
       "missing inference mode must fail closed without contacting cloud");
     check(!router.ask("battery",InferenceRouter.Mode.HYBRID,false).equals("CLOUD"),"local first");
