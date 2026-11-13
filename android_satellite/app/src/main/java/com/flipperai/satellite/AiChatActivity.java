@@ -14,6 +14,9 @@ import java.util.concurrent.*;
 /** Dedicated opt-in on-device AI chat. No prompts leave the phone. */
 public final class AiChatActivity extends Activity {
   private final LocalModelEngine model=new LocalModelEngine();
+  private final WorkerCloudEngine cloud=new WorkerCloudEngine();
+  private InferenceRouter.Mode aiMode=InferenceRouter.Mode.OFFLINE;
+  private boolean cloudConsent=false;
   private NanoModelEngine nano;
   private EmbeddedModelEngine embedded;
   private boolean useEmbedded=true;
@@ -74,6 +77,8 @@ public final class AiChatActivity extends Activity {
     modelName=new EditText(this);modelName.setSingleLine(true);modelName.setHint("Local model ID (required)");modelName.setTextColor(Color.WHITE);modelName.setHintTextColor(Color.LTGRAY);setup.addView(modelName);
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
     useNano=saved.getBoolean("use_nano",false);
+    try { aiMode=InferenceRouter.Mode.valueOf(saved.getString("ai_mode","OFFLINE")); } catch(Exception ignored) { aiMode=InferenceRouter.Mode.OFFLINE; }
+    cloudConsent=saved.getBoolean("cloud_consent",false);
     useEmbedded=saved.getBoolean("use_embedded",true);
     java.io.File[] stored=new java.io.File(getFilesDir(),"ai_models").listFiles((dir,name)->name.matches("[a-f0-9]{64}\\.task"));
     final String selectedModel=saved.getString("embedded_model","");
@@ -84,6 +89,29 @@ public final class AiChatActivity extends Activity {
     if(useNano)modelHint.setText("Gemini Nano selected (optional). This device may not support it. Choose independent model in setup.");
     endpoint.setText(saved.getString("endpoint",""));
     modelName.setText(saved.getString("model",""));
+    button(setup,"AI MODE: OFFLINE / ONLINE / HYBRID",()->{
+      String[] modes={"Offline only","Online (requires consent)","Hybrid (offline first)"};
+      new android.app.AlertDialog.Builder(this).setTitle("AI processing mode").setSingleChoiceItems(modes,aiMode.ordinal(),(dialog,index)->{
+        aiMode=InferenceRouter.Mode.values()[index];saved.edit().putString("ai_mode",aiMode.name()).apply();
+        status.setText("AI mode: "+aiMode.name()+(cloudConsent?" • cloud allowed":" • cloud disabled"));dialog.dismiss();
+      }).setNegativeButton("CANCEL",null).show();
+    });
+    button(setup,"CLOUD CONSENT: ENABLE / DISABLE",()->{
+      if(cloudConsent){cloudConsent=false;cloud.clear();saved.edit().putBoolean("cloud_consent",false).apply();cancel();status.setText("Cloud permission revoked; active request cancelled.");return;}
+      new android.app.AlertDialog.Builder(this).setTitle("Allow online AI?")
+        .setMessage("Online mode sends your prompts to your configured HTTPS AI service. Do not send private Flipper diagnostics unless you choose to. You can revoke permission at any time.")
+        .setNegativeButton("NO",null).setPositiveButton("I AGREE",(d,w)->{cloudConsent=true;saved.edit().putBoolean("cloud_consent",true).apply();status.setText("Cloud permitted; configure your HTTPS Worker.");}).show();
+    });
+    button(setup,"CONFIGURE ONLINE AI WORKER",()->{
+      LinearLayout fields=new LinearLayout(this);fields.setOrientation(LinearLayout.VERTICAL);
+      EditText url=new EditText(this);url.setSingleLine(true);url.setHint("https://your-worker.example/ask");fields.addView(url);
+      EditText token=new EditText(this);token.setSingleLine(true);token.setHint("Device access token (not saved)");fields.addView(token);
+      new android.app.AlertDialog.Builder(this).setTitle("Secure online AI endpoint").setView(fields)
+        .setNegativeButton("CANCEL",null).setPositiveButton("CONNECT",(d,w)->{
+          try{cloud.configure(url.getText().toString().trim(),token.getText().toString().trim());status.setText("Online endpoint configured; live reply not yet verified.");}
+          catch(Exception e){status.setText("Online setup failed: "+e.getMessage());}
+        }).show();
+    });
     button(setup,"IMPORT OFFLINE .TASK MODEL",()->{
       Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);pick.setType("application/octet-stream");pick.addCategory(Intent.CATEGORY_OPENABLE);startActivityForResult(pick,IMPORT_TASK);
     });
@@ -195,6 +223,7 @@ public final class AiChatActivity extends Activity {
   private void cancel(){
     generation++;
     model.revokeActive();
+    cloud.revokeActive();
     busy=false;
     send.setEnabled(true);
     status.setText("OFFLINE • Request stopped");
@@ -212,12 +241,12 @@ public final class AiChatActivity extends Activity {
   }
   private void ask(){
     if(useEmbedded&&loadingEmbedded){status.setText("Offline model is loading; please wait.");return;}
-    if(useEmbedded&&!embedded.ready()){status.setText("Import and load a compatible .task model in Model Setup first.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
-    if(!useEmbedded&&!useNano&&!model.ready()){status.setText("No independent model runtime is connected. Open Model Setup to configure a local server.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
+    if(aiMode!=InferenceRouter.Mode.ONLINE && useEmbedded&&!embedded.ready() && aiMode==InferenceRouter.Mode.OFFLINE){status.setText("Import and load a compatible .task model in Model Setup first.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
+    if(aiMode==InferenceRouter.Mode.OFFLINE&&!useEmbedded&&!useNano&&!model.ready()){status.setText("No independent model runtime is connected. Open Model Setup to configure a local server.");setup.setVisibility(View.VISIBLE);setupScroll.setVisibility(View.VISIBLE);return;}
     if(busy){status.setText("A response is already processing. Press Stop first.");return;}
     final String text=prompt.getText().toString().trim();
     if(text.isEmpty()){status.setText("Type a question first.");return;}
-    if(text.length()>(useNano?1500:127)){status.setText("Prompt too long for selected engine.");return;}
+    if(text.length()>127){status.setText("Prompt too long for selected engine.");return;}
     prompt.setText("");
     request(text,true);
   }
@@ -229,16 +258,24 @@ public final class AiChatActivity extends Activity {
     status.setText("AI • Processing with selected engine");
     send.setEnabled(false);
     final boolean selectedEmbedded=useEmbedded,selectedNano=useNano;
+    final InferenceRouter.Mode selectedMode=aiMode;
+    final boolean selectedConsent=cloudConsent;
     worker.execute(()->{
       String response;boolean success=true;
-      try{response=selectedEmbedded?embedded.answer(text):(selectedNano?(nano==null?missingNano():nano.answer(text)):model.answer(text));}
+      try{
+        InferenceRouter.OfflineEngine local=selectedEmbedded?embedded:(selectedNano?new InferenceRouter.OfflineEngine(){
+          public boolean ready(){return nano!=null;}
+          public String answer(String prompt) throws Exception{return nano.answer(prompt);}
+        }:model);
+        response=new InferenceRouter(local,cloud).ask(text,selectedMode,selectedConsent);
+      }
       catch(Exception e){response="Local model unavailable: "+e.getMessage();success=false;}
       final String result=response;final boolean ok=success;
       ui.post(()->{
         if(isFinishing()||isDestroyed()||request!=generation)return;
         busy=false;send.setEnabled(true);
         if(visible){transcript.append(ok?"\nAI: ":"\nSYSTEM: ").append(result);completedRequests++;showTranscript();}
-        status.setText(ok?(visible?"OFFLINE • Response received":"OFFLINE • Model test responded: "+result):"OFFLINE • "+result);
+        status.setText(ok?(visible?selectedMode.name()+" • Response received":selectedMode.name()+" • Model test responded: "+result):selectedMode.name()+" • "+result);
       });
     });
   }
@@ -247,5 +284,5 @@ public final class AiChatActivity extends Activity {
   private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
   private TextView label(String s,int size,int color){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);v.setPadding(4,8,4,8);return v;}
   private Button button(LinearLayout parent,String title,Runnable action){Button b=new Button(this);b.setText(title);b.setTextSize(11);b.setAllCaps(false);b.setTextColor(cyan);b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(panel));b.setMinHeight(dp(40));b.setMinimumHeight(dp(40));b.setPadding(dp(4),0,dp(4),0);b.setOnClickListener(v->action.run());LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(44),1);p.setMargins(dp(2),dp(2),dp(2),dp(2));parent.addView(b,p);return b;}
-  @Override protected void onDestroy(){generation++;closing=true;model.clear();worker.execute(()->{if(embedded!=null)embedded.close();});worker.shutdown();super.onDestroy();}
+  @Override protected void onDestroy(){generation++;closing=true;model.clear();cloud.clear();worker.execute(()->{if(embedded!=null)embedded.close();});worker.shutdown();super.onDestroy();}
 }
