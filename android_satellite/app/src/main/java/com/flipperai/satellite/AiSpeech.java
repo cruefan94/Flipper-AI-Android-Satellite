@@ -29,7 +29,7 @@ public final class AiSpeech {
   private final Events events;
   private final Handler ui=new Handler(Looper.getMainLooper());
   private TextToSpeech tts;
-  private boolean ready=false,closed=false,enabled;
+  private boolean ready=false,closed=false,enabled,offlineVoiceReady=false;
   private String selectedName;
   private static final String PREF_ENABLED="speak_answers";
   private static final String PREF_VOICE="voice_name";
@@ -85,6 +85,7 @@ public final class AiSpeech {
   private void configureVoice() {
     if(tts==null || !ready || closed)return;
     List<Voice> voices=englishLocalVoices();
+    offlineVoiceReady=false;
     Voice choice=null;
     for(Voice voice:voices) {
       if(voice.getName().equals(selectedName)){choice=voice;break;}
@@ -95,10 +96,10 @@ public final class AiSpeech {
           choice=voice;
     }
     if(choice!=null) {
-      if(tts.setVoice(choice)==TextToSpeech.ERROR)
+      offlineVoiceReady=tts.setVoice(choice)==TextToSpeech.SUCCESS;
+      if(!offlineVoiceReady)
         events.status("Selected speech voice unavailable; check Android text-to-speech settings.");
     } else {
-      tts.setLanguage(Locale.CANADA);
       events.status("No installed offline English TTS voice found. Check Android speech settings.");
     }
     tts.setSpeechRate(0.98f);
@@ -106,7 +107,7 @@ public final class AiSpeech {
   }
 
   public void speak(String text) {
-    if(!enabled || !ready || closed || tts==null || text==null || text.isEmpty())return;
+    if(!enabled || !ready || !offlineVoiceReady || closed || tts==null || text==null || text.isEmpty())return;
     // The TTS engine has a bounded input size; spoken text is capped, not the
     // original visible AI reply. No audio capture or online API is used.
     int limit=Math.min(3000,TextToSpeech.getMaxSpeechInputLength()-1);
@@ -138,6 +139,7 @@ public final class AiSpeech {
       .setSingleChoiceItems(labels,selected,(dialog,index)->{
         Voice voice=voices.get(index);
         if(tts.setVoice(voice)==TextToSpeech.SUCCESS) {
+          offlineVoiceReady=true;
           selectedName=voice.getName();
           prefs.edit().putString(PREF_VOICE,selectedName).apply();
           tts.speak("Hello! I'm your Flipper AI assistant.",
@@ -151,7 +153,7 @@ public final class AiSpeech {
 
   public void close() {
     if(closed)return;
-    closed=true;ready=false;
+    closed=true;ready=false;offlineVoiceReady=false;
     if(tts!=null){tts.stop();tts.shutdown();tts=null;}
   }
 }
