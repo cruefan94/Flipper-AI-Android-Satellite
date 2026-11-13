@@ -51,6 +51,22 @@ class NavigationRegressionTests(unittest.TestCase):
         self.assertIn("OFFLINE • No model file • Basic diagnostics only",CHAT)
         self.assertIn("router.ask(question,requestedMode,approved)",CHAT)
 
+    def test_ai_mode_dialog_maps_labels_to_explicit_modes(self):
+        # Menu order is OFFLINE, HYBRID, ONLINE; enum order is OFFLINE, ONLINE, HYBRID.
+        # Never use enum ordinal or values()[which] for this dialog.
+        import re
+        dialog=CHAT.split("private void chooseMode()",1)[1].split("private void cloudSettings()",1)[0]
+        before_labels,after_labels=dialog.split("String[] choices=",1)
+        actual_modes=re.findall(r"InferenceRouter\\.Mode\\.(OFFLINE|ONLINE|HYBRID)",before_labels)
+        actual_labels=re.findall(r'"(OFFLINE|ONLINE|HYBRID) •',after_labels.split(";",1)[0])
+        self.assertEqual(actual_modes,["OFFLINE","HYBRID","ONLINE"])
+        self.assertEqual(actual_modes,actual_labels)
+        self.assertIn("displayedModes[i]==mode",dialog)
+        self.assertIn(".setSingleChoiceItems(choices,selected,",dialog)
+        self.assertIn("mode=displayedModes[which]",dialog)
+        self.assertNotIn("mode.ordinal()",dialog)
+        self.assertNotIn("Mode.values()[which]",dialog)
+
     def test_model_and_chat_are_separate_and_real(self):
         self.assertIn("new EmbeddedLlmEngine(",CHAT)
         self.assertIn("router.ask(question,requestedMode,approved)",CHAT)
