@@ -58,7 +58,7 @@ public final class HybridCancellationTest {
       }
     };
     interrupted = false;
-    try { new InferenceRouter(trackingLocal, interruptingCloud)
+    try { new InferenceRouter(failed, interruptingCloud)
         .ask("test", InferenceRouter.Mode.HYBRID, true); }
     catch (InterruptedException expected) { interrupted = true; }
     check(interrupted && localCalls[0] == 0, "cancelled cloud request must not retry locally");
