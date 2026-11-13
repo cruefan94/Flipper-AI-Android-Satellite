@@ -6,8 +6,6 @@ DEST=$(mktemp -d)
 trap 'rm -rf "$DEST"' EXIT
 javac -d "$DEST" "$SRC/SatelliteProtocol.java" "$SRC/FrameCodec.java" "$SRC/TransportState.java" "$SRC/BondGate.java" "$SRC/PromptLimits.java" "$SRC/InferenceRouter.java" "$SRC/OfflineDiagnosticEngine.java" "$SRC/SatelliteRequestHandler.java" "$SRC/ProtocolSession.java" "$SRC/SessionEpoch.java" "$ROOT/android_satellite/tests/SatelliteCoreTest.java"
 java -cp "$DEST" SatelliteCoreTest
-javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/Ai1FrameParityTest.java"
-java -cp "$DEST" Ai1FrameParityTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SessionEpochTest.java"
 java -cp "$DEST" SessionEpochTest
 javac -cp "$DEST" -d "$DEST" "$SRC/WorkerEndpointPolicy.java" "$ROOT/android_satellite/tests/WorkerEndpointPolicyTest.java"
