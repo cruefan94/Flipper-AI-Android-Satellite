@@ -42,6 +42,10 @@ class ModelPackageImeTests(unittest.TestCase):
         self.assertIn("prompt.setOnFocusChangeListener(",CHAT)
         self.assertIn("hideSoftInputFromWindow",CHAT)
         self.assertIn("chatScroll.setSmoothScrollingEnabled(false)",CHAT)
+        self.assertIn("keyboardHideable=new View[]{title,navigation,voiceControls",CHAT)
+        self.assertIn("if(compact!=keyboardCompact)",CHAT)
+        self.assertIn("control.setVisibility(compact?View.GONE:View.VISIBLE)",CHAT)
+        self.assertIn("status.setSingleLine(true)",CHAT)
         self.assertIn("send.setOnClickListener(v->ask())",CHAT)
 
 if __name__=="__main__":
