@@ -44,11 +44,17 @@ public final class AiChatActivity extends Activity {
     embedded=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
     router=new InferenceRouter(new OfflineModelOrDiagnostics(
       embedded,new OfflineDiagnosticEngine()),cloud);
-    getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+    // On modern Android, we apply IME insets ourselves. ADJUST_RESIZE plus
+    // ime.bottom padding can resize the screen twice and cause visible flashes.
+    getWindow().setSoftInputMode(Build.VERSION.SDK_INT>=30
+      ?WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+      :WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
     getWindow().setStatusBarColor(SatelliteUi.BACKGROUND);
     getWindow().setNavigationBarColor(SatelliteUi.BACKGROUND);
     LinearLayout page=SatelliteUi.column(this);
     page.setPadding(dp(15),dp(15),dp(15),dp(12));
+    // Never auto-focus the editor simply because it is the first input view.
+    page.setFocusableInTouchMode(true);
     page.setBackgroundColor(SatelliteUi.BACKGROUND);
     setContentView(page);
     applyChatWindowInsets(page);
@@ -106,6 +112,7 @@ public final class AiChatActivity extends Activity {
 
     chatScroll=new ScrollView(this);
     chatScroll.setFillViewport(true);
+    chatScroll.setSmoothScrollingEnabled(false);
     chatScroll.setBackground(SatelliteUi.panel(this,false));
     transcript=SatelliteUi.text(this,"Welcome to Flipper AI. Import an offline model under MODELS for full AI chat. Without a model, supported hardware diagnostics still work.",15,SatelliteUi.WHITE,false);
     transcript.setPadding(dp(14),dp(14),dp(14),dp(14));
@@ -155,6 +162,16 @@ public final class AiChatActivity extends Activity {
     prompt.setBackground(SatelliteUi.panel(this,false));
     prompt.setPadding(dp(13),dp(10),dp(13),dp(10));
     prompt.setFilters(new InputFilter[]{new InputFilter.LengthFilter(PromptLimits.MAX_CHARACTERS)});
+    prompt.setImeOptions(android.view.inputmethod.EditorInfo.IME_FLAG_NO_EXTRACT_UI);
+    prompt.setOnFocusChangeListener((view,focused)->{
+      // Do not leave a keyboard on-screen when transcript selection or another
+      // control owns focus. Never hide/reopen it during normal typing.
+      if(!focused) {
+        android.view.inputmethod.InputMethodManager ime=
+          (android.view.inputmethod.InputMethodManager)getSystemService(INPUT_METHOD_SERVICE);
+        if(ime!=null)ime.hideSoftInputFromWindow(prompt.getWindowToken(),0);
+      }
+    });
     composer.addView(prompt,new LinearLayout.LayoutParams(0,-2,1));
     send=new Button(this);
     send.setText("SEND");
@@ -172,25 +189,35 @@ public final class AiChatActivity extends Activity {
     sendLp.leftMargin=dp(10);
     composer.addView(send,sendLp);
     send.setOnClickListener(v->ask());
+    // The parent owns initial focus until the user explicitly taps the composer.
+    page.requestFocus();
   }
-  /** Android 15+ edge-to-edge can place app content under system bars.
-   * Honor both status/nav bars and IME so SEND stays tappable with the keyboard.
-   * Padding is derived from immutable base values, never accumulated. */
+  /**
+   * One IME owner: API 30+ uses ADJUST_NOTHING and applies insets manually.
+   * Pre-30 retains ADJUST_RESIZE with system-bar padding only. Padding changes
+   * only when the inset really changes, not when the user types each character.
+   */
   private void applyChatWindowInsets(LinearLayout page) {
+    final int left=dp(15),top=dp(15),right=dp(15),bottom=dp(12);
     page.setOnApplyWindowInsetsListener((view,insets)->{
-      final int safeTop,safeBottom;
+      int safeTop=0,safeBottom=0;
       if(Build.VERSION.SDK_INT>=30) {
         android.graphics.Insets bars=insets.getInsets(
           WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
         android.graphics.Insets ime=insets.getInsets(WindowInsets.Type.ime());
         safeTop=bars.top;
+        // IME and navigation-bar insets overlap; use the larger, not their sum.
         safeBottom=Math.max(bars.bottom,ime.bottom);
       } else {
         safeTop=insets.getSystemWindowInsetTop();
-        safeBottom=insets.getSystemWindowInsetBottom();
+        // Legacy adjustResize already accounts for the keyboard's height.
+        safeBottom=0;
       }
-      view.setPadding(dp(15),dp(15)+Math.max(0,safeTop),
-                      dp(15),dp(12)+Math.max(0,safeBottom));
+      int nextTop=top+Math.max(0,safeTop);
+      int nextBottom=bottom+Math.max(0,safeBottom);
+      if(view.getPaddingLeft()!=left || view.getPaddingTop()!=nextTop
+          || view.getPaddingRight()!=right || view.getPaddingBottom()!=nextBottom)
+        view.setPadding(left,nextTop,right,nextBottom);
       return insets;
     });
     page.requestApplyInsets();
