@@ -36,12 +36,11 @@ public final class DashboardActivity extends Activity {
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
     lp.bottomMargin=dp(12);
     parent.addView(box,lp);
+    box.setClickable(true);
+    box.setFocusable(true);
+    box.setContentDescription(title+": "+action);
+    box.setMinHeight(dp(72));
     box.setOnClickListener(v->SatelliteUi.open(this,screen));
-  }
-  private void link(LinearLayout parent,String glyph,String label,Class<?> screen){
-    TextView item=SatelliteUi.action(this,parent,glyph+"   "+label,
-      ()->SatelliteUi.open(this,screen));
-    item.setTextSize(15);
   }
   @Override public void onCreate(Bundle state){
     super.onCreate(state);
@@ -65,35 +64,20 @@ public final class DashboardActivity extends Activity {
     brand.setPadding(dp(16),dp(15),dp(16),dp(15));
     brand.setBackground(SatelliteUi.panel(this,true));
     brand.addView(text("◈  FLIPPER AI SATELLITE",27,SatelliteUi.ORANGE,true));
-    brand.addView(text("MOMENTUM • ANDROID AI COMPANION • UI v0.7",13,SatelliteUi.WHITE,true));
+    brand.addView(text("MOMENTUM • ANDROID AI COMPANION",13,SatelliteUi.WHITE,true));
     root.addView(brand);
     gap(root,14);
 
-    boolean wide=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE
-      && getResources().getDisplayMetrics().widthPixels/getResources().getDisplayMetrics().density>=700;
-    LinearLayout space=new LinearLayout(this);
-    space.setOrientation(wide?LinearLayout.HORIZONTAL:LinearLayout.VERTICAL);
-    root.addView(space);
-    LinearLayout nav=column(),content=column();
-    if(wide){
-      LinearLayout.LayoutParams side=new LinearLayout.LayoutParams(0,-2,1.2f);
-      side.rightMargin=dp(12);
-      space.addView(nav,side);
-      space.addView(content,new LinearLayout.LayoutParams(0,-2,2.8f));
-    }else{
-      space.addView(content);
-      space.addView(nav);
-    }
-    if(wide){
-      nav.addView(text("NAVIGATION",15,SatelliteUi.ORANGE,true));
-      gap(nav,8);
-      link(nav,"◉","AI CHAT",AiChatActivity.class);
-      link(nav,"ᛒ","FLIPPER / BLE",MainActivity.class);
-      link(nav,"↓","OFFLINE MODELS",ModelsActivity.class);
-      link(nav,"⬡","PHONE TOOLS",PhoneCompanionActivity.class);
-      link(nav,"⌘","GITHUB",GitHubActivity.class);
-      gap(nav,10);
-    }
+    // A single navigational route per screen, including tablets in landscape.
+    // Old landscape sidebar repeated the same destinations as the cards.
+    boolean wide=getResources().getDisplayMetrics().widthPixels
+      /getResources().getDisplayMetrics().density>=700;
+    LinearLayout content=column();
+    LinearLayout.LayoutParams contentParams=new LinearLayout.LayoutParams(
+      wide?dp(680):-1,-2);
+    contentParams.gravity=Gravity.CENTER_HORIZONTAL;
+    root.addView(content,contentParams);
+    SatelliteUi.sectionTitle(this,content,"ESSENTIALS");
     panelCard(content,"ᛒ","FLIPPER CONNECTION",
       "Pair, connect and check Momentum BLE and the AI channel. Connection state is shown in the dedicated BLE screen.",
       "MANAGE CONNECTION",MainActivity.class);
@@ -105,16 +89,18 @@ public final class DashboardActivity extends Activity {
         ? "Model file imported on this phone. Run the live test to confirm that inference works."
         : "No imported .litertlm model detected. Import a compatible LiteRT-LM model to enable full offline responses.",
       "INSTALL / TEST",ModelsActivity.class);
+    SatelliteUi.sectionTitle(this,content,"LISTEN & EXPLORE");
     panelCard(content,"♫","RADIO LISTENING",
       "Find public internet AM/FM streams, play permitted feeds, and manage favorites. Receive-only; no SDR or Flipper radio attachment yet.",
       "OPEN RADIO",RadioScannerActivity.class);
+    SatelliteUi.sectionTitle(this,content,"UTILITIES");
     panelCard(content,"▥","PHONE COMPANION",
       "Check battery, network and Bluetooth device status. No hidden permissions or automatic device control.",
       "PHONE STATUS",PhoneCompanionActivity.class);
     panelCard(content,"⌘","GITHUB BUILDS",
       "Read-only public repository builds, commits and releases. Private account access is not enabled in this app.",
       "OPEN GITHUB",GitHubActivity.class);
-    TextView future=text("COMING LATER  ·  SDR reception, Flipper radio attachments and radio transcription.",
+    TextView future=text("Additional hardware radio reception and audio transcription are future features.",
       13,SatelliteUi.MUTED,false);
     future.setPadding(dp(5),dp(6),dp(5),dp(7));
     content.addView(future);
