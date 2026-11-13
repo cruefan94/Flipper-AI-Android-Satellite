@@ -78,14 +78,14 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       "Pair and connect your Flipper Zero. AI model management and chat are on separate screens.",
       14,SatelliteUi.MUTED,false);
     root.addView(sectionIntro);
-    status=new TextView(this);
-    status.setText("No AI connection");root.addView(status);
+    status=SatelliteUi.text(this,"No AI connection",15,SatelliteUi.ORANGE,false);
+    root.addView(status);
     TextView offlineHelp=new TextView(this);
     offlineHelp.setText("Offline AI runs on this Android phone when a compatible local model is installed and running. The Flipper accesses it over Bluetooth. Without the phone, Flipper tools remain available but full AI chat does not.");
     root.addView(offlineHelp);
-    connectionState=new TextView(this);connectionState.setTextSize(18);
+    connectionState=SatelliteUi.text(this,"",19,SatelliteUi.WHITE,true);
     connectionState.setText("AI CONNECTION: NOT CONNECTED");root.addView(connectionState);
-    connectionHistory=new TextView(this);
+    connectionHistory=SatelliteUi.text(this,"",14,SatelliteUi.MUTED,false);
     connectionHistory.setText("Bluetooth device discovery is separate from the AI channel.");
     root.addView(connectionHistory);
     TextView categoryPrompt=new TextView(this);
@@ -102,6 +102,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     root.addView(sources);
     pairedSection=new LinearLayout(this);
     pairedSection.setOrientation(LinearLayout.VERTICAL);
+    pairedSection.setPadding(12,12,12,12);
+    pairedSection.setBackground(SatelliteUi.panel(this,false));
     root.addView(pairedSection);
     pairedHeading=new TextView(this);pairedHeading.setText("PAIRED / CONNECTED DEVICES");pairedSection.addView(pairedHeading);
     devices=new Spinner(this);pairedSection.addView(devices);
@@ -112,6 +114,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     });
     discoverableSection=new LinearLayout(this);
     discoverableSection.setOrientation(LinearLayout.VERTICAL);
+    discoverableSection.setPadding(12,12,12,12);
+    discoverableSection.setBackground(SatelliteUi.panel(this,false));
     root.addView(discoverableSection);
     nearbyHeading=new TextView(this);nearbyHeading.setText("DISCOVERABLE DEVICES");discoverableSection.addView(nearbyHeading);
     nearbyDevices=new Spinner(this);discoverableSection.addView(nearbyDevices);
@@ -165,6 +169,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     });
     advancedSection=new LinearLayout(this);
     advancedSection.setOrientation(LinearLayout.VERTICAL);
+    advancedSection.setPadding(12,12,12,12);
+    advancedSection.setBackground(SatelliteUi.panel(this,false));
     advancedSection.setVisibility(android.view.View.GONE);
     root.addView(advancedSection);
     mode=new Spinner(this);
@@ -388,13 +394,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     return discoverableMode?nearby.get(selectedAddress):discovered.get(selectedAddress);
   }
   private void sectionButton(LinearLayout section,String name,Runnable action){
-    Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());section.addView(b);
+    SatelliteUi.action(this,section,name,action);
   }
   private void advancedButton(String name,Runnable action){
-    Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());advancedSection.addView(b);
+    SatelliteUi.action(this,advancedSection,name,action);
   }
   private void button(String name,Runnable action){
-    Button b=new Button(this);b.setText(name);b.setOnClickListener(v->action.run());root.addView(b);
+    SatelliteUi.action(this,root,name,action);
   }
   private boolean permissionsAlreadyGranted(){
     if(Build.VERSION.SDK_INT>=31)
