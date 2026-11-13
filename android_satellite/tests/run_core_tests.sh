@@ -10,6 +10,8 @@ javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridCancellationTe
 java -cp "$DEST" HybridCancellationTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridFallbackTest.java"
 java -cp "$DEST" HybridFallbackTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/DiagnosticReadinessCancellationTest.java"
+java -cp "$DEST" DiagnosticReadinessCancellationTest
 javac -cp "$DEST" -d "$DEST" "$SRC/EmbeddedOrLocalEngine.java" "$ROOT/android_satellite/tests/EmbeddedOrLocalEngineTest.java"
 java -cp "$DEST" EmbeddedOrLocalEngineTest
 javac -cp "$DEST" -d "$DEST" "$SRC/GattProfilePolicy.java" "$ROOT/android_satellite/tests/GattProfilePolicyTest.java"
