@@ -34,8 +34,10 @@ public final class EmbeddedModelStore {
         uri,new String[]{OpenableColumns.DISPLAY_NAME},null,null,null)){
       if(cursor!=null && cursor.moveToFirst())name=cursor.getString(0);
     }
-    if(name==null || !name.toLowerCase(Locale.ROOT).endsWith(".litertlm"))
-      throw new IllegalArgumentException("Choose a .litertlm model, not a .gguf or .tflite file");
+    boolean direct=name!=null && name.toLowerCase(Locale.ROOT).endsWith(".litertlm");
+    boolean packaged=name!=null && ModelPackageExtractor.supportsZipName(name);
+    if(!direct && !packaged)
+      throw new IllegalArgumentException("Choose a .litertlm model or a ZIP containing one .litertlm model");
     // The new external-weights Qwen3 INT4 export is documented to crash LiteRT-LM 0.18.x.
     if("Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm".equalsIgnoreCase(name))
       throw new IllegalArgumentException("This model needs LiteRT-LM 0.19+. Choose Qwen3-0.6B.litertlm for this app.");
@@ -51,11 +53,16 @@ public final class EmbeddedModelStore {
       try(InputStream input=context.getContentResolver().openInputStream(uri);
           FileOutputStream output=new FileOutputStream(staging)){
         if(input==null)throw new IllegalStateException("Could not read selected model file");
-        byte[] buffer=new byte[65536];int count;
-        while((count=input.read(buffer))!=-1){
-          if(copied+count>MAX_BYTES)throw new IllegalArgumentException("Model file exceeds 6 GiB limit");
-          output.write(buffer,0,count);
-          copied+=count;
+        if(packaged) {
+          // Extract only the model data. Never load arbitrary package code.
+          copied=ModelPackageExtractor.extract(input,output);
+        } else {
+          byte[] buffer=new byte[65536];int count;
+          while((count=input.read(buffer))!=-1){
+            if(copied>MAX_BYTES-count)throw new IllegalArgumentException("Model file exceeds 6 GiB limit");
+            output.write(buffer,0,count);
+            copied+=count;
+          }
         }
         output.getFD().sync();
       }
