@@ -1,7 +1,9 @@
 package com.flipperai.satellite;
 
+import android.Manifest;
 import android.app.Activity;
 import android.content.*;
+import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.os.*;
 import android.text.InputFilter;
@@ -18,6 +20,7 @@ import java.util.concurrent.*;
  * Model weights remain in private Android storage and AI never executes Flipper commands.
  */
 public final class AiChatActivity extends Activity {
+  private static final int MICROPHONE_PERMISSION_REQUEST=643;
   private final ExecutorService worker=Executors.newSingleThreadExecutor();
   private EmbeddedLlmEngine embedded;
   private final WorkerCloudEngine cloud=new WorkerCloudEngine();
@@ -26,6 +29,7 @@ public final class AiChatActivity extends Activity {
   private volatile boolean consent=false;
   private TextView status,transcript,voiceToggle;
   private AiSpeech speech;
+  private OnDeviceVoiceInput voiceInput;
   private EditText prompt;
   private Button send;
   private ScrollView chatScroll;
@@ -55,6 +59,18 @@ public final class AiChatActivity extends Activity {
     status.setPadding(0,dp(4),0,dp(9));
     page.addView(status);
     speech=new AiSpeech(this,this::setStatus);
+    voiceInput=new OnDeviceVoiceInput(this,new OnDeviceVoiceInput.Events() {
+      @Override public void status(String message){setStatus(message);}
+      @Override public void transcript(String recognized){
+        if(closing || prompt==null || isFinishing())return;
+        // Dictation fills the composer, never sends it. The user can edit first.
+        String existing=prompt.getText().toString();
+        if(!existing.isEmpty() && !Character.isWhitespace(existing.charAt(existing.length()-1)))
+          prompt.append(" ");
+        prompt.append(recognized);
+        setStatus("Voice transcript added locally. Review it, then tap SEND.");
+      }
+    });
 
     LinearLayout navigation=new LinearLayout(this);
     navigation.setOrientation(LinearLayout.HORIZONTAL);
@@ -76,7 +92,17 @@ public final class AiChatActivity extends Activity {
       setStatus(speech.enabled()?"Spoken AI replies enabled":"Spoken AI replies muted");
     });
     smallAction(voiceControls,"CHOOSE VOICE",()->speech.pickVoice(this));
-    smallAction(voiceControls,"STOP",()->speech.stop());
+    smallAction(voiceControls,"STOP VOICE",()->speech.stop());
+
+    LinearLayout microphoneControls=new LinearLayout(this);
+    microphoneControls.setOrientation(LinearLayout.HORIZONTAL);
+    page.addView(microphoneControls);
+    smallAction(microphoneControls,"TALK",this::startVoiceInput);
+    smallAction(microphoneControls,"FINISH",()->voiceInput.finishListening());
+    smallAction(microphoneControls,"CANCEL MIC",()->voiceInput.cancelListening());
+    TextView microphoneHint=SatelliteUi.text(this,
+      "On-device microphone only • Transcript stays editable until SEND",11,SatelliteUi.MUTED,false);
+    page.addView(microphoneHint);
 
     chatScroll=new ScrollView(this);
     chatScroll.setFillViewport(true);
@@ -239,6 +265,28 @@ public final class AiChatActivity extends Activity {
         }catch(Exception e){setStatus("Cloud configuration rejected: "+e.getMessage());}
       }).show();
   }
+  /** No microphone access until TALK was explicitly tapped. */
+  private void startVoiceInput(){
+    if(closing || busy) {
+      setStatus("Finish the current AI request before starting voice input.");
+      return;
+    }
+    if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED) {
+      requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO},MICROPHONE_PERMISSION_REQUEST);
+      setStatus("Android microphone permission requested. Tap TALK again after allowing.");
+      return;
+    }
+    speech.stop();
+    voiceInput.startListening();
+  }
+  @Override public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] grants) {
+    super.onRequestPermissionsResult(requestCode,permissions,grants);
+    if(requestCode!=MICROPHONE_PERMISSION_REQUEST)return;
+    if(grants.length>0 && grants[0]==PackageManager.PERMISSION_GRANTED)
+      setStatus("Microphone permission allowed. Tap TALK to start on-device recognition.");
+    else
+      setStatus("Microphone permission denied. You can still type messages.");
+  }
   private void ask(){
     if(busy || closing)return;
     final String question=prompt.getText().toString().trim();
@@ -311,12 +359,18 @@ public final class AiChatActivity extends Activity {
         status.setText(content);
     });
   }
+  @Override protected void onPause(){
+    // Always revoke live microphone capture when this screen loses focus.
+    if(voiceInput!=null)voiceInput.cancelListening();
+    super.onPause();
+  }
   @Override protected void onStop(){
     if(speech!=null)speech.stop();
     super.onStop();
   }
   @Override protected void onDestroy(){
     closing=true;
+    if(voiceInput!=null)voiceInput.close();
     if(speech!=null)speech.close();
     ++requestGeneration;
     consent=false;
