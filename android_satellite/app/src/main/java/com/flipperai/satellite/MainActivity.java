@@ -172,7 +172,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     advancedButton("Use installed offline model",()->{
       try{
         localModel.configure(localUrl.getText().toString(),localName.getText().toString());
-        showStatus("On-device local model endpoint configured; network access restricted to loopback");
+        showStatus("Local model address saved for this session (loopback only). This does not install or verify a model. Tap Test local model connection to confirm real inference.");
       }catch(Exception e){showStatus(e.getMessage());}
     });
     advancedButton("Disable local model",()->{
@@ -186,7 +186,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       inferenceWorker.execute(()->{
         try{
           String sample=localModel.answer("Reply with OK.");
-          showStatus("Local model responded: "+sample);
+          showStatus("Verified live localhost model response: "+sample);
         }catch(Exception e){
           showStatus("Local model not responding: "+e.getMessage());
         }
