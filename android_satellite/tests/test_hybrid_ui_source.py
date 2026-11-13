@@ -13,7 +13,8 @@ class HybridUiSourceTests(unittest.TestCase):
         self.assertIn("HYBRID • offline then allowed cloud", CHAT)
         self.assertIn("ONLINE • requires cloud permission", CHAT)
         self.assertIn("InferenceRouter.Mode.OFFLINE,InferenceRouter.Mode.HYBRID,InferenceRouter.Mode.ONLINE", CHAT)
-        self.assertIn("mode=choiceModes[which];", CHAT)
+        self.assertIn("InferenceRouter.Mode chosen=choiceModes[which];", CHAT)
+        self.assertIn("mode=chosen;", CHAT)
         self.assertNotIn("mode=InferenceRouter.Mode.values()[which]", CHAT)
         self.assertNotIn("setSingleChoiceItems(choices,mode.ordinal()", CHAT)
 
