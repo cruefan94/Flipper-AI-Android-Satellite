@@ -36,6 +36,9 @@ public final class EmbeddedModelStore {
     }
     if(name==null || !name.toLowerCase(Locale.ROOT).endsWith(".litertlm"))
       throw new IllegalArgumentException("Choose a .litertlm model, not a .gguf or .tflite file");
+    // The new external-weights Qwen3 INT4 export is documented to crash LiteRT-LM 0.18.x.
+    if("Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm".equalsIgnoreCase(name))
+      throw new IllegalArgumentException("This model needs LiteRT-LM 0.19+. Choose Qwen3-0.6B.litertlm for this app.");
     File target=modelFile(context);
     File directory=target.getParentFile();
     if(!directory.isDirectory() && !directory.mkdirs())
