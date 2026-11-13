@@ -8,6 +8,8 @@ javac -d "$DEST" "$SRC/SatelliteProtocol.java" "$SRC/FrameCodec.java" "$SRC/Tran
 java -cp "$DEST" SatelliteCoreTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridFallbackTest.java"
 java -cp "$DEST" HybridFallbackTest
+javac -cp "$DEST" -d "$DEST" "$SRC/GattProfilePolicy.java" "$ROOT/android_satellite/tests/GattProfilePolicyTest.java"
+java -cp "$DEST" GattProfilePolicyTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SessionEpochTest.java"
 java -cp "$DEST" SessionEpochTest
 javac -cp "$DEST" -d "$DEST" "$SRC/WorkerEndpointPolicy.java" "$ROOT/android_satellite/tests/WorkerEndpointPolicyTest.java"
