@@ -43,6 +43,22 @@ public final class RadioScannerActivity extends Activity {
     });
     status=label(root,"Radio: stopped");
     info=label(root,"Station: none");
+    title(root,"QUICK RADIO CATEGORIES");
+    label(root,"Browse public online listings by category. Broadcast results are not guaranteed live; scanner feeds require authorized providers.");
+    Spinner quickCategory=spinner(root,new String[]{"AM radio","FM radio","News / talk","Music","Weather","Police feeds","Fire feeds","Ham / amateur","CB radio","Aircraft"});
+    button(root,"BROWSE CATEGORY",()->{
+      int choice=quickCategory.getSelectedItemPosition();
+      if(choice>=5){
+        status.setText("No verified playable "+quickCategory.getSelectedItem()+" directory is bundled. Add a lawful HTTPS audio feed as a favorite; a frequency alone cannot play on the phone.");
+        return;
+      }
+      directoryName.setText("");
+      directoryCountry.setText("Canada");
+      directoryCategory.setSelection(choice==2?1:choice==3?3:choice==4?9:0);
+      if(choice==0)directoryName.setText("AM");
+      if(choice==1)directoryName.setText("FM");
+      findOnline();
+    });
     title(root,"FIND ONLINE RADIO STATIONS");
     label(root,"Search public stations by name and optional country. Uses the public Radio Browser directory; station availability and provider permissions are not guaranteed.");
     directoryName=edit(root,"Station name (e.g. jazz, rock, CBC)");
