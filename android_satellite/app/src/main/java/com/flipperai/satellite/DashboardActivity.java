@@ -26,7 +26,7 @@ public final class DashboardActivity extends Activity {
     frame.addView(nav);setContentView(frame);
     // Keep app navigation above gesture/three-button system navigation on edge-to-edge Android.
     frame.setOnApplyWindowInsetsListener((view,insets)->{
-      android.view.WindowInsets.Type navigation=android.view.WindowInsets.Type.navigationBars();
+      int navigation=android.view.WindowInsets.Type.navigationBars();
       Insets bottom=insets.getInsets(navigation);
       nav.setPadding(0,0,0,bottom.bottom);
       return insets;
