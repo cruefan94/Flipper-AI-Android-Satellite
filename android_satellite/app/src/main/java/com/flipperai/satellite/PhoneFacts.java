@@ -51,7 +51,8 @@ public final class PhoneFacts {
           +"|date today|today)"))
       return Query.DATE;
     if (s.matches("(?:what(?:'s| is|s) (?:my |the )?(?:phone(?:'s)? )?battery(?: level| percentage| percent)?"
-          +"|(?:my )?(?:phone )?battery(?: level| percentage| percent)"
+          +"|(?:my |phone |my phone )battery(?: level| percentage| percent)?"
+          +"|battery(?: level| percentage| percent)"
           +"|how much battery (?:do i have|is left|does my phone have)"
           +"|how (?:charged|full) is my phone"
           +"|what(?:'s| is|s) (?:my )?battery percentage)"))
