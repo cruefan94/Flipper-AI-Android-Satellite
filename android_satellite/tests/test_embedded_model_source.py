@@ -48,6 +48,7 @@ class EmbeddedModelSourceTests(unittest.TestCase):
         self.assertIn('endsWith(".litertlm")',STORE)
         self.assertIn("MAX_BYTES",STORE)
         self.assertIn("if(copied==0)",STORE)
+        self.assertIn('"Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm".equalsIgnoreCase(name)',STORE)
         self.assertIn("if(staging.exists())staging.delete();",STORE)
 
 if __name__=="__main__":unittest.main()
