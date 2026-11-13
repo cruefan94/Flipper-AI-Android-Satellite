@@ -4,6 +4,20 @@ public final class SatelliteCoreTest {
   public static void main(String[] args) throws Exception {
     String encoded=SatelliteProtocol.encode("HELLO",1,"phone");
     check(SatelliteProtocol.decode(encoded)[3].equals("phone"),"round-trip");
+    String emojiPayload="radio \uD83D\uDD0A";
+    check(SatelliteProtocol.decode(SatelliteProtocol.encode("ASK",2,emojiPayload))[3]
+      .equals(emojiPayload),"valid supplementary Unicode round-trip");
+    for(String malformed : new String[]{"bad\uD83D", "bad\uDD0A", "\uDD0A\uD83D"}) {
+      boolean rejected=false;
+      try { SatelliteProtocol.encode("ASK",2,malformed); }
+      catch(IllegalArgumentException expected) { rejected=true; }
+      check(rejected,"malformed UTF-16 must not be silently replaced in AI1");
+    }
+
+    boolean negativeIdRejected=false;
+    try { SatelliteProtocol.encode("ASK",-1L,"battery"); }
+    catch(IllegalArgumentException expected) { negativeIdRejected=true; }
+    check(negativeIdRejected,"negative request IDs must be rejected by encoder");
     boolean bad=false;
     try{SatelliteProtocol.encode("ASK",1,"unsafe|payload");}
     catch(IllegalArgumentException ex){bad=true;}
@@ -27,6 +41,14 @@ public final class SatelliteCoreTest {
       public boolean ready(){return true;}
       public String answer(String p){return "CLOUD";}
     };
+    boolean rejectedMissingOffline=false;
+    try { new InferenceRouter(null,cloud); }
+    catch (IllegalArgumentException expected) { rejectedMissingOffline=true; }
+    check(rejectedMissingOffline,"missing offline engine must fail at configuration");
+    boolean rejectedMissingCloud=false;
+    try { new InferenceRouter(local,null); }
+    catch (IllegalArgumentException expected) { rejectedMissingCloud=true; }
+    check(rejectedMissingCloud,"missing online engine must fail at configuration");
     InferenceRouter router=new InferenceRouter(local,cloud);
     final int[] unexpectedCloudCalls={0};
     InferenceRouter.OnlineEngine countingCloud=new InferenceRouter.OnlineEngine(){
@@ -34,6 +56,25 @@ public final class SatelliteCoreTest {
       public String answer(String p){unexpectedCloudCalls[0]++;return "CLOUD";}
     };
     InferenceRouter nullModeRouter=new InferenceRouter(local,countingCloud);
+    SatelliteRequestHandler capacityHandler=new SatelliteRequestHandler(
+      new InferenceRouter(local,countingCloud));
+    capacityHandler.configure(InferenceRouter.Mode.ONLINE,true);
+    String undeliverable=capacityHandler.handle(
+      SatelliteProtocol.encode("ASK",4294967295L,"private prompt"),16);
+    check(undeliverable==null && unexpectedCloudCalls[0]==0,
+      "undersized BLE payload must not trigger consented cloud inference");
+
+    for (InferenceRouter.Mode testMode : InferenceRouter.Mode.values()) {
+      boolean oversizedRejected=false;
+      try { nullModeRouter.ask("x".repeat(PromptLimits.MAX_CHARACTERS+1),testMode,true); }
+      catch (IllegalArgumentException expected) { oversizedRejected=true; }
+      check(oversizedRejected && unexpectedCloudCalls[0]==0,
+        "oversized prompts must be rejected before cloud dispatch in "+testMode);
+    }
+    check(nullModeRouter.ask("x".repeat(PromptLimits.MAX_CHARACTERS),
+      InferenceRouter.Mode.ONLINE,true).equals("CLOUD"),
+      "maximum permitted prompt remains accepted");
+    unexpectedCloudCalls[0]=0;
     boolean missingModeRejected=false;
     try{nullModeRouter.ask("private prompt",null,true);}
     catch(IllegalArgumentException expected){missingModeRejected=true;}
@@ -71,14 +112,31 @@ public final class SatelliteCoreTest {
     try{router.ask("secret",InferenceRouter.Mode.ONLINE,false);}
     catch(IllegalStateException e){denied=true;}
     check(denied,"deny online without consent");
+    boolean missingHandlerRouterRejected=false;
+    try { new SatelliteRequestHandler(null); }
+    catch(IllegalArgumentException expected) { missingHandlerRouterRejected=true; }
+    check(missingHandlerRouterRejected,"missing request router rejected during setup");
     SatelliteRequestHandler handler=new SatelliteRequestHandler(router);
     String ping=handler.handle(SatelliteProtocol.encode("PING",2,""),180);
     check(SatelliteProtocol.decode(ping)[1].equals("PONG"),"ping");
+    ProtocolSession mtuSession=new ProtocolSession();
+    String tooSmallAck=mtuSession.dispatch(
+      SatelliteProtocol.encode("HELLO",10,"flipper-v1"),16,handler);
+    check(tooSmallAck==null && !mtuSession.helloSeen(),
+      "failed HELLO_ACK must not establish a session");
+    String retriedAck=mtuSession.dispatch(
+      SatelliteProtocol.encode("HELLO",10,"flipper-v1"),180,handler);
+    check(retriedAck!=null && mtuSession.helloSeen() &&
+      SatelliteProtocol.decode(retriedAck)[1].equals("HELLO_ACK"),
+      "HELLO must succeed after ATT capacity becomes sufficient");
     ProtocolSession s=new ProtocolSession();
     String rejected=s.dispatch(SatelliteProtocol.encode("ASK",3,"battery"),180,handler);
     check(SatelliteProtocol.decode(rejected)[3].equals("HELLO_REQUIRED"),"handshake required");
     String hello=s.dispatch(SatelliteProtocol.encode("HELLO",4,"flipper-v1"),180,handler);
     check(SatelliteProtocol.decode(hello)[1].equals("HELLO_ACK"),"hello");
+    String tooSmallAnswer=s.dispatch(
+      SatelliteProtocol.encode("ASK",5,"battery"),16,handler);
+    check(tooSmallAnswer==null,"undersized ATT payload cannot carry response");
     String reply=s.dispatch(SatelliteProtocol.encode("ASK",5,"battery"),180,handler);
     check(SatelliteProtocol.decode(reply)[1].equals("ANSWER"),"answer");
     InferenceRouter.OnlineEngine largeEngine=new InferenceRouter.OnlineEngine(){
