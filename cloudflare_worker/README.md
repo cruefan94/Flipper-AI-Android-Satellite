@@ -34,3 +34,7 @@ Current offline model and Flipper BLE testing remain separate. Production functi
 ## Connected-build verification
 
 After selecting GitHub `main`, enabling builds, and setting `cloudflare_worker` as the root directory in Cloudflare, a new commit under this directory can trigger a fresh Cloudflare build. Confirm an actual **GitHub-triggered** successful deployment in Cloudflare Deployments or Builds; the existing **manually deployed** Hello World version does not establish that the Worker has updated. The online AI flow remains unconfigured until runtime secrets `DEVICE_TOKEN` and `GEMINI_API_KEY` are saved in Cloudflare.
+
+## Git-connected deployment trigger
+
+Cloudflare Git integration starts observing new commits after the repository and production branch are connected. If an earlier commit already passed GitHub Actions before the Cloudflare connection was saved, that GitHub check alone will not confirm a Worker deployment. A documentation-only commit under `cloudflare_worker/` can trigger the newly configured deployment without changing the Worker code. Confirm the resulting build and deployed commit in Cloudflare **Workers & Pages → flipper-ai-satellite → Deployments / Builds**. The runtime secrets `DEVICE_TOKEN` and `GEMINI_API_KEY` must still be configured separately before live Gemini replies will work.
