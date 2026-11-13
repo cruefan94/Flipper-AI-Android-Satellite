@@ -25,7 +25,9 @@ public final class ProtocolSession {
         }
         if(!helloSeen)return handler.error(id,"HELLO_REQUIRED",maxFrameBytes);
         if(id<=lastRequestId)return handler.error(id,"REPLAY_ID",maxFrameBytes);
-        lastRequestId=id;
-        return handler.handle(frame,maxFrameBytes);
+        String reply=handler.handle(frame,maxFrameBytes);
+        // Failed delivery must not consume the ID; allow a capacity retry.
+        if(reply!=null)lastRequestId=id;
+        return reply;
     }
 }
