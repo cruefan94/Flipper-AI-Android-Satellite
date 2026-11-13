@@ -60,7 +60,7 @@ class MainVoiceMarkdown(unittest.TestCase):
                       "WindowInsets.Type.ime()",
                       "Math.max(bars.bottom,ime.bottom)",
                       'send.setText("SEND")',
-                      "router.ask(question,requestedMode,approved)",
+                      "router.askWithSource(question,requestedMode,approved)",
                       "if(generation==requestGeneration && (!approved||consent))"]:
             self.assertIn(value,CHAT)
 
