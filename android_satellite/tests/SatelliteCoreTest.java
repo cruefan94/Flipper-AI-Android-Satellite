@@ -37,7 +37,7 @@ public final class SatelliteCoreTest {
     boolean missingModeRejected=false;
     try{nullModeRouter.ask("private prompt",null,true);}
     catch(IllegalArgumentException expected){missingModeRejected=true;}
-    for (String blankPrompt : new String[]{null, "", "  ", "\\t"}) {
+    for (String blankPrompt : new String[]{null, "", "  ", "\t"}) {
       boolean rejectedBlank=false;
       try { nullModeRouter.ask(blankPrompt,InferenceRouter.Mode.ONLINE,true); }
       catch(IllegalArgumentException expected) { rejectedBlank=true; }
