@@ -16,6 +16,7 @@ public final class InferenceRouter {
     PromptLimits.validate(prompt);
     // An absent/invalid mode must never implicitly become HYBRID and reach cloud.
     if (mode == null) throw new IllegalArgumentException("Inference mode is required");
+    if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     if (mode == Mode.OFFLINE) return offline(prompt);
     // Cancellation must be honored in every mode, including direct ONLINE.
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
@@ -38,6 +39,7 @@ public final class InferenceRouter {
       try { return cloud.answer(prompt); }
       catch (InterruptedException cancelled) { Thread.currentThread().interrupt(); throw cancelled; }
       catch (Exception cloudFailure) {
+        if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
         if(local.ready()) {
           try { return local.answer(prompt); }
           catch(InterruptedException cancelled) { Thread.currentThread().interrupt(); throw cancelled; }
@@ -48,6 +50,7 @@ public final class InferenceRouter {
     }
     // Diagnostic fallback stays on-device when consent is absent, or when a
     // model fails and no approved cloud endpoint is available.
+    if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     if (local.ready()) return local.answer(prompt);
     if (localFailure != null)
       throw new IllegalStateException("Local inference failed; cloud fallback disabled or unavailable", localFailure);
