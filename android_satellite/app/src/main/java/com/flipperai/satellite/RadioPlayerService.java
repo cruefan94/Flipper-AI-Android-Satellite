@@ -38,7 +38,7 @@ public final class RadioPlayerService extends Service {
     else if("pause".equals(cmd))pause();
     else if("resume".equals(cmd)){if(player!=null)try{player.start();state="Playing";publish();}catch(IllegalStateException e){state="Cannot resume stream";publish();}}
     else if("stop".equals(cmd))stopPlayback();
-    else if("status".equals(cmd))publish();
+    else if("status".equals(cmd)){publish();if(!foreground && player==null)stopSelf();}
     return START_NOT_STICKY;
   }
   private void play(String url,String name){
@@ -47,10 +47,18 @@ public final class RadioPlayerService extends Service {
     stream=url;station=RadioStreamPolicy.safeLabel(name);
     state="Connecting";publish();
     try{
+      // startForegroundService() requires this notification promptly. Do it
+      // before potentially slow network/codec preparation.
+      startForeground(NOTIFICATION,notification());
+      foreground=true;
       player=new MediaPlayer();
       player.setAudioAttributes(new AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build());
       player.setDataSource(url);
-      player.setOnPreparedListener(mp->{mp.start();state="Playing";publish();});
+      player.setOnPreparedListener(mp->{
+        if(player!=mp)return;
+        try{mp.start();state="Playing";publish();}
+        catch(IllegalStateException ignored){state="Stream stopped";publish();}
+      });
       player.setOnBufferingUpdateListener((mp,percent)->{if(percent<100 && "Connecting".equals(state)){state="Buffering ("+percent+"%)";publish();}});
       player.setOnInfoListener((mp,what,extra)->{
         if(what==MediaPlayer.MEDIA_INFO_BUFFERING_START){state="Buffering";publish();}
@@ -60,10 +68,12 @@ public final class RadioPlayerService extends Service {
       player.setOnErrorListener((mp,what,extra)->{state="Stream error ("+what+"/"+extra+"); check URL, format or availability";stopPlayer();publish();return true;});
       player.setOnCompletionListener(mp->{state="Stream ended";stopPlayer();publish();});
       player.prepareAsync();
-      startForeground(NOTIFICATION,notification());
-      foreground=true;
-    }catch(IOException | IllegalArgumentException | IllegalStateException | SecurityException e){
-      state="Cannot open stream: "+e.getClass().getSimpleName();stopPlayer();publish();
+    }catch(IOException | RuntimeException e){
+      state="Cannot open stream: "+e.getClass().getSimpleName();
+      stopPlayer();
+      publish();
+      if(foreground){stopForeground(STOP_FOREGROUND_REMOVE);foreground=false;}
+      stopSelf();
     }
   }
   private void pause(){if(player!=null)try{if(player.isPlaying())player.pause();state="Paused";publish();}catch(IllegalStateException ignored){}}
