@@ -41,8 +41,9 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private Spinner mode;
   private final WorkerCloudEngine cloud=new WorkerCloudEngine();
   private final LocalModelEngine localModel=new LocalModelEngine();
-  private final InferenceRouter router=new InferenceRouter(
-    new OfflineModelOrDiagnostics(localModel,new OfflineDiagnosticEngine()),cloud);
+  private EmbeddedLlmEngine embeddedModel;
+  private InferenceRouter router;
+  private static final int PICK_EMBEDDED_MODEL=4127;
   private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
   private CheckBox cloudConsent;
   private final ConsentEpoch consentEpoch=new ConsentEpoch();
@@ -51,6 +52,12 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final SessionEpoch connectionEpoch=new SessionEpoch();
   @Override public void onCreate(Bundle b) {
     super.onCreate(b);
+    embeddedModel=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
+    if(EmbeddedModelStore.installed(this))
+      embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
+    router=new InferenceRouter(
+      new OfflineModelOrDiagnostics(new EmbeddedOrLocalEngine(embeddedModel,localModel),
+        new OfflineDiagnosticEngine()),cloud);
     requests=new SatelliteRequestHandler(router);
     ble=new BleSatellite(this,this);
     transports.register(ble);
@@ -162,8 +169,40 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     mode=new Spinner(this);
     mode.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
     advancedSection.addView(mode);
+    TextView builtInLabel=new TextView(this);
+    builtInLabel.setText("Embedded OFFLINE AI: download a compatible .litertlm model separately (for example Qwen3-0.6B), then import it from Android Files. LiteRT-LM runs inside this app on your phone. Weights are not included in the APK.");
+    advancedSection.addView(builtInLabel);
+    advancedButton("Find compatible Qwen3-0.6B model",()->{
+      startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
+        android.net.Uri.parse("https://huggingface.co/litert-community/Qwen3-0.6B")));
+    });
+    advancedButton("Import embedded AI model (.litertlm)",()->{
+      android.content.Intent picker=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
+      picker.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+      picker.setType("*/*");
+      startActivityForResult(picker,PICK_EMBEDDED_MODEL);
+    });
+    advancedButton("Test embedded AI inference",()->{
+      if(!embeddedModel.ready()){showStatus("Import a .litertlm model before testing embedded AI");return;}
+      showStatus("Loading and testing embedded AI on phone (this may take time)...");
+      inferenceWorker.execute(()->{
+        try{
+          String answer=embeddedModel.answer("Reply with OK.");
+          showStatus("Verified LIVE embedded offline model response: "+answer);
+        }catch(Exception e){showStatus("Embedded model failed: "+e.getMessage());}
+      });
+    });
+    advancedButton("Remove imported embedded model",()->{
+      showStatus("Removing private offline model file...");
+      inferenceWorker.execute(()->{
+        embeddedModel.clear();
+        showStatus(EmbeddedModelStore.delete(this)
+          ? "Embedded model removed; diagnostic fallback still available"
+          : "Could not delete imported offline model file");
+      });
+    });
     TextView localLabel=new TextView(this);
-    localLabel.setText("Offline language model (optional): install a local OpenAI-compatible server and model on this phone. Only 127.0.0.1 is accepted; no internet URL is allowed.");
+    localLabel.setText("Alternative offline backend: an OpenAI-compatible server on this phone, restricted to 127.0.0.1. Embedded model takes priority when installed.");
     advancedSection.addView(localLabel);
     EditText localUrl=new EditText(this);
     localUrl.setSingleLine(true);
@@ -241,7 +280,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
           : "No authorized AI GATT or stock Momentum RPC session.");
     });
     TextView caveat=new TextView(this);
-    caveat.setText("Momentum functions remain on Flipper. Offline LLM inference works only with a separately installed local model server; otherwise the app uses diagnostic rules. Localhost model requests never access the internet.");
+    caveat.setText("Momentum functions remain on Flipper. Full offline AI uses an imported embedded .litertlm model or your optional localhost model server. Without a working model, diagnostic rules remain available. Cloud AI always requires opt-in.");
     advancedSection.addView(caveat);
   }
   private void beginScan(){
@@ -456,10 +495,34 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       }catch(SecurityException e){showStatus("Allow Nearby devices permission to view results.");}
     });
   }
+  @Override protected void onActivityResult(int requestCode,int resultCode,android.content.Intent data){
+    super.onActivityResult(requestCode,resultCode,data);
+    if(requestCode!=PICK_EMBEDDED_MODEL || resultCode!=RESULT_OK || data==null)return;
+    android.net.Uri selected=data.getData();
+    showStatus("Importing model into private Android storage...");
+    inferenceWorker.execute(()->{
+      try{
+        embeddedModel.clear(); // Stop old inference before replacing the same model file.
+        long bytes=EmbeddedModelStore.importFromDocument(this,selected);
+        embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
+        showStatus("Imported "+(bytes/(1024*1024))+" MiB locally. Tap Test embedded AI inference to verify the model.");
+      }catch(Exception e){
+        // A failed import retains the previously installed model.
+        if(EmbeddedModelStore.installed(this))
+          embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
+        showStatus("Model import failed: "+e.getMessage());
+      }
+    });
+  }
   @Override public void onDestroy(){
     connectionEpoch.advance();
     ble.stopScan();transports.close();
-    cloud.clear();localModel.clear();inferenceWorker.shutdownNow();
+    cloud.clear();localModel.clear();
+    // Release native model after queued inference completes; never block UI.
+    if(!inferenceWorker.isShutdown()){
+      inferenceWorker.execute(()->embeddedModel.clear());
+      inferenceWorker.shutdown();
+    }
     super.onDestroy();
   }
 }
