@@ -31,7 +31,10 @@ class MainVoiceMarkdown(unittest.TestCase):
         self.assertIn("speech.setEnabled(!speech.enabled())",CHAT)
         self.assertIn("speech.close()",CHAT)
         self.assertIn('android.intent.action.TTS_SERVICE',MANIFEST)
-        self.assertNotIn("RECORD_AUDIO",MANIFEST)
+        self.assertIn('android.permission.RECORD_AUDIO',MANIFEST)
+        self.assertIn('android.speech.RecognitionService',MANIFEST)
+        self.assertIn('speech.pickVoice(this)',CHAT)
+        self.assertIn('new OnDeviceVoiceInput(this',CHAT)
 
     def test_safe_markdown_cleaned_for_chat_and_speech(self):
         self.assertIn("ChatMarkdownFormatter.render(message)",CHAT)
