@@ -35,6 +35,11 @@ public final class SatelliteRequestHandler {
                     return fit("ANSWER",id,router.ask(fields[3],mode,cloudConsent),maxFrameBytes);
                 default:return fit("ERROR",id,"UNKNOWN_TYPE",maxFrameBytes);
             }
+        }catch(InterruptedException cancelled){
+            // Cancellation must remain visible to the BLE caller and must not
+            // be mistaken for a normal inference failure or retried online.
+            Thread.currentThread().interrupt();
+            return null;
         }catch(Exception ex){return fit("ERROR",id,"ENGINE_UNAVAILABLE",maxFrameBytes);}
     }
     public String error(long id,String code,int limit) { return fit("ERROR",id,code,limit); }
