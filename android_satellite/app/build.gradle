@@ -1,8 +1,53 @@
-plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
-android { namespace 'com.flipperai.satellite'; compileSdk 35
- defaultConfig { applicationId 'com.flipperai.satellite'; minSdk 26; targetSdk 35; versionCode 2; versionName '0.7.0-ui-restored' }
- compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// CI assigns a monotonically increasing versionCode to prevent downgrade
+// errors. Local developers retain the previous value by default.
+def satelliteVersionCode = (findProperty('satelliteVersionCode') ?: '2').toString().toInteger()
+
+// A persistent signing key must be provided by protected GitHub Actions secrets.
+// Without it, Gradle uses its normal per-run debug key and the APK should be
+// treated as an isolated testing build, not an in-place update package.
+def stableKeystore = System.getenv('SATELLITE_KEYSTORE_FILE')
+def useStableKeystore = stableKeystore != null && !stableKeystore.trim().isEmpty()
+
+android {
+    namespace 'com.flipperai.satellite'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.flipperai.satellite'
+        minSdk 26
+        targetSdk 35
+        versionCode satelliteVersionCode
+        versionName '0.7.0-ui-restored'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    signingConfigs {
+        if (useStableKeystore) {
+            persistentDebug {
+                storeFile file(stableKeystore)
+                storePassword System.getenv('SATELLITE_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('SATELLITE_KEY_ALIAS')
+                keyPassword System.getenv('SATELLITE_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            if (useStableKeystore) {
+                signingConfig signingConfigs.persistentDebug
+            }
+        }
+    }
 }
 
 // Official on-device LiteRT-LM engine; model weights are selected/imported separately.
-dependencies { implementation 'com.google.ai.edge.litertlm:litertlm-android:0.18.0' }
+dependencies {
+    implementation 'com.google.ai.edge.litertlm:litertlm-android:0.18.0'
+}
