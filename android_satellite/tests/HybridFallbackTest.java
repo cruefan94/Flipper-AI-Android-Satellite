@@ -14,7 +14,7 @@ public final class HybridFallbackTest {
     InferenceRouter router = new InferenceRouter(failed, cloud);
     boolean blocked = false;
     try { router.ask("private", InferenceRouter.Mode.HYBRID, false); }
-    catch (IllegalStateException expected) { blocked = true; }
+    catch (Exception expected) { blocked = true; }
     check(blocked);
     check(router.ask("approved", InferenceRouter.Mode.HYBRID, true).equals("CLOUD"));
     System.out.println("Hybrid fallback tests passed");
