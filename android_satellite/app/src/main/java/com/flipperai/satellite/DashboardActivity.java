@@ -115,14 +115,5 @@ public final class DashboardActivity extends Activity {
       13,SatelliteUi.MUTED,false);
     future.setPadding(dp(5),dp(6),dp(5),dp(7));
     content.addView(future);
-    if(!wide){
-      nav.addView(text("QUICK NAVIGATION",15,SatelliteUi.ORANGE,true));
-      gap(nav,7);
-      link(nav,"◉","AI CHAT",AiChatActivity.class);
-      link(nav,"ᛒ","FLIPPER / BLE",MainActivity.class);
-      link(nav,"↓","OFFLINE MODELS",ModelsActivity.class);
-      link(nav,"⬡","PHONE TOOLS",PhoneCompanionActivity.class);
-      link(nav,"⌘","GITHUB",GitHubActivity.class);
-    }
   }
 }
