@@ -51,7 +51,7 @@ class MainVoiceMarkdown(unittest.TestCase):
     def test_phone_ble_report_requires_physical_protocol_verification(self):
         self.assertIn("Copy BLE hardware test report",BLE)
         self.assertIn("HELLO/ASK not confirmed",BLE)
-        self.assertIn("model file presence does not prove live AI inference",BLE.lower())
+        self.assertIn("model file presence does not prove live ai inference",BLE.lower())
         self.assertIn("ClipboardManager",BLE)
         self.assertNotIn('+"Selected address:"',BLE)
 
