@@ -65,6 +65,9 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     header.setTextSize(22);root.addView(header);
     status=new TextView(this);
     status.setText("No AI connection");root.addView(status);
+    TextView offlineHelp=new TextView(this);
+    offlineHelp.setText("Offline AI runs on this Android phone when a compatible local model is installed and running. The Flipper accesses it over Bluetooth. Without the phone, Flipper tools remain available but full AI chat does not.");
+    root.addView(offlineHelp);
     connectionState=new TextView(this);connectionState.setTextSize(18);
     connectionState.setText("AI CONNECTION: NOT CONNECTED");root.addView(connectionState);
     connectionHistory=new TextView(this);
