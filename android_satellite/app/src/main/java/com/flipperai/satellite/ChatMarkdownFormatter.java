@@ -65,7 +65,7 @@ public final class ChatMarkdownFormatter {
     return out;
   }
 
-  // Apply only typography: no Html.fromHtml or dangerous untrusted markup.
+  // Apply only local typography: never evaluate or import model-supplied HTML.
   private static void appendInline(SpannableStringBuilder out,String line) {
     int i=0;
     while(i<line.length()) {
