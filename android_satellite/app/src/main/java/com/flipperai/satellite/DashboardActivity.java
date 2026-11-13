@@ -49,13 +49,7 @@ public final class DashboardActivity extends Activity {
     section("CONNECTION & SECURITY");
     content.addView(label("Bluetooth: connection details are shown inside Flipper Connection. This dashboard does not claim a live AI session.",14,MUTED,false));
     content.addView(label("GitHub OAuth, private repositories, Flipper PTT, notification sharing and USB SDR are not operational yet.",14,MUTED,false));
-    space(12);
-    section("QUICK ACCESS");
-    tile("OPEN AI CHAT",AiChatActivity.class);
-    tile("FLIPPER CONNECTION / BLE",MainActivity.class);
-    tile("RADIO STATION BROWSER",RadioScannerActivity.class);
-    tile("PHONE STATUS",PhoneCompanionActivity.class);
-    tile("GITHUB BUILDS",GitHubActivity.class);
+
   }
   private void navButton(LinearLayout parent,String title,Class<?> screen){
     TextView v=label(title,11,screen==DashboardActivity.class?CYAN:Color.WHITE,true);
