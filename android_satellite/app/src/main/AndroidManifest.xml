@@ -7,9 +7,15 @@
   <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
   <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
   <uses-permission android:name="android.permission.INTERNET"/>
-  <application android:label="Flipper AI Satellite" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+  <application android:label="Flipper AI Satellite" android:theme="@style/FlipperAiTheme" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
     <uses-native-library android:name="libvndksupport.so" android:required="false"/>
     <uses-native-library android:name="libOpenCL.so" android:required="false"/>
-    <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+    <activity android:name=".PhoneCompanionActivity" android:exported="false"/>
+    <activity android:name=".GitHubActivity" android:exported="false"/>
+    <activity android:name=".ModelsActivity" android:exported="false"/>
+    <activity android:name=".AiChatActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
+    <activity android:name=".MainActivity" android:exported="false"/>
+    <activity android:name=".DashboardActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
   </application>
 </manifest>
