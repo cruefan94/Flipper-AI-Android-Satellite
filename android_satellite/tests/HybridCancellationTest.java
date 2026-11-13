@@ -64,6 +64,37 @@ public final class HybridCancellationTest {
     check(interrupted && localCalls[0] == 0, "cancelled cloud request must not retry locally");
     Thread.interrupted();
 
+    // A readiness check may itself observe cancellation. Never dispatch afterward.
+    final int[] dispatched = {0};
+    InferenceRouter.OnlineEngine cancelsDuringReady = new InferenceRouter.OnlineEngine() {
+      public boolean ready() { Thread.currentThread().interrupt(); return true; }
+      public String answer(String prompt) { dispatched[0]++; return "CLOUD"; }
+    };
+    interrupted = false;
+    try { new InferenceRouter(trackingLocal, cancelsDuringReady)
+        .ask("test", InferenceRouter.Mode.ONLINE, true); }
+    catch (InterruptedException expected) { interrupted = true; }
+    check(interrupted && dispatched[0] == 0, "online readiness cancellation must block dispatch");
+    Thread.interrupted();
+
+    interrupted = false;
+    try { new InferenceRouter(failed, cancelsDuringReady)
+        .ask("test", InferenceRouter.Mode.HYBRID, true); }
+    catch (InterruptedException expected) { interrupted = true; }
+    check(interrupted && dispatched[0] == 0, "hybrid cloud readiness cancellation must block dispatch");
+    Thread.interrupted();
+
+    InferenceRouter.OfflineEngine cancelsLocalReady = new InferenceRouter.OfflineEngine() {
+      public boolean ready() { Thread.currentThread().interrupt(); return true; }
+      public String answer(String prompt) { dispatched[0]++; return "LOCAL"; }
+    };
+    interrupted = false;
+    try { new InferenceRouter(cancelsLocalReady, cloud)
+        .ask("test", InferenceRouter.Mode.OFFLINE, false); }
+    catch (InterruptedException expected) { interrupted = true; }
+    check(interrupted && dispatched[0] == 0, "offline readiness cancellation must block dispatch");
+    Thread.interrupted();
+
     System.out.println("Hybrid cancellation tests passed");
   }
 }
