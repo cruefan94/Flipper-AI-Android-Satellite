@@ -49,11 +49,11 @@ class NavigationRegressionTests(unittest.TestCase):
         self.assertIn("OFFLINE • Model imported • Ready for AI chat",CHAT)
         self.assertNotIn("Model file imported; live inference needs testing",CHAT)
         self.assertIn("OFFLINE • No model file • Basic diagnostics only",CHAT)
-        self.assertIn("router.ask(question,requestedMode,approved)",CHAT)
+        self.assertIn("router.askWithSource(question,requestedMode,approved)",CHAT)
 
     def test_model_and_chat_are_separate_and_real(self):
         self.assertIn("new EmbeddedLlmEngine(",CHAT)
-        self.assertIn("router.ask(question,requestedMode,approved)",CHAT)
+        self.assertIn("router.askWithSource(question,requestedMode,approved)",CHAT)
         self.assertIn("EmbeddedModelStore.importFromDocument(",MODELS)
         self.assertIn('Verified LIVE embedded offline model response:',MODELS)
         self.assertIn('cloud.clear();',CHAT)
