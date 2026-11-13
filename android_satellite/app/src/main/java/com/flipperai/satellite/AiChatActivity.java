@@ -42,6 +42,7 @@ public final class AiChatActivity extends Activity {
     page.setPadding(dp(15),dp(15),dp(15),dp(12));
     page.setBackgroundColor(SatelliteUi.BACKGROUND);
     setContentView(page);
+    applyChatWindowInsets(page);
 
     TextView title=SatelliteUi.text(this,"✧  AI CHAT",25,SatelliteUi.ORANGE,true);
     page.addView(title);
@@ -94,22 +95,60 @@ public final class AiChatActivity extends Activity {
 
     LinearLayout composer=new LinearLayout(this);
     composer.setGravity(Gravity.CENTER_VERTICAL);
+    composer.setPadding(0,dp(8),0,dp(4));
     page.addView(composer);
     prompt=new EditText(this);
     prompt.setSingleLine(false);
     prompt.setMaxLines(3);
     prompt.setMinLines(1);
+    prompt.setTextSize(16);
+    prompt.setGravity(Gravity.CENTER_VERTICAL);
+    prompt.setMinHeight(dp(52));
     prompt.setTextColor(SatelliteUi.WHITE);
     prompt.setHintTextColor(SatelliteUi.MUTED);
     prompt.setHint("Ask your AI...");
+    prompt.setBackground(SatelliteUi.panel(this,false));
+    prompt.setPadding(dp(13),dp(10),dp(13),dp(10));
     prompt.setFilters(new InputFilter[]{new InputFilter.LengthFilter(PromptLimits.MAX_CHARACTERS)});
     composer.addView(prompt,new LinearLayout.LayoutParams(0,-2,1));
     send=new Button(this);
     send.setText("SEND");
+    send.setAllCaps(false);
+    send.setTextSize(16);
+    send.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
     send.setTextColor(SatelliteUi.BACKGROUND);
-    send.setBackgroundTintList(android.content.res.ColorStateList.valueOf(SatelliteUi.ORANGE));
-    composer.addView(send);
+    send.setBackgroundTintList(null);
+    android.graphics.drawable.GradientDrawable sendBackground=new android.graphics.drawable.GradientDrawable();
+    sendBackground.setColor(SatelliteUi.ORANGE);
+    sendBackground.setCornerRadius(dp(12));
+    send.setBackground(sendBackground);
+    send.setElevation(0);
+    LinearLayout.LayoutParams sendLp=new LinearLayout.LayoutParams(dp(96),dp(52));
+    sendLp.leftMargin=dp(10);
+    composer.addView(send,sendLp);
     send.setOnClickListener(v->ask());
+  }
+  /** Android 15+ edge-to-edge can place app content under system bars.
+   * Honor both status/nav bars and IME so SEND stays tappable with the keyboard.
+   * Padding is derived from immutable base values, never accumulated. */
+  private void applyChatWindowInsets(LinearLayout page) {
+    page.setOnApplyWindowInsetsListener((view,insets)->{
+      final int safeTop,safeBottom;
+      if(Build.VERSION.SDK_INT>=30) {
+        android.graphics.Insets bars=insets.getInsets(
+          WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+        android.graphics.Insets ime=insets.getInsets(WindowInsets.Type.ime());
+        safeTop=bars.top;
+        safeBottom=Math.max(bars.bottom,ime.bottom);
+      } else {
+        safeTop=insets.getSystemWindowInsetTop();
+        safeBottom=insets.getSystemWindowInsetBottom();
+      }
+      view.setPadding(dp(15),dp(15)+Math.max(0,safeTop),
+                      dp(15),dp(12)+Math.max(0,safeBottom));
+      return insets;
+    });
+    page.requestApplyInsets();
   }
   @Override protected void onResume(){
     super.onResume();
@@ -126,7 +165,8 @@ public final class AiChatActivity extends Activity {
   private void smallAction(LinearLayout row,String label,Runnable callback){
     TextView item=SatelliteUi.text(this,label,12,SatelliteUi.ORANGE,true);
     item.setGravity(Gravity.CENTER);
-    item.setPadding(dp(9),dp(12),dp(9),dp(12));
+    item.setPadding(dp(6),dp(12),dp(6),dp(12));
+    item.setMinHeight(dp(48));
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);
     lp.setMargins(dp(1),0,dp(1),0);
     row.addView(item,lp);
