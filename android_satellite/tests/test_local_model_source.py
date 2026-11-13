@@ -32,6 +32,10 @@ class LocalModelSourceTest(unittest.TestCase):
         self.assertIn('advancedButton("Test local model connection"',UI)
         self.assertIn('localModel.answer("Reply with OK.")',UI)
         self.assertIn('inferenceWorker.execute(()->{',UI)
+    def test_configuration_is_not_reported_as_model_installation(self):
+        self.assertIn("This does not install or verify a model",UI)
+        self.assertIn("Verified live localhost model response:",UI)
+
     def test_ble_notification_epoch_bound_before_ui_enqueue(self):
         self.assertIn("final int receivedEpoch=connectionEpoch.current();",UI)
         self.assertIn("connectionEpoch.matches(receivedEpoch) && ble.isReady()",UI)
