@@ -33,6 +33,9 @@ public final class AiChatActivity extends Activity {
   private EditText prompt;
   private Button send;
   private ScrollView chatScroll;
+  // Compact only once when the keyboard opens/closes; never per keystroke.
+  private View[] keyboardHideable;
+  private boolean keyboardCompact=false;
   private final StringBuilder history=new StringBuilder();
   private final SpannableStringBuilder styledHistory=new SpannableStringBuilder();
   private boolean busy=false;
@@ -57,12 +60,13 @@ public final class AiChatActivity extends Activity {
     page.setFocusableInTouchMode(true);
     page.setBackgroundColor(SatelliteUi.BACKGROUND);
     setContentView(page);
-    applyChatWindowInsets(page);
 
     TextView title=SatelliteUi.text(this,"✧  AI CHAT",25,SatelliteUi.ORANGE,true);
     page.addView(title);
     status=SatelliteUi.text(this,"Offline AI • Checking imported model...",13,SatelliteUi.MUTED,false);
     status.setPadding(0,dp(4),0,dp(9));
+    status.setSingleLine(true);
+    status.setEllipsize(android.text.TextUtils.TruncateAt.END);
     page.addView(status);
     speech=new AiSpeech(this,this::setStatus);
     voiceInput=new OnDeviceVoiceInput(this,new OnDeviceVoiceInput.Events() {
@@ -189,6 +193,9 @@ public final class AiChatActivity extends Activity {
     sendLp.leftMargin=dp(10);
     composer.addView(send,sendLp);
     send.setOnClickListener(v->ask());
+    keyboardHideable=new View[]{title,navigation,voiceControls,
+      microphoneControls,microphoneHint,actions};
+    applyChatWindowInsets(page);
     // The parent owns initial focus until the user explicitly taps the composer.
     page.requestFocus();
   }
@@ -212,6 +219,18 @@ public final class AiChatActivity extends Activity {
         safeTop=insets.getSystemWindowInsetTop();
         // Legacy adjustResize already accounts for the keyboard's height.
         safeBottom=0;
+      }
+      if(Build.VERSION.SDK_INT>=30 && keyboardHideable!=null) {
+        // Small phone windows cannot show every voice/nav row above an IME.
+        // Collapsing those rows once keeps the composer visible and prevents
+        // repeated height/focus oscillation while typing.
+        boolean compact=insets.getInsets(WindowInsets.Type.ime()).bottom
+          >insets.getInsets(WindowInsets.Type.systemBars()).bottom+dp(48);
+        if(compact!=keyboardCompact) {
+          keyboardCompact=compact;
+          for(View control:keyboardHideable)
+            control.setVisibility(compact?View.GONE:View.VISIBLE);
+        }
       }
       int nextTop=top+Math.max(0,safeTop);
       int nextBottom=bottom+Math.max(0,safeBottom);
