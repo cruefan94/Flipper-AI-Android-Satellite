@@ -5,6 +5,9 @@ import android.content.*;
 import android.graphics.Typeface;
 import android.os.*;
 import android.text.InputFilter;
+import android.text.SpannableStringBuilder;
+import android.text.Spanned;
+import android.text.style.StyleSpan;
 import android.view.*;
 import android.widget.*;
 import java.util.concurrent.*;
@@ -21,11 +24,13 @@ public final class AiChatActivity extends Activity {
   private InferenceRouter router;
   private InferenceRouter.Mode mode=InferenceRouter.Mode.OFFLINE;
   private volatile boolean consent=false;
-  private TextView status,transcript;
+  private TextView status,transcript,voiceToggle;
+  private AiSpeech speech;
   private EditText prompt;
   private Button send;
   private ScrollView chatScroll;
   private final StringBuilder history=new StringBuilder();
+  private final SpannableStringBuilder styledHistory=new SpannableStringBuilder();
   private boolean busy=false;
   private boolean closing=false;
   private int requestGeneration=0;
@@ -42,12 +47,14 @@ public final class AiChatActivity extends Activity {
     page.setPadding(dp(15),dp(15),dp(15),dp(12));
     page.setBackgroundColor(SatelliteUi.BACKGROUND);
     setContentView(page);
+    applyChatWindowInsets(page);
 
     TextView title=SatelliteUi.text(this,"✧  AI CHAT",25,SatelliteUi.ORANGE,true);
     page.addView(title);
     status=SatelliteUi.text(this,"Offline AI • Checking imported model...",13,SatelliteUi.MUTED,false);
     status.setPadding(0,dp(4),0,dp(9));
     page.addView(status);
+    speech=new AiSpeech(this,this::setStatus);
 
     LinearLayout navigation=new LinearLayout(this);
     navigation.setOrientation(LinearLayout.HORIZONTAL);
@@ -59,6 +66,17 @@ public final class AiChatActivity extends Activity {
     smallAction(navigation,"MODE",this::chooseMode);
     smallAction(navigation,"CLOUD",this::cloudSettings);
     smallAction(navigation,"MODELS",()->startActivity(new Intent(this,ModelsActivity.class)));
+
+    LinearLayout voiceControls=new LinearLayout(this);
+    voiceControls.setOrientation(LinearLayout.HORIZONTAL);
+    page.addView(voiceControls);
+    voiceToggle=smallAction(voiceControls,speech.enabled()?"VOICE ON":"VOICE OFF",()->{
+      speech.setEnabled(!speech.enabled());
+      voiceToggle.setText(speech.enabled()?"VOICE ON":"VOICE OFF");
+      setStatus(speech.enabled()?"Spoken AI replies enabled":"Spoken AI replies muted");
+    });
+    smallAction(voiceControls,"CHOOSE VOICE",()->speech.pickVoice(this));
+    smallAction(voiceControls,"STOP",()->speech.stop());
 
     chatScroll=new ScrollView(this);
     chatScroll.setFillViewport(true);
@@ -80,7 +98,9 @@ public final class AiChatActivity extends Activity {
     smallAction(actions,"BATTERY",()->prompt.setText("battery diagnostics"));
     smallAction(actions,"CLEAR",()->{
       ++requestGeneration;
+      speech.stop();
       history.setLength(0);
+      styledHistory.clear();
       transcript.setText("Conversation cleared.");
     });
     smallAction(actions,"COPY",()->{
@@ -94,22 +114,60 @@ public final class AiChatActivity extends Activity {
 
     LinearLayout composer=new LinearLayout(this);
     composer.setGravity(Gravity.CENTER_VERTICAL);
+    composer.setPadding(0,dp(8),0,dp(4));
     page.addView(composer);
     prompt=new EditText(this);
     prompt.setSingleLine(false);
     prompt.setMaxLines(3);
     prompt.setMinLines(1);
+    prompt.setTextSize(16);
+    prompt.setGravity(Gravity.CENTER_VERTICAL);
+    prompt.setMinHeight(dp(52));
     prompt.setTextColor(SatelliteUi.WHITE);
     prompt.setHintTextColor(SatelliteUi.MUTED);
     prompt.setHint("Ask your AI...");
+    prompt.setBackground(SatelliteUi.panel(this,false));
+    prompt.setPadding(dp(13),dp(10),dp(13),dp(10));
     prompt.setFilters(new InputFilter[]{new InputFilter.LengthFilter(PromptLimits.MAX_CHARACTERS)});
     composer.addView(prompt,new LinearLayout.LayoutParams(0,-2,1));
     send=new Button(this);
     send.setText("SEND");
+    send.setAllCaps(false);
+    send.setTextSize(16);
+    send.setTypeface(Typeface.DEFAULT,Typeface.BOLD);
     send.setTextColor(SatelliteUi.BACKGROUND);
-    send.setBackgroundTintList(android.content.res.ColorStateList.valueOf(SatelliteUi.ORANGE));
-    composer.addView(send);
+    send.setBackgroundTintList(null);
+    android.graphics.drawable.GradientDrawable sendBackground=new android.graphics.drawable.GradientDrawable();
+    sendBackground.setColor(SatelliteUi.ORANGE);
+    sendBackground.setCornerRadius(dp(12));
+    send.setBackground(sendBackground);
+    send.setElevation(0);
+    LinearLayout.LayoutParams sendLp=new LinearLayout.LayoutParams(dp(96),dp(52));
+    sendLp.leftMargin=dp(10);
+    composer.addView(send,sendLp);
     send.setOnClickListener(v->ask());
+  }
+  /** Android 15+ edge-to-edge can place app content under system bars.
+   * Honor both status/nav bars and IME so SEND stays tappable with the keyboard.
+   * Padding is derived from immutable base values, never accumulated. */
+  private void applyChatWindowInsets(LinearLayout page) {
+    page.setOnApplyWindowInsetsListener((view,insets)->{
+      final int safeTop,safeBottom;
+      if(Build.VERSION.SDK_INT>=30) {
+        android.graphics.Insets bars=insets.getInsets(
+          WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+        android.graphics.Insets ime=insets.getInsets(WindowInsets.Type.ime());
+        safeTop=bars.top;
+        safeBottom=Math.max(bars.bottom,ime.bottom);
+      } else {
+        safeTop=insets.getSystemWindowInsetTop();
+        safeBottom=insets.getSystemWindowInsetBottom();
+      }
+      view.setPadding(dp(15),dp(15)+Math.max(0,safeTop),
+                      dp(15),dp(12)+Math.max(0,safeBottom));
+      return insets;
+    });
+    page.requestApplyInsets();
   }
   @Override protected void onResume(){
     super.onResume();
@@ -123,14 +181,16 @@ public final class AiChatActivity extends Activity {
       }catch(Exception e){setStatus("Embedded AI unavailable: "+e.getMessage());}
     });
   }
-  private void smallAction(LinearLayout row,String label,Runnable callback){
+  private TextView smallAction(LinearLayout row,String label,Runnable callback){
     TextView item=SatelliteUi.text(this,label,12,SatelliteUi.ORANGE,true);
     item.setGravity(Gravity.CENTER);
-    item.setPadding(dp(9),dp(12),dp(9),dp(12));
+    item.setPadding(dp(6),dp(12),dp(6),dp(12));
+    item.setMinHeight(dp(48));
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);
     lp.setMargins(dp(1),0,dp(1),0);
     row.addView(item,lp);
     item.setOnClickListener(v->callback.run());
+    return item;
   }
   private void chooseMode(){
     String[] choices={"OFFLINE • on this phone","HYBRID • offline then allowed cloud","ONLINE • requires cloud permission"};
@@ -194,6 +254,7 @@ public final class AiChatActivity extends Activity {
         if(closing)return;
         if(generation==requestGeneration && (!approved||consent)){
           append("AI",answer);
+          speech.speak(ChatMarkdownFormatter.plainSpeech(answer));
           setStatus(requestedMode+" • Response complete");
         }else setStatus("Old response discarded due to changed settings.");
         busy=false;send.setEnabled(true);
@@ -201,9 +262,20 @@ public final class AiChatActivity extends Activity {
     });
   }
   private void append(String speaker,String message){
-    if(history.length()>14000)history.delete(0,history.length()-7000);
+    if(history.length()>14000) {
+      history.delete(0,history.length()-7000);
+      styledHistory.delete(0,Math.max(0,styledHistory.length()-7000));
+    }
     history.append(speaker).append(": ").append(message).append("\n\n");
-    transcript.setText(history.toString());
+    int labelStart=styledHistory.length();
+    styledHistory.append(speaker);
+    styledHistory.setSpan(new StyleSpan(Typeface.BOLD),labelStart,
+      styledHistory.length(),Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+    styledHistory.append(": ");
+    if("AI".equals(speaker))styledHistory.append(ChatMarkdownFormatter.render(message));
+    else styledHistory.append(message);
+    styledHistory.append("\n\n");
+    transcript.setText(styledHistory);
     chatScroll.post(()->chatScroll.fullScroll(android.view.View.FOCUS_DOWN));
   }
   private void setStatus(String content){
@@ -212,8 +284,13 @@ public final class AiChatActivity extends Activity {
         status.setText(content);
     });
   }
+  @Override protected void onStop(){
+    if(speech!=null)speech.stop();
+    super.onStop();
+  }
   @Override protected void onDestroy(){
     closing=true;
+    if(speech!=null)speech.close();
     ++requestGeneration;
     consent=false;
     cloud.clear();

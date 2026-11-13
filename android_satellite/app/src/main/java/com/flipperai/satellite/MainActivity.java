@@ -283,9 +283,26 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     advancedButton("Check AI BLE channel",()->{
       if(!permissions())return;
       showStatus(transports.isReady()
-          ? "AI GATT connected; Flipper must initiate HELLO by notification"
+          ? "AI GATT transport ready; HELLO/ASK exchange must still be verified on the Flipper"
           : ble.hasStockRpc() ? "Stock Momentum RPC detected. Indications: "+(ble.isStockRpcSubscribed()?"enabled":"not enabled")+". Received: "+ble.stockRpcNotificationCount()+". AI bridge not installed."
           : "No authorized AI GATT or stock Momentum RPC session.");
+    });
+    advancedButton("Copy BLE hardware test report",()->{
+      // No MAC addresses, tokens, device IDs or user prompts are included.
+      String summary="Flipper AI BLE hardware test (phone-side snapshot)\n"
+        +"AI GATT transport: "+(transports.isReady()?"READY (HELLO/ASK not confirmed)":"NOT READY")+"\n"
+        +"Stock Momentum RPC: "+(ble.hasStockRpc()?"DETECTED":"NOT DETECTED")+"\n"
+        +"RPC indications: "+(ble.isStockRpcSubscribed()?"ENABLED":"NOT ENABLED")+"\n"
+        +"RPC notifications received: "+ble.stockRpcNotificationCount()+"\n"
+        +"Offline model file: "+(EmbeddedModelStore.installed(this)?"IMPORTED":"NOT IMPORTED")+"\n"
+        +"Note: model file presence does not prove live AI inference.\n"
+        +"Dedicated AI BLE and protocol must be tested on physical custom Momentum firmware.";
+      android.content.ClipboardManager clipboard=
+        (android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+      if(clipboard!=null){
+        clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Flipper AI BLE test",summary));
+        showStatus("Bluetooth test report copied. Paste it into the project chat.");
+      } else showStatus("Android clipboard unavailable.");
     });
     TextView caveat=new TextView(this);
     caveat.setText("Momentum functions remain on Flipper. Full offline AI uses an imported embedded .litertlm model or your optional localhost model server. Without a working model, diagnostic rules remain available. Cloud AI always requires opt-in.");
