@@ -23,8 +23,10 @@ public final class ModelsActivity extends Activity {
     status.setPadding(0,SatelliteUi.dp(this,7),0,SatelliteUi.dp(this,14));
     page.addView(status);
     TextView instructions=SatelliteUi.text(this,
-      "Supported: Qwen3-0.6B.litertlm (~586 MB INT8). Other .litertlm exports may not be compatible. "+
-      "The dynamic INT4 file requires a newer runtime. Download model weights separately, then import using Android Files.",
+      "Import a .litertlm model directly or a ZIP containing exactly one .litertlm model plus small README/LICENSE files. "+
+      "Import installs the model data—no APK rebuild or code compilation is needed. "+
+      "Compatible example: Qwen3-0.6B.litertlm (~586 MB INT8); other models may need a different runtime. "+
+      "The newer dynamic INT4 version requires a newer runtime.",
       14,SatelliteUi.MUTED,false);
     page.addView(instructions);
     SatelliteUi.gap(this,page,15);
@@ -33,7 +35,7 @@ public final class ModelsActivity extends Activity {
         Uri.parse("https://huggingface.co/litert-community/Qwen3-0.6B/tree/main"));
       startActivity(browser);
     });
-    SatelliteUi.action(this,page,"2  IMPORT .LITERTLM FILE",()->{
+    SatelliteUi.action(this,page,"2  IMPORT .LITERTLM OR MODEL ZIP",()->{
       Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
       picker.addCategory(Intent.CATEGORY_OPENABLE);
       picker.setType("*/*");
@@ -41,7 +43,7 @@ public final class ModelsActivity extends Activity {
     });
     SatelliteUi.action(this,page,"3  TEST LIVE OFFLINE AI",()->{
       if(!EmbeddedModelStore.installed(this)){
-        setStatus("No model imported. Choose a .litertlm file first.");return;
+        setStatus("No model imported. Choose a compatible .litertlm model or ZIP first.");return;
       }
       setStatus("Testing live on-device inference... This uses no cloud service.");
       worker.execute(()->{
@@ -80,12 +82,12 @@ public final class ModelsActivity extends Activity {
     super.onActivityResult(request,result,data);
     if(request!=PICK_MODEL||result!=RESULT_OK||data==null||data.getData()==null)return;
     Uri selected=data.getData();
-    setStatus("Importing model to private storage... Keep the app open.");
+    setStatus("Importing and validating model package locally... Existing model is preserved if import fails.");
     worker.execute(()->{
       try{
         model.clear();
         long bytes=EmbeddedModelStore.importFromDocument(this,selected);
-        setStatus("Imported "+(bytes/(1024L*1024L))+" MiB. Tap TEST LIVE OFFLINE AI to confirm it works.");
+        setStatus("Model installed ("+(bytes/(1024L*1024L))+" MiB). No APK compilation needed. Tap TEST LIVE OFFLINE AI to verify compatibility.");
       }catch(Exception e){
         setStatus("Import failed: "+e.getMessage()+
           (EmbeddedModelStore.installed(this)?". Previously imported model was preserved.":""));
