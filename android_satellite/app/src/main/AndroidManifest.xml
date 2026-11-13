@@ -12,7 +12,7 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
   <queries><intent><action android:name="android.speech.RecognitionService"/></intent></queries>
-  <application android:label="Flipper AI Satellite" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
+  <application android:label="Flipper AI Satellite" android:theme="@android:style/Theme.Material.NoActionBar" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
     <service android:name=".RadioPlayerService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
     <activity android:name=".PhoneCompanionActivity" android:exported="false"/>
     <activity android:name=".GitHubActivity" android:exported="false"/>
