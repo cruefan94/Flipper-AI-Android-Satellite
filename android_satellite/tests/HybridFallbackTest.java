@@ -41,6 +41,19 @@ public final class HybridFallbackTest {
       Thread.interrupted(); // clear the test thread's interrupt state
     }
     check(cancelled && calls[0] == 0 && calls[1] == 0);
+    final int[] readinessCalls = new int[3];
+    InferenceRouter.OfflineEngine interruptedReady = new InferenceRouter.OfflineEngine() {
+      public boolean ready() { readinessCalls[0]++; Thread.currentThread().interrupt(); return true; }
+      public boolean supports(String prompt) { readinessCalls[1]++; return true; }
+      public String answer(String prompt) { readinessCalls[2]++; return "LOCAL"; }
+    };
+    boolean readinessCancelled = false;
+    try {
+      new InferenceRouter(interruptedReady, trackedCloud).ask("ready", InferenceRouter.Mode.HYBRID, true);
+    } catch (InterruptedException expected) { readinessCancelled = true; }
+    finally { Thread.interrupted(); }
+    check(readinessCancelled && readinessCalls[0] == 1 && readinessCalls[1] == 0
+      && readinessCalls[2] == 0 && calls[1] == 0);
     System.out.println("Hybrid fallback tests passed");
   }
 }
