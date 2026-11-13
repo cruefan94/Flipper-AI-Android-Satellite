@@ -43,7 +43,7 @@ public final class AiChatActivity extends Activity {
     frame.setFitsSystemWindows(true);getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);setContentView(frame);
     TextView title=label("AI ASSISTANT",22,cyan);frame.addView(title);
     status=label("OFFLINE • Independent model runtime not configured",13,Color.LTGRAY);frame.addView(status);
-    modelHint=label("Independent offline AI is preferred. Configure a local runtime in Model Setup. Gemini Nano is optional.",12,Color.LTGRAY);frame.addView(modelHint);
+    modelHint=label("AI MODEL: NOT INSTALLED. Open Model Setup to import a compatible .task model. Offline chat cannot work until a model loads.",12,Color.LTGRAY);frame.addView(modelHint);
     embedded=new EmbeddedModelEngine(getApplicationContext());
     try{nano=new NanoModelEngine();}catch(Throwable e){modelHint.setText("Gemini Nano initialization unavailable: "+e.getClass().getSimpleName());}
 
@@ -65,11 +65,11 @@ public final class AiChatActivity extends Activity {
     send=button(composer,"SEND",this::ask);
     LinearLayout tools=new LinearLayout(this);tools.setOrientation(LinearLayout.HORIZONTAL);frame.addView(tools);
     button(tools,"STOP",this::cancel);
-    button(tools,"MODEL SETUP",()->{boolean show=setupScroll.getVisibility()!=View.VISIBLE;setupScroll.setVisibility(show?View.VISIBLE:View.GONE);setup.setVisibility(show?View.VISIBLE:View.GONE);});
+    button(tools,"INSTALL / SELECT AI",()->{boolean show=setupScroll.getVisibility()!=View.VISIBLE;setupScroll.setVisibility(show?View.VISIBLE:View.GONE);setup.setVisibility(show?View.VISIBLE:View.GONE);});
     button(tools,"BACK",this::finish);
     setup=new LinearLayout(this);setup.setOrientation(LinearLayout.VERTICAL);setup.setVisibility(View.GONE);
     setupScroll=new ScrollView(this);setupScroll.setVisibility(View.GONE);setupScroll.addView(setup);frame.addView(setupScroll,new LinearLayout.LayoutParams(-1,0,0.8f));
-    TextView instructions=label("LOCAL AI SETUP: A compatible on-phone model server is required. This app does not install one. Enter a loopback URL and model ID only after installing a runtime. No cloud access is enabled here.",13,Color.LTGRAY);setup.addView(instructions);
+    TextView instructions=label("OFFLINE AI SETUP: Import a compatible MediaPipe .task model for the existing embedded runtime. GGUF weights alone are not runnable here. Automatic model download and LiteRT-LM integration are not available yet. Advanced users may configure a separate local loopback server below.",13,Color.LTGRAY);setup.addView(instructions);
     endpoint=new EditText(this);endpoint.setSingleLine(true);endpoint.setHint("http://127.0.0.1:8080/v1/chat/completions");endpoint.setTextColor(Color.WHITE);endpoint.setHintTextColor(Color.LTGRAY);setup.addView(endpoint);
     modelName=new EditText(this);modelName.setSingleLine(true);modelName.setHint("Local model ID (required)");modelName.setTextColor(Color.WHITE);modelName.setHintTextColor(Color.LTGRAY);setup.addView(modelName);
     android.content.SharedPreferences saved=getSharedPreferences(PREFS,MODE_PRIVATE);
