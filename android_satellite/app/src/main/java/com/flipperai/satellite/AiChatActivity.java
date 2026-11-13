@@ -21,7 +21,8 @@ public final class AiChatActivity extends Activity {
   private InferenceRouter router;
   private InferenceRouter.Mode mode=InferenceRouter.Mode.OFFLINE;
   private volatile boolean consent=false;
-  private TextView status,transcript;
+  private TextView status,transcript,voiceToggle;
+  private AiSpeech speech;
   private EditText prompt;
   private Button send;
   private ScrollView chatScroll;
@@ -49,6 +50,7 @@ public final class AiChatActivity extends Activity {
     status=SatelliteUi.text(this,"Offline AI • Checking imported model...",13,SatelliteUi.MUTED,false);
     status.setPadding(0,dp(4),0,dp(9));
     page.addView(status);
+    speech=new AiSpeech(this,this::setStatus);
 
     LinearLayout navigation=new LinearLayout(this);
     navigation.setOrientation(LinearLayout.HORIZONTAL);
@@ -60,6 +62,17 @@ public final class AiChatActivity extends Activity {
     smallAction(navigation,"MODE",this::chooseMode);
     smallAction(navigation,"CLOUD",this::cloudSettings);
     smallAction(navigation,"MODELS",()->startActivity(new Intent(this,ModelsActivity.class)));
+
+    LinearLayout voiceControls=new LinearLayout(this);
+    voiceControls.setOrientation(LinearLayout.HORIZONTAL);
+    page.addView(voiceControls);
+    voiceToggle=smallAction(voiceControls,speech.enabled()?"VOICE ON":"VOICE OFF",()->{
+      speech.setEnabled(!speech.enabled());
+      voiceToggle.setText(speech.enabled()?"VOICE ON":"VOICE OFF");
+      setStatus(speech.enabled()?"Spoken AI replies enabled":"Spoken AI replies muted");
+    });
+    smallAction(voiceControls,"CHOOSE VOICE",()->speech.pickVoice(this));
+    smallAction(voiceControls,"STOP",()->speech.stop());
 
     chatScroll=new ScrollView(this);
     chatScroll.setFillViewport(true);
@@ -81,6 +94,7 @@ public final class AiChatActivity extends Activity {
     smallAction(actions,"BATTERY",()->prompt.setText("battery diagnostics"));
     smallAction(actions,"CLEAR",()->{
       ++requestGeneration;
+      speech.stop();
       history.setLength(0);
       transcript.setText("Conversation cleared.");
     });
@@ -162,7 +176,7 @@ public final class AiChatActivity extends Activity {
       }catch(Exception e){setStatus("Embedded AI unavailable: "+e.getMessage());}
     });
   }
-  private void smallAction(LinearLayout row,String label,Runnable callback){
+  private TextView smallAction(LinearLayout row,String label,Runnable callback){
     TextView item=SatelliteUi.text(this,label,12,SatelliteUi.ORANGE,true);
     item.setGravity(Gravity.CENTER);
     item.setPadding(dp(6),dp(12),dp(6),dp(12));
@@ -171,6 +185,7 @@ public final class AiChatActivity extends Activity {
     lp.setMargins(dp(1),0,dp(1),0);
     row.addView(item,lp);
     item.setOnClickListener(v->callback.run());
+    return item;
   }
   private void chooseMode(){
     String[] choices={"OFFLINE • on this phone","HYBRID • offline then allowed cloud","ONLINE • requires cloud permission"};
@@ -234,6 +249,7 @@ public final class AiChatActivity extends Activity {
         if(closing)return;
         if(generation==requestGeneration && (!approved||consent)){
           append("AI",answer);
+          speech.speak(answer);
           setStatus(requestedMode+" • Response complete");
         }else setStatus("Old response discarded due to changed settings.");
         busy=false;send.setEnabled(true);
@@ -252,8 +268,13 @@ public final class AiChatActivity extends Activity {
         status.setText(content);
     });
   }
+  @Override protected void onStop(){
+    if(speech!=null)speech.stop();
+    super.onStop();
+  }
   @Override protected void onDestroy(){
     closing=true;
+    if(speech!=null)speech.close();
     ++requestGeneration;
     consent=false;
     cloud.clear();
