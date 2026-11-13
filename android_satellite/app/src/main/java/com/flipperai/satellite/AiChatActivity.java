@@ -193,10 +193,20 @@ public final class AiChatActivity extends Activity {
     return item;
   }
   private void chooseMode(){
+    // Display order differs from Mode enum order: map choices explicitly.
     String[] choices={"OFFLINE • on this phone","HYBRID • offline then allowed cloud","ONLINE • requires cloud permission"};
+    final InferenceRouter.Mode[] choiceModes={
+      InferenceRouter.Mode.OFFLINE,InferenceRouter.Mode.HYBRID,InferenceRouter.Mode.ONLINE
+    };
+    int selected=mode==InferenceRouter.Mode.HYBRID?1:mode==InferenceRouter.Mode.ONLINE?2:0;
     new android.app.AlertDialog.Builder(this).setTitle("AI processing mode")
-      .setSingleChoiceItems(choices,mode.ordinal(),(dialog,which)->{
-        mode=InferenceRouter.Mode.values()[which];
+      .setSingleChoiceItems(choices,selected,(dialog,which)->{
+        InferenceRouter.Mode chosen=choiceModes[which];
+        if(mode!=chosen) {
+          ++requestGeneration; // Invalidate any response from the previous mode.
+          cloud.revokeActive(); // Disconnect a previous cloud request without clearing consent.
+        }
+        mode=chosen;
         setStatus(mode+" • Cloud "+(consent?"allowed":"disabled"));
         dialog.dismiss();
       }).setNegativeButton("CANCEL",null).show();
@@ -242,20 +252,30 @@ public final class AiChatActivity extends Activity {
     busy=true;send.setEnabled(false);
     setStatus("Processing "+requestedMode+" request...");
     worker.execute(()->{
-      String result;
+      String result, completionStatus;
       try{
         if(requestedMode==InferenceRouter.Mode.OFFLINE && !embedded.ready()
             && !new OfflineDiagnosticEngine().supports(question))
           throw new IllegalStateException("Import a compatible model for general questions.");
-        result=router.ask(question,requestedMode,approved);
-      }catch(Exception e){result="AI unavailable: "+e.getMessage();}
+        InferenceRouter.Reply reply=router.askWithSource(question,requestedMode,approved);
+        result=reply.text;
+        if(reply.source==InferenceRouter.Source.OFFLINE_FALLBACK)
+          completionStatus="HYBRID • Cloud unavailable • On-device fallback";
+        else if(reply.source==InferenceRouter.Source.ONLINE)
+          completionStatus=requestedMode+" • Cloud response complete";
+        else completionStatus=requestedMode+" • On-device response complete";
+      }catch(Exception e){
+        result="AI unavailable: "+e.getMessage();
+        completionStatus=requestedMode+" • Request failed";
+      }
       final String answer=result;
+      final String finalStatus=completionStatus;
       runOnUiThread(()->{
         if(closing)return;
         if(generation==requestGeneration && (!approved||consent)){
           append("AI",answer);
           speech.speak(ChatMarkdownFormatter.plainSpeech(answer));
-          setStatus(requestedMode+" • Response complete");
+          setStatus(finalStatus);
         }else setStatus("Old response discarded due to changed settings.");
         busy=false;send.setEnabled(true);
       });
