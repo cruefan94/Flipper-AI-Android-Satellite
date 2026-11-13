@@ -74,6 +74,28 @@ public final class SatelliteCoreTest {
     SatelliteRequestHandler handler=new SatelliteRequestHandler(router);
     String ping=handler.handle(SatelliteProtocol.encode("PING",2,""),180);
     check(SatelliteProtocol.decode(ping)[1].equals("PONG"),"ping");
+    // Rejected handshakes must not establish a session or consume request IDs.
+    ProtocolSession handshakeRecovery=new ProtocolSession();
+    String badHello=handshakeRecovery.dispatch(
+      SatelliteProtocol.encode("HELLO",11,"wrong-version"),180,handler);
+    check(SatelliteProtocol.decode(badHello)[3].equals("BAD_VERSION"),
+      "unsupported HELLO rejected");
+    check(!handshakeRecovery.helloSeen(),"invalid HELLO cannot open session");
+    String correctedHello=handshakeRecovery.dispatch(
+      SatelliteProtocol.encode("HELLO",11,"flipper-v1"),180,handler);
+    check(correctedHello!=null &&
+      SatelliteProtocol.decode(correctedHello)[1].equals("HELLO_ACK"),
+      "corrected HELLO accepted with same request ID");
+    String duplicateHello=handshakeRecovery.dispatch(
+      SatelliteProtocol.encode("HELLO",12,"flipper-v1"),180,handler);
+    check(SatelliteProtocol.decode(duplicateHello)[3].equals("ALREADY_CONNECTED"),
+      "duplicate HELLO rejected");
+    handshakeRecovery.reset();
+    check(!handshakeRecovery.helloSeen(),"disconnect clears handshake");
+    String freshHello=handshakeRecovery.dispatch(
+      SatelliteProtocol.encode("HELLO",1,"flipper-v1"),180,handler);
+    check(freshHello!=null && SatelliteProtocol.decode(freshHello)[1].equals("HELLO_ACK"),
+      "reconnect accepts fresh request ID sequence");
     ProtocolSession s=new ProtocolSession();
     String rejected=s.dispatch(SatelliteProtocol.encode("ASK",3,"battery"),180,handler);
     check(SatelliteProtocol.decode(rejected)[3].equals("HELLO_REQUIRED"),"handshake required");
