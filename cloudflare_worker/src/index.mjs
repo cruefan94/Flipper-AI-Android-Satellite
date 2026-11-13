@@ -106,7 +106,7 @@ export default {
       return respond(400, { error: "invalid_message" });
     }
 
-    const model = typeof env.GEMINI_MODEL === "string" ? env.GEMINI_MODEL : "gemini-2.5-flash";
+    const model = typeof env.GEMINI_MODEL === "string" ? env.GEMINI_MODEL : "gemini-3.5-flash-lite";
     if (!/^gemini-[a-z0-9.-]{1,64}$/.test(model)) {
       return respond(503, { error: "invalid_model_configuration" });
     }
@@ -123,7 +123,7 @@ export default {
           },
           body: JSON.stringify({
             contents: [{ role: "user", parts: [{ text: message }] }],
-            generationConfig: { maxOutputTokens: 512, temperature: 0.5 },
+            generationConfig: { maxOutputTokens: 1024 },
           }),
           signal: AbortSignal.timeout(30000),
         }
@@ -133,8 +133,17 @@ export default {
     }
 
     if (!upstream.ok) {
-      // Never forward provider error bodies, which may contain sensitive details.
-      return respond(502, { error: "ai_provider_error" });
+      // Never forward provider response bodies, which may contain sensitive data.
+      // Return only a fixed classification so callers can troubleshoot safely.
+      const category = ({
+        400: "ai_provider_bad_request",
+        401: "ai_provider_key_invalid",
+        403: "ai_provider_access_denied",
+        404: "ai_provider_model_unavailable",
+        429: "ai_provider_quota_or_rate_limit",
+        503: "ai_provider_overloaded",
+      })[upstream.status] || "ai_provider_error";
+      return respond(502, { error: category });
     }
 
     try {
