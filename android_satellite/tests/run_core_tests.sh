@@ -12,6 +12,8 @@ javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridFallbackTest.j
 java -cp "$DEST" HybridFallbackTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridRoutingSourceTest.java"
 java -cp "$DEST" HybridRoutingSourceTest
+javac -cp "$DEST" -d "$DEST" "$SRC/PhoneFacts.java" "$ROOT/android_satellite/tests/PhoneFactsTest.java"
+java -cp "$DEST" PhoneFactsTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/DiagnosticReadinessCancellationTest.java"
 java -cp "$DEST" DiagnosticReadinessCancellationTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/OfflineReadinessCancellationTest.java"
