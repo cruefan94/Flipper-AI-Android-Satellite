@@ -41,10 +41,37 @@ jobs:
           java -version
           gradle --version
           sdkmanager --list_installed
+      - name: Prepare optional persistent signing key
+        env:
+          SATELLITE_KEYSTORE_B64: ${{ secrets.SATELLITE_KEYSTORE_B64 }}
+          SATELLITE_KEYSTORE_PASSWORD: ${{ secrets.SATELLITE_KEYSTORE_PASSWORD }}
+          SATELLITE_KEY_ALIAS: ${{ secrets.SATELLITE_KEY_ALIAS }}
+          SATELLITE_KEY_PASSWORD: ${{ secrets.SATELLITE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$SATELLITE_KEYSTORE_B64" ]; then
+            echo "::warning::Persistent signing not configured. This APK may not install over previous CI debug builds."
+          else
+            if [ -z "$SATELLITE_KEYSTORE_PASSWORD" ] || [ -z "$SATELLITE_KEY_ALIAS" ] || [ -z "$SATELLITE_KEY_PASSWORD" ]; then
+              echo "::error::Persistent signing requires all four GitHub Actions signing secrets."
+              exit 1
+            fi
+            umask 077
+            printf '%s' "$SATELLITE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/satellite-signing.jks"
+            echo "SATELLITE_KEYSTORE_FILE=$RUNNER_TEMP/satellite-signing.jks" >> "$GITHUB_ENV"
+            echo "Persistent signing certificate loaded from GitHub Actions secrets."
+          fi
       - name: Build debug APK
-        run: gradle -p android_satellite --no-daemon --stacktrace :app:assembleDebug
-      - name: Verify APK exists
-        run: test -s android_satellite/app/build/outputs/apk/debug/app-debug.apk
+        env:
+          SATELLITE_KEYSTORE_PASSWORD: ${{ secrets.SATELLITE_KEYSTORE_PASSWORD }}
+          SATELLITE_KEY_ALIAS: ${{ secrets.SATELLITE_KEY_ALIAS }}
+          SATELLITE_KEY_PASSWORD: ${{ secrets.SATELLITE_KEY_PASSWORD }}
+        run: gradle -p android_satellite --no-daemon --stacktrace -PsatelliteVersionCode=${{ github.run_number }} :app:assembleDebug
+      - name: Verify APK exists and increasing versionCode
+        run: |
+          APK=android_satellite/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "name='com.flipperai.satellite' versionCode='${{ github.run_number }}'"
       - name: Give APK a unique download filename
         run: |
           SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-8)"
