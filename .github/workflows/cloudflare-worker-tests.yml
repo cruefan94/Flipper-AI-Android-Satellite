@@ -1,0 +1,27 @@
+name: Cloudflare Worker contract tests
+
+on:
+  push:
+    branches:
+      - main
+      - feature/cloudflare-gemini-worker-v01
+    paths:
+      - 'cloudflare_worker/**'
+      - '.github/workflows/cloudflare-worker-tests.yml'
+  pull_request:
+    paths:
+      - 'cloudflare_worker/**'
+      - '.github/workflows/cloudflare-worker-tests.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Worker protocol and security checks
+        run: node --test cloudflare_worker/test/*.test.mjs
