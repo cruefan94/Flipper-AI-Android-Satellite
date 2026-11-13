@@ -36,6 +36,8 @@ public final class AiChatActivity extends Activity {
   // Compact only once when the keyboard opens/closes; never per keystroke.
   private View[] keyboardHideable;
   private boolean keyboardCompact=false;
+  private boolean toolsExpanded=false;
+  private LinearLayout toolsPanel;
   private final StringBuilder history=new StringBuilder();
   private final SpannableStringBuilder styledHistory=new SpannableStringBuilder();
   private boolean busy=false;
@@ -90,12 +92,28 @@ public final class AiChatActivity extends Activity {
       finish();
     });
     smallAction(navigation,"MODE",this::chooseMode);
-    smallAction(navigation,"CLOUD",this::cloudSettings);
-    smallAction(navigation,"MODELS",()->startActivity(new Intent(this,ModelsActivity.class)));
+    smallAction(navigation,"TOOLS",()->{
+      toolsExpanded=!toolsExpanded;
+      toolsPanel.setVisibility(toolsExpanded && !keyboardCompact?View.VISIBLE:View.GONE);
+      setStatus(toolsExpanded?"Extra chat controls expanded.":"Extra chat controls collapsed.");
+    });
+
+    // Advanced controls are in one optional section, not permanently stacked
+    // above the conversation. Keep the microphone on the main screen.
+    toolsPanel=SatelliteUi.column(this);
+    toolsPanel.setVisibility(View.GONE);
+    page.addView(toolsPanel);
+    LinearLayout cloudControls=new LinearLayout(this);
+    cloudControls.setOrientation(LinearLayout.HORIZONTAL);
+    toolsPanel.addView(cloudControls);
+    smallAction(cloudControls,"CLOUD",this::cloudSettings);
+    smallAction(cloudControls,"MODELS",()->startActivity(new Intent(this,ModelsActivity.class)));
+    TextView toolsLabel=SatelliteUi.text(this,"VOICE & CHAT TOOLS",12,SatelliteUi.MUTED,true);
+    toolsPanel.addView(toolsLabel);
 
     LinearLayout voiceControls=new LinearLayout(this);
     voiceControls.setOrientation(LinearLayout.HORIZONTAL);
-    page.addView(voiceControls);
+    toolsPanel.addView(voiceControls);
     voiceToggle=smallAction(voiceControls,speech.enabled()?"VOICE ON":"VOICE OFF",()->{
       speech.setEnabled(!speech.enabled());
       voiceToggle.setText(speech.enabled()?"VOICE ON":"VOICE OFF");
@@ -117,6 +135,8 @@ public final class AiChatActivity extends Activity {
     chatScroll=new ScrollView(this);
     chatScroll.setFillViewport(true);
     chatScroll.setSmoothScrollingEnabled(false);
+    // Keep the message pane from grabbing keyboard focus on typing updates.
+    chatScroll.setFocusable(false);
     chatScroll.setBackground(SatelliteUi.panel(this,false));
     transcript=SatelliteUi.text(this,"Welcome to Flipper AI. Import an offline model under MODELS for full AI chat. Without a model, supported hardware diagnostics still work.",15,SatelliteUi.WHITE,false);
     transcript.setPadding(dp(14),dp(14),dp(14),dp(14));
@@ -130,7 +150,7 @@ public final class AiChatActivity extends Activity {
 
     LinearLayout actions=new LinearLayout(this);
     actions.setOrientation(LinearLayout.HORIZONTAL);
-    page.addView(actions);
+    toolsPanel.addView(actions);
     smallAction(actions,"BLE HELP",()->prompt.setText("Explain BLE"));
     smallAction(actions,"BATTERY",()->prompt.setText("battery diagnostics"));
     smallAction(actions,"CLEAR",()->{
@@ -193,8 +213,7 @@ public final class AiChatActivity extends Activity {
     sendLp.leftMargin=dp(10);
     composer.addView(send,sendLp);
     send.setOnClickListener(v->ask());
-    keyboardHideable=new View[]{title,navigation,voiceControls,
-      microphoneControls,microphoneHint,actions};
+    keyboardHideable=new View[]{title,navigation,microphoneControls,microphoneHint};
     applyChatWindowInsets(page);
     // The parent owns initial focus until the user explicitly taps the composer.
     page.requestFocus();
@@ -230,6 +249,8 @@ public final class AiChatActivity extends Activity {
           keyboardCompact=compact;
           for(View control:keyboardHideable)
             control.setVisibility(compact?View.GONE:View.VISIBLE);
+          if(toolsPanel!=null)
+            toolsPanel.setVisibility(!compact && toolsExpanded?View.VISIBLE:View.GONE);
         }
       }
       int nextTop=top+Math.max(0,safeTop);
