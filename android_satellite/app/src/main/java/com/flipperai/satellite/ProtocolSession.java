@@ -19,9 +19,12 @@ public final class ProtocolSession {
         if(fields[1].equals("HELLO")) {
             if(helloSeen)return handler.error(id,"ALREADY_CONNECTED",maxFrameBytes);
             if(!fields[3].equals("flipper-v1"))return handler.error(id,"BAD_VERSION",maxFrameBytes);
+            String acknowledgement=handler.handle(frame,maxFrameBytes);
+            // Commit handshake state only after the ACK can actually be sent.
+            if(acknowledgement==null)return null;
             helloSeen=true;
             lastRequestId=id;
-            return handler.handle(frame,maxFrameBytes);
+            return acknowledgement;
         }
         if(!helloSeen)return handler.error(id,"HELLO_REQUIRED",maxFrameBytes);
         if(id<=lastRequestId)return handler.error(id,"REPLAY_ID",maxFrameBytes);
