@@ -7,6 +7,8 @@ public final class OfflineModelOrDiagnostics implements InferenceRouter.OfflineE
   private final LocalModelEngine model;
   private final OfflineDiagnosticEngine diagnostic;
   public OfflineModelOrDiagnostics(LocalModelEngine model,OfflineDiagnosticEngine diagnostic){
+    if(model==null || diagnostic==null)
+      throw new IllegalArgumentException("Local model and diagnostic fallback are required");
     this.model=model;this.diagnostic=diagnostic;
   }
   @Override public boolean ready(){return true;}
