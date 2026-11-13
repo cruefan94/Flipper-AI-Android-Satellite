@@ -46,19 +46,7 @@ public final class RadioScannerActivity extends Activity {
     title(root,"QUICK RADIO CATEGORIES");
     label(root,"Browse public online listings by category. Broadcast results are not guaranteed live; scanner feeds require authorized providers.");
     Spinner quickCategory=spinner(root,new String[]{"AM radio","FM radio","News / talk","Music","Weather","Police feeds","Fire feeds","Ham / amateur","CB radio","Aircraft"});
-    button(root,"BROWSE CATEGORY",()->{
-      int choice=quickCategory.getSelectedItemPosition();
-      if(choice>=5){
-        status.setText("No verified playable "+quickCategory.getSelectedItem()+" directory is bundled. Add a lawful HTTPS audio feed as a favorite; a frequency alone cannot play on the phone.");
-        return;
-      }
-      directoryName.setText("");
-      directoryCountry.setText("Canada");
-      directoryCategory.setSelection(choice==2?1:choice==3?3:choice==4?9:0);
-      if(choice==0)directoryName.setText("AM");
-      if(choice==1)directoryName.setText("FM");
-      findOnline();
-    });
+    button(root,"BROWSE CATEGORY",()->browseCategory(quickCategory.getSelectedItemPosition()));
     title(root,"FIND ONLINE RADIO STATIONS");
     label(root,"Search public stations by name and optional country. Uses the public Radio Browser directory; station availability and provider permissions are not guaranteed.");
     directoryName=edit(root,"Station name (e.g. jazz, rock, CBC)");
@@ -100,6 +88,8 @@ public final class RadioScannerActivity extends Activity {
     label(root,"Not connected to an authenticated radio-control protocol. Radio playback works independently of Flipper. No signal-strength reading without an SDR receiver.");
     button(root,"BACK",()->finish());
     load();refresh();refreshRecent();
+    int quick=getIntent().getIntExtra("quick_category",-1);
+    if(quick>=0&&quick<=7){int[] mapping={0,1,5,6,7,8,9,4};quickCategory.setSelection(mapping[quick]);browseCategory(mapping[quick]);}
     receiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent intent){
       String state=intent.getStringExtra(RadioPlayerService.STATUS);
       String station=intent.getStringExtra(RadioPlayerService.NAME);
@@ -109,10 +99,20 @@ public final class RadioScannerActivity extends Activity {
     registerReceiver(receiver,new IntentFilter(RadioPlayerService.UPDATE),Context.RECEIVER_NOT_EXPORTED);
     send("status",null,null);
   }
-  private void findOnline(){
+  private void browseCategory(int choice){
+    String[] names={"AM","FM","","","","","","","",""};
+    String[] tags={"","","news","music","weather","police","fire","ham","cb","aviation"};
+    directoryName.setText(names[Math.max(0,Math.min(choice,9))]);
+    directoryCountry.setText("Canada");
+    directoryCategory.setSelection(0);
+    if(choice>=5)status.setText("Searching public internet broadcasts tagged "+tags[choice]+". These are NOT verified live scanner feeds.");
+    findOnlineWithTag(tags[choice]);
+  }
+  private void findOnline(){findOnlineWithTag(null);}
+  private void findOnlineWithTag(String presetTag){
     if(source.getSelectedItemPosition()!=0){status.setText("Select ONLINE STREAMS before browsing.");return;}
     String query=directoryName.getText().toString().trim(),countryName=directoryCountry.getText().toString().trim();
-    String tag=directoryCategory.getSelectedItemPosition()==0?"":directoryCategory.getSelectedItem().toString().toLowerCase(Locale.ROOT);
+    String tag=presetTag!=null?presetTag:(directoryCategory.getSelectedItemPosition()==0?"":directoryCategory.getSelectedItem().toString().toLowerCase(Locale.ROOT));
     if(query.isEmpty()&&countryName.isEmpty()&&tag.isEmpty()){status.setText("Enter a station name, country or category to search.");return;}
     status.setText("Searching public station directory...");
     RadioStationDirectory.search(query,countryName,tag,(entries,error)->runOnUiThread(()->{
