@@ -75,6 +75,18 @@ public final class SatelliteCoreTest {
       InferenceRouter.Mode.ONLINE,true).equals("CLOUD"),
       "maximum permitted prompt remains accepted");
     unexpectedCloudCalls[0]=0;
+    for (String malformedPrompt : new String[]{"bad\\uD83D", "bad\\uDD0A", "\\uDD0A\\uD83D"}) {
+      for (InferenceRouter.Mode testMode : InferenceRouter.Mode.values()) {
+        boolean malformedRejected=false;
+        try { nullModeRouter.ask(malformedPrompt,testMode,true); }
+        catch (IllegalArgumentException expected) { malformedRejected=true; }
+        check(malformedRejected && unexpectedCloudCalls[0]==0,
+          "malformed prompt Unicode must not reach cloud in "+testMode);
+      }
+    }
+    check(nullModeRouter.ask("valid \\uD83D\\uDD0A",InferenceRouter.Mode.ONLINE,true).equals("CLOUD"),
+      "valid supplementary Unicode prompt accepted");
+    unexpectedCloudCalls[0]=0;
     boolean missingModeRejected=false;
     try{nullModeRouter.ask("private prompt",null,true);}
     catch(IllegalArgumentException expected){missingModeRejected=true;}
