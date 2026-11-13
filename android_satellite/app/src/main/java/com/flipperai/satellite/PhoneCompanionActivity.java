@@ -50,7 +50,7 @@ public final class PhoneCompanionActivity extends Activity {
       sb.append("Transport: ").append(caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)?"Wi-Fi":caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)?"Cellular":caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)?"Ethernet":"Other").append("\n");
     }
     sb.append("Voice: available through the Satellite Voice controls\n");
-    sb.append("Radio: available through the Radio Scanner screen\n");
+    sb.append("Radio Scanner: deferred until the core AI build is complete\n");
     sb.append("Flipper button control: not authenticated/verified\n");
     sb.append("GitHub authorization: not linked; optional\n");
     status.setText(sb.toString());
