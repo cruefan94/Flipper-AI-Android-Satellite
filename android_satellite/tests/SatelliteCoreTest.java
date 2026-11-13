@@ -197,6 +197,28 @@ public final class SatelliteCoreTest {
     String overflowReply=unsignedSession.dispatch(overflowFrame,180,handler);
     check(SatelliteProtocol.decode(overflowReply)[3].equals("BAD_ID"),"decode rejects uint32 overflow");
 
+    // An interrupted BLE inference must not emit a misleading ENGINE_UNAVAILABLE
+    // response or permit hybrid escalation to the online engine.
+    final int[] cloudCallsAfterCancellation={0};
+    InferenceRouter.OfflineEngine interruptedLocal=new InferenceRouter.OfflineEngine(){
+      public boolean ready(){return true;}
+      public String answer(String prompt) throws Exception {throw new InterruptedException("cancelled");}
+      public String answerForHybrid(String prompt) throws Exception {throw new InterruptedException("cancelled");}
+    };
+    InferenceRouter.OnlineEngine countingCloud=new InferenceRouter.OnlineEngine(){
+      public boolean ready(){return true;}
+      public String answer(String prompt){cloudCallsAfterCancellation[0]++;return "CLOUD";}
+    };
+    SatelliteRequestHandler cancelledHandler=new SatelliteRequestHandler(
+      new InferenceRouter(interruptedLocal,countingCloud));
+    cancelledHandler.configure(InferenceRouter.Mode.HYBRID,true);
+    String cancelledFrame=cancelledHandler.handle(
+      SatelliteProtocol.encode("ASK",19,"battery"),180);
+    check(cancelledFrame==null,"cancelled BLE request must not produce an answer");
+    check(Thread.currentThread().isInterrupted(),"BLE cancellation preserves interrupt flag");
+    check(cloudCallsAfterCancellation[0]==0,"cancelled BLE request must not reach cloud");
+    Thread.interrupted(); // clear test-thread flag before remaining tests
+
     System.out.println("Satellite core tests passed");
   }
 }
