@@ -50,15 +50,12 @@ public final class RadioScannerActivity extends Activity {
     button(root,"FIND STATIONS ONLINE",()->findOnline());
     button(root,"BROWSE CANADIAN STATIONS",()->{directoryCountry.setText("Canada");directoryName.setText("");findOnline();});
     directoryCategory=spinner(root,new String[]{"All broadcast categories","News","Talk","Music","Jazz","Rock","Classical","Country","Weather"});
-    button(root,"BROWSE CATEGORY ONLINE",()->{if(directoryName.getText().toString().trim().isEmpty())directoryName.setText("");findOnline();});
     button(root,"CLEAR ONLINE SEARCH",()->{directoryName.setText("");directoryCountry.setText("");directoryCategory.setSelection(0);status.setText("Search filters cleared.");});
     directoryResults=spinner(root,new String[]{"Search online to find stations"});
-    button(root,"USE SELECTED STATION",()->selectDirectoryStation(false));
-    button(root,"PLAY SELECTED ONLINE STATION",()->selectDirectoryStation(true));
+    button(root,"PLAY STATION",()->selectDirectoryStation(true));
     label(root,"Favorites below are saved on your phone. Only stations with an HTTPS audio stream are shown.");
     category=spinner(root,CATEGORIES);
     search=edit(root,"Search saved stations by name, category or location keyword");
-    button(root,"SEARCH SAVED STATIONS",()->refresh());
     stationList=spinner(root,new String[]{"No saved stations"});
     stationList.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
       public void onNothingSelected(android.widget.AdapterView<?> p){}
@@ -75,27 +72,17 @@ public final class RadioScannerActivity extends Activity {
     button(root,"REMOVE SELECTED FAVORITE",()->removeStation());
     button(root,"PLAY SELECTED OR ENTERED STREAM",()->play());
     button(root,"PAUSE",()->send("pause",null,null));
-    button(root,"RESUME",()->send("resume",null,null));
-    button(root,"RETRY LAST STREAM",()->{
-      if(recentStations.isEmpty()){status.setText("No previous stream to retry.");return;}
-      Station last=recentStations.get(0);name.setText(last.name);url.setText(last.url);play();
-    });
     button(root,"STOP",()->send("stop",null,null));
-    button(root,"ANDROID MEDIA VOLUME",()->{
-      AudioManager audio=(AudioManager)getSystemService(AUDIO_SERVICE);
-      if(audio!=null)audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,AudioManager.ADJUST_SAME,AudioManager.FLAG_SHOW_UI);
-    });
     title(root,"RECENTLY PLAYED");
     recentList=spinner(root,new String[]{"No recent streams"});
     button(root,"PLAY SELECTED RECENT STATION",()->playRecent());
-    button(root,"CLEAR RECENT HISTORY",()->{recentStations.clear();recent.clear();persist();refreshRecent();status.setText("Recent station history cleared.");});
     label(root,"If a stream fails: try Retry Last Stream, choose another result, or check the provider. Search results are not guaranteed live.");
     title(root,"AI RADIO INTELLIGENCE");
     ai=label(root,"Transcription and AI summaries are not enabled. No audio is recorded or uploaded. Actual audio capture and user consent must be implemented first.");
     button(root,"CHECK AI RADIO FEATURES",()->ai.setText("Unavailable: no authorized audio-capture/transcription pipeline or configured radio AI model. Playback is unaffected."));
     title(root,"FLIPPER BLE CONTROL");
     label(root,"Not connected to an authenticated radio-control protocol. Radio playback works independently of Flipper. No signal-strength reading without an SDR receiver.");
-    button(root,"BACK TO SATELLITE",()->finish());
+    button(root,"BACK",()->finish());
     load();refresh();refreshRecent();
     receiver=new BroadcastReceiver(){@Override public void onReceive(Context c,Intent intent){
       String state=intent.getStringExtra(RadioPlayerService.STATUS);
