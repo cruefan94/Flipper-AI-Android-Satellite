@@ -65,7 +65,7 @@ public final class DashboardActivity extends Activity {
     brand.setPadding(dp(16),dp(15),dp(16),dp(15));
     brand.setBackground(SatelliteUi.panel(this,true));
     brand.addView(text("◈  FLIPPER AI SATELLITE",27,SatelliteUi.ORANGE,true));
-    brand.addView(text("MOMENTUM • ANDROID AI COMPANION",13,SatelliteUi.WHITE,true));
+    brand.addView(text("MOMENTUM • ANDROID AI COMPANION • UI v0.7",13,SatelliteUi.WHITE,true));
     root.addView(brand);
     gap(root,14);
 
