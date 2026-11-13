@@ -16,6 +16,8 @@ javac -cp "$DEST" -d "$DEST" "$SRC/PhoneFacts.java" "$ROOT/android_satellite/tes
 java -cp "$DEST" PhoneFactsTest
 javac -cp "$DEST" -d "$DEST" "$SRC/ModelPackageExtractor.java" "$ROOT/android_satellite/tests/ModelPackageExtractorTest.java"
 java -cp "$DEST" ModelPackageExtractorTest
+javac -cp "$DEST" -d "$DEST" "$SRC/RadioStreamPolicy.java" "$ROOT/android_satellite/tests/RadioStreamPolicyTest.java"
+java -cp "$DEST" RadioStreamPolicyTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/DiagnosticReadinessCancellationTest.java"
 java -cp "$DEST" DiagnosticReadinessCancellationTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/OfflineReadinessCancellationTest.java"
