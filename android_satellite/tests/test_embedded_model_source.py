@@ -38,7 +38,7 @@ class EmbeddedModelSourceTests(unittest.TestCase):
         self.assertIn("oldEngine?.close()",ENGINE)
 
     def test_embedded_priority_and_cloud_consent_not_bypassed(self):
-        self.assertIn("embedded.ready()?embedded.answer(prompt):",PREFERRED)
+        self.assertIn("if(embedded.ready())return embedded.answer(prompt);",PREFERRED)
         self.assertIn("new EmbeddedOrLocalEngine(embeddedModel,localModel)",UI)
         self.assertIn('Verified LIVE embedded offline model response:',UI)
         self.assertIn('android:usesCleartextTraffic="false"',MANIFEST)
