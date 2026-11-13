@@ -123,14 +123,14 @@ public final class AiChatActivity extends Activity {
       }catch(Exception e){setStatus("Embedded AI unavailable: "+e.getMessage());}
     });
   }
-  private void smallAction(LinearLayout row,String label,Runnable action){
-    TextView action=SatelliteUi.text(this,label,12,SatelliteUi.ORANGE,true);
-    action.setGravity(Gravity.CENTER);
-    action.setPadding(dp(9),dp(12),dp(9),dp(12));
+  private void smallAction(LinearLayout row,String label,Runnable callback){
+    TextView item=SatelliteUi.text(this,label,12,SatelliteUi.ORANGE,true);
+    item.setGravity(Gravity.CENTER);
+    item.setPadding(dp(9),dp(12),dp(9),dp(12));
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);
     lp.setMargins(dp(1),0,dp(1),0);
-    row.addView(action,lp);
-    action.setOnClickListener(v->action.run());
+    row.addView(item,lp);
+    item.setOnClickListener(v->callback.run());
   }
   private void chooseMode(){
     String[] choices={"OFFLINE • on this phone","HYBRID • offline then allowed cloud","ONLINE • requires cloud permission"};
