@@ -205,12 +205,12 @@ public final class SatelliteCoreTest {
       public String answer(String prompt) throws Exception {throw new InterruptedException("cancelled");}
       public String answerForHybrid(String prompt) throws Exception {throw new InterruptedException("cancelled");}
     };
-    InferenceRouter.OnlineEngine countingCloud=new InferenceRouter.OnlineEngine(){
+    InferenceRouter.OnlineEngine cancellationCountingCloud=new InferenceRouter.OnlineEngine(){
       public boolean ready(){return true;}
       public String answer(String prompt){cloudCallsAfterCancellation[0]++;return "CLOUD";}
     };
     SatelliteRequestHandler cancelledHandler=new SatelliteRequestHandler(
-      new InferenceRouter(interruptedLocal,countingCloud));
+      new InferenceRouter(interruptedLocal,cancellationCountingCloud));
     cancelledHandler.configure(InferenceRouter.Mode.HYBRID,true);
     String cancelledFrame=cancelledHandler.handle(
       SatelliteProtocol.encode("ASK",19,"battery"),180);
