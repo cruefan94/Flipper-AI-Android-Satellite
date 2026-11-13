@@ -12,7 +12,7 @@ import android.widget.*;
 
 /** Unified dashboard shell. Existing BLE, voice and radio implementations remain in their activities. */
 public final class DashboardActivity extends Activity {
-  private static final int BG=Color.rgb(8,17,23), PANEL=Color.rgb(19,37,45), CYAN=Color.rgb(50,231,218), MUTED=Color.rgb(166,190,195);
+  private static final int BG=Color.rgb(10,12,16), PANEL=Color.rgb(28,32,39), CYAN=Color.rgb(255,151,22), MUTED=Color.rgb(191,198,206);
   private LinearLayout content;
   @Override public void onCreate(Bundle saved){
     super.onCreate(saved);
@@ -36,14 +36,14 @@ public final class DashboardActivity extends Activity {
   private void render(){
     content.removeAllViews();
     TextView brand=label("◈  FLIPPER AI SATELLITE",24,CYAN,true);content.addView(brand);
-    content.addView(label("Android AI Companion  •  Unified Dashboard",13,MUTED,false));
+    content.addView(label("ANDROID COMPANION  •  MOMENTUM",13,MUTED,false));
     space(20);
-    section("SYSTEM OVERVIEW");
-    card("FLIPPER ZERO", "Open BLE connection, paired-device discovery, RPC diagnostics and manual reconnect.",MainActivity.class);
+    section("CONTROL CENTER");
+    card("FLIPPER / BLE", "Pair or connect your Flipper. Momentum RPC connection does not mean AI is ready.",MainActivity.class);
     card("PHONE COMPANION", "Phone battery, charging, Bluetooth, Wi-Fi and internet connectivity.",PhoneCompanionActivity.class);
-    card("AI ASSISTANT", "Dedicated private on-phone text chat with optional local model.",AiChatActivity.class);
+    card("AI CHAT & MODELS", "Offline AI requires a compatible installed model. Open model setup inside chat.",AiChatActivity.class);
     card("VOICE ASSISTANT", "Working phone microphone and spoken AI responses. Cloud mode requires consent.",MainActivity.class);
-    card("RADIO SCANNER", "Find online stations, favorites, recent streams and media playback.",RadioScannerActivity.class);
+    card("RADIO SCANNER", "Browse broadcasts, favorites, recent stations and playable online streams.",RadioScannerActivity.class);
     card("GITHUB", "Public repositories, branches, commits, Actions and releases. Account linking not yet available.",GitHubActivity.class);
     space(12);
     section("CONNECTION & SECURITY");
@@ -53,14 +53,14 @@ public final class DashboardActivity extends Activity {
   }
   private void navButton(LinearLayout parent,String title,Class<?> screen){
     TextView v=label(title,11,screen==DashboardActivity.class?CYAN:Color.WHITE,true);
-    v.setGravity(Gravity.CENTER);v.setPadding(0,dp(16),0,dp(16));
-    parent.addView(v,new LinearLayout.LayoutParams(0,dp(55),1));
+    v.setGravity(Gravity.CENTER);v.setPadding(0,dp(12),0,dp(12));
+    parent.addView(v,new LinearLayout.LayoutParams(0,dp(54),1));
     v.setOnClickListener(w->open(screen));
   }
   private void section(String title){TextView t=label(title,15,CYAN,true);t.setPadding(0,dp(5),0,dp(10));content.addView(t);}
   private void card(String title,String subtitle,Class<?> screen){
     LinearLayout panel=new LinearLayout(this);panel.setOrientation(LinearLayout.VERTICAL);panel.setPadding(dp(16),dp(15),dp(16),dp(15));
-    GradientDrawable shape=new GradientDrawable();shape.setColor(PANEL);shape.setCornerRadius(dp(13));shape.setStroke(dp(1),Color.rgb(38,92,99));panel.setBackground(shape);
+    GradientDrawable shape=new GradientDrawable();shape.setColor(PANEL);shape.setCornerRadius(dp(13));shape.setStroke(dp(1),Color.rgb(129,81,28));panel.setBackground(shape);
     panel.addView(label(title+"  ›",17,Color.WHITE,true));panel.addView(label(subtitle,13,MUTED,false));
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);lp.bottomMargin=dp(10);content.addView(panel,lp);panel.setOnClickListener(v->open(screen));
   }
