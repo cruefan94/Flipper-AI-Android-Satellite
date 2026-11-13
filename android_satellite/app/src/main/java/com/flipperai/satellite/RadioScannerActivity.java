@@ -59,6 +59,18 @@ public final class RadioScannerActivity extends Activity {
     page.addView(status);
     description=SatelliteUi.text(this,"Play a stream to see its status.",14,SatelliteUi.WHITE,false);
     page.addView(description);
+    heading(page,"PLAYBACK");
+    LinearLayout playback=new LinearLayout(this);
+    playback.setOrientation(LinearLayout.HORIZONTAL);
+    page.addView(playback);
+    mediaButton(playback,"PAUSE RADIO",()->command("pause",null,null));
+    mediaButton(playback,"RESUME RADIO",()->command("resume",null,null));
+    mediaButton(playback,"STOP RADIO",()->command("stop",null,null));
+    SatelliteUi.action(this,page,"PHONE MEDIA VOLUME",()->{
+      AudioManager audio=(AudioManager)getSystemService(AUDIO_SERVICE);
+      if(audio!=null)audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
+        AudioManager.ADJUST_SAME,AudioManager.FLAG_SHOW_UI);
+    });
 
     SatelliteUi.gap(this,page,12);
     heading(page,"FIND ONLINE RADIO STATIONS");
@@ -86,16 +98,6 @@ public final class RadioScannerActivity extends Activity {
     favoriteCategory=spinner(page,CATEGORIES);
     SatelliteUi.action(this,page,"SAVE ENTERED STREAM",this::saveEntered);
 
-    SatelliteUi.gap(this,page,10);
-    heading(page,"PLAYBACK");
-    SatelliteUi.action(this,page,"PAUSE RADIO",()->command("pause",null,null));
-    SatelliteUi.action(this,page,"RESUME RADIO",()->command("resume",null,null));
-    SatelliteUi.action(this,page,"STOP RADIO",()->command("stop",null,null));
-    SatelliteUi.action(this,page,"PHONE MEDIA VOLUME",()->{
-      AudioManager audio=(AudioManager)getSystemService(AUDIO_SERVICE);
-      if(audio!=null)audio.adjustStreamVolume(AudioManager.STREAM_MUSIC,
-        AudioManager.ADJUST_SAME,AudioManager.FLAG_SHOW_UI);
-    });
     SatelliteUi.gap(this,page,8);
     body(page,"AM/FM here means internet streams, not direct AM/FM radio reception. "+
       "CB, fire and police are only playable if an authorized public internet feed is available. "+
@@ -116,8 +118,20 @@ public final class RadioScannerActivity extends Activity {
   }
 
   private void heading(LinearLayout page,String title){
-    TextView view=SatelliteUi.text(this,title,17,SatelliteUi.ORANGE,true);
-    page.addView(view);
+    SatelliteUi.sectionTitle(this,page,title);
+  }
+  private void mediaButton(LinearLayout row,String label,Runnable action){
+    TextView control=SatelliteUi.text(this,label.replace(" RADIO",""),13,SatelliteUi.WHITE,true);
+    control.setGravity(android.view.Gravity.CENTER);
+    control.setBackground(SatelliteUi.panel(this,false));
+    control.setMinHeight(SatelliteUi.dp(this,52));
+    control.setFocusable(true);
+    control.setClickable(true);
+    control.setContentDescription(label);
+    LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);
+    p.setMargins(SatelliteUi.dp(this,2),0,SatelliteUi.dp(this,2),SatelliteUi.dp(this,6));
+    row.addView(control,p);
+    control.setOnClickListener(v->action.run());
   }
   private void body(LinearLayout page,String text) {
     TextView v=SatelliteUi.text(this,text,13,SatelliteUi.MUTED,false);
@@ -131,6 +145,8 @@ public final class RadioScannerActivity extends Activity {
     e.setHintTextColor(SatelliteUi.MUTED);
     e.setHint(hint);
     e.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+    e.setFilters(new android.text.InputFilter[]{
+      new android.text.InputFilter.LengthFilter(2048)});
     page.addView(e);
     return e;
   }
