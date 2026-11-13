@@ -26,6 +26,9 @@ public final class SatelliteRequestHandler {
                 case "PING":return fit("PONG",id,"ok",maxFrameBytes);
                 case "ASK":
                     if(fields[3].trim().isEmpty())return fit("ERROR",id,"EMPTY_PROMPT",maxFrameBytes);
+                    // Never perform inference (especially cloud I/O) if even the
+                    // smallest ANSWER frame cannot fit the negotiated ATT value.
+                    if(fit("ANSWER",id,"",maxFrameBytes)==null)return null;
                     return fit("ANSWER",id,router.ask(fields[3],mode,cloudConsent),maxFrameBytes);
                 default:return fit("ERROR",id,"UNKNOWN_TYPE",maxFrameBytes);
             }
