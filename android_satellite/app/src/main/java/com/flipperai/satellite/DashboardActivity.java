@@ -7,6 +7,7 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.*;
 import android.view.*;
+import android.graphics.Insets;
 import android.widget.*;
 
 /** Unified dashboard shell. Existing BLE, voice and radio implementations remain in their activities. */
@@ -22,7 +23,15 @@ public final class DashboardActivity extends Activity {
     scroll.addView(content);frame.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
     LinearLayout nav=new LinearLayout(this);nav.setOrientation(LinearLayout.HORIZONTAL);nav.setBackgroundColor(PANEL);
     navButton(nav,"HOME",DashboardActivity.class);navButton(nav,"AI",AiChatActivity.class);navButton(nav,"FLIPPER",MainActivity.class);navButton(nav,"RADIO",RadioScannerActivity.class);
-    frame.addView(nav);setContentView(frame);render();
+    frame.addView(nav);setContentView(frame);
+    // Keep app navigation above gesture/three-button system navigation on edge-to-edge Android.
+    frame.setOnApplyWindowInsetsListener((view,insets)->{
+      android.view.WindowInsets.Type navigation=android.view.WindowInsets.Type.navigationBars();
+      Insets bottom=insets.getInsets(navigation);
+      nav.setPadding(0,0,0,bottom.bottom);
+      return insets;
+    });
+    frame.requestApplyInsets();render();
   }
   private void render(){
     content.removeAllViews();
