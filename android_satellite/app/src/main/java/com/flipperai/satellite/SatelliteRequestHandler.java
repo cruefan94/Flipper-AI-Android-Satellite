@@ -7,7 +7,10 @@ public final class SatelliteRequestHandler {
     private final InferenceRouter router;
     private InferenceRouter.Mode mode=InferenceRouter.Mode.OFFLINE;
     private boolean cloudConsent=false;
-    public SatelliteRequestHandler(InferenceRouter router) { this.router=router; }
+    public SatelliteRequestHandler(InferenceRouter router) {
+        if (router == null) throw new IllegalArgumentException("Inference router is required");
+        this.router=router;
+    }
     public void configure(InferenceRouter.Mode mode,boolean consent) {
         if(mode==null)throw new IllegalArgumentException("mode");
         this.mode=mode; this.cloudConsent=consent;
