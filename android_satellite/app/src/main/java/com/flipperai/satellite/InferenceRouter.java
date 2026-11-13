@@ -30,7 +30,9 @@ public final class InferenceRouter {
     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
     // Local failure never authorizes transmission; fallback needs explicit consent.
     Exception localFailure = null;
-    if (local.ready() && local.supports(prompt)) {
+    boolean localReady = local.ready();
+    if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
+    if (localReady && local.supports(prompt)) {
       // supports() can be slow or cancel the request; never dispatch afterward.
       if (Thread.currentThread().isInterrupted()) throw new InterruptedException("AI request cancelled");
       try { return local.answerForHybrid(prompt); }
