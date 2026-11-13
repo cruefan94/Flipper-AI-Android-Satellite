@@ -2,7 +2,7 @@ name: Android Satellite — public APK build
 on:
   workflow_dispatch:
   push:
-    branches: [develop/android-apk-build]
+    branches: [develop/android-apk-build, 'fix/**', 'feature/**']
     paths:
       - 'android_satellite/**'
       - '.github/workflows/android-apk.yml'
@@ -36,6 +36,11 @@ jobs:
         run: sh android_satellite/tests/run_core_tests.sh
       - name: Source security regression tests
         run: python3 -m unittest discover -s android_satellite/tests -p 'test_*.py' -v
+      - name: Print Android build environment
+        run: |
+          java -version
+          gradle --version
+          sdkmanager --list_installed
       - name: Build debug APK
         run: gradle -p android_satellite --no-daemon --stacktrace :app:assembleDebug
       - name: Verify APK exists
@@ -46,6 +51,16 @@ jobs:
           BUILD_NAME="FlipperAI-Satellite-${{ github.run_number }}-${SHORT_SHA}-debug-UNTESTED.apk"
           cp android_satellite/app/build/outputs/apk/debug/app-debug.apk "android_satellite/app/build/outputs/apk/debug/$BUILD_NAME"
           echo "APK_NAME=$BUILD_NAME" >> "$GITHUB_ENV"
+      - name: Upload build diagnostics if unsuccessful
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlipperAI-Android-Build-Diagnostics
+          path: |
+            android_satellite/app/build/reports/**
+            android_satellite/app/build/outputs/logs/**
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
