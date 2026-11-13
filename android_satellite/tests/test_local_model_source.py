@@ -46,7 +46,11 @@ class LocalModelSourceTest(unittest.TestCase):
         self.assertIn("if(!inferenceWorker.isShutdown())",UI)
         self.assertIn("RejectedExecutionException ignored",UI)
         self.assertLess(UI.index("ble.stopScan();transports.close();",UI.index("@Override public void onDestroy()")),
-                        UI.index("inferenceWorker.shutdownNow();",UI.index("@Override public void onDestroy()")))
+                        UI.index("inferenceWorker.shutdown();",UI.index("@Override public void onDestroy()")))
+
+    def test_embedded_native_engine_is_closed_on_inference_worker(self):
+        self.assertIn("inferenceWorker.execute(()->embeddedModel.clear());",UI)
+        self.assertIn("inferenceWorker.shutdown();",UI)
 
     def test_hybrid_requires_consent(self):
         self.assertIn('if (cloudConsent && cloud.ready())',ROUTER)
