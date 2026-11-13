@@ -56,6 +56,14 @@ public final class SatelliteCoreTest {
       public String answer(String p){unexpectedCloudCalls[0]++;return "CLOUD";}
     };
     InferenceRouter nullModeRouter=new InferenceRouter(local,countingCloud);
+    // A cancelled request must never start a cloud call, even in direct ONLINE mode.
+    Thread.currentThread().interrupt();
+    boolean onlineCancelled=false;
+    try { nullModeRouter.ask("private prompt",InferenceRouter.Mode.ONLINE,true); }
+    catch (InterruptedException expected) { onlineCancelled=true; }
+    finally { Thread.interrupted(); } // Clear the test thread's interrupt flag.
+    check(onlineCancelled && unexpectedCloudCalls[0]==0,
+      "cancelled direct-online request must not contact cloud");
     SatelliteRequestHandler capacityHandler=new SatelliteRequestHandler(
       new InferenceRouter(local,countingCloud));
     capacityHandler.configure(InferenceRouter.Mode.ONLINE,true);
