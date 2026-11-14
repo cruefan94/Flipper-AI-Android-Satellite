@@ -28,7 +28,9 @@ class ModelPackageImeTests(unittest.TestCase):
         self.assertNotIn("DexClassLoader",EXTRACTOR)
         self.assertIn("IMPORT .LITERTLM OR MODEL ZIP",MODEL)
         self.assertIn("No APK compilation needed",MODEL)
-        self.assertIn("Import offline model (.litertlm or ZIP)",BLE)
+        self.assertIn('advancedButton("OPEN OFFLINE MODELS"',BLE)
+        self.assertNotIn('advancedButton("Import offline model',BLE)
+        self.assertIn("IMPORT .LITERTLM OR MODEL ZIP",MODEL)
 
     def test_ime_single_owner_and_padding_gated(self):
         self.assertIn("SOFT_INPUT_ADJUST_NOTHING",CHAT)
