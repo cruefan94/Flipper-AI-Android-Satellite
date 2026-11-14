@@ -100,6 +100,9 @@ public final class DashboardActivity extends Activity {
     panelCard(content,"▥","PHONE COMPANION",
       "Check battery, network and Bluetooth device status. No hidden permissions or automatic device control.",
       "PHONE STATUS",PhoneCompanionActivity.class);
+    panelCard(content,"▣","BATTERY ASSISTANT",
+      "Read-only Flipper battery monitoring and Eco / Balanced / Performance guidance. Shows unavailable data honestly until verified BLE telemetry is connected.",
+      "OPEN BATTERY ASSISTANT",BatteryAssistantActivity.class);
     panelCard(content,"⌘","GITHUB BUILDS",
       "Read-only public repository builds, commits and releases. Private account access is not enabled in this app.",
       "OPEN GITHUB",GitHubActivity.class);
