@@ -28,7 +28,8 @@ class UiRefinementSourceTests(unittest.TestCase):
 
     def test_dashboard_has_one_route_per_destination_and_remains_multi_screen(self):
         self.assertIn("SatelliteUi.sectionTitle(this,content",DASH)
-        self.assertIn("wide?dp(680):-1",DASH)
+        self.assertIn("int cardWidthDp=Math.max(1,Math.min(680,viewportDp-26))",DASH)
+        self.assertIn("wide?dp(cardWidthDp):-1",DASH)
         self.assertNotIn('link(nav,"◉","AI CHAT"',DASH)
         self.assertNotIn("nav.addView(text(\"NAVIGATION\"",DASH)
         self.assertEqual(DASH.count("MainActivity.class);"),1)
