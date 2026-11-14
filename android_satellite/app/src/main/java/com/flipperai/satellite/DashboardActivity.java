@@ -39,7 +39,7 @@ public final class DashboardActivity extends Activity {
     box.setClickable(true);
     box.setFocusable(true);
     box.setContentDescription(title+": "+action);
-    box.setMinHeight(dp(72));
+    box.setMinimumHeight(dp(72));
     box.setOnClickListener(v->SatelliteUi.open(this,screen));
   }
   @Override public void onCreate(Bundle state){
