@@ -1,0 +1,69 @@
+name: Android release signing configuration smoke (DISPOSABLE CI KEY)
+on:
+  workflow_dispatch:
+  push:
+    branches: ['test/android-disposable-release-signing-smoke-v01']
+    paths:
+      - 'android_satellite/app/build.gradle'
+      - '.github/workflows/android-disposable-signing-smoke.yml'
+  pull_request:
+    paths:
+      - 'android_satellite/app/build.gradle'
+      - '.github/workflows/android-disposable-signing-smoke.yml'
+permissions:
+  contents: read
+jobs:
+  test-only-signing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install build tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Create explicitly disposable CI signing key
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          keytool -genkeypair -noprompt \
+            -keystore "$RUNNER_TEMP/ci-throwaway.jks" \
+            -alias ci-only -keyalg RSA -keysize 2048 -validity 2 \
+            -storepass CI_DISPOSABLE_PASSWORD_2026 \
+            -keypass CI_DISPOSABLE_PASSWORD_2026 \
+            -dname "CN=CI Temporary,OU=Automated Test,O=Flipper AI,C=CA"
+          chmod 600 "$RUNNER_TEMP/ci-throwaway.jks"
+          echo "FLIPPER_AI_VERSION_CODE=150001" >> "$GITHUB_ENV"
+          echo "FLIPPER_ANDROID_SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/ci-throwaway.jks" >> "$GITHUB_ENV"
+          echo "FLIPPER_ANDROID_KEYSTORE_PASSWORD=CI_DISPOSABLE_PASSWORD_2026" >> "$GITHUB_ENV"
+          echo "FLIPPER_ANDROID_KEY_ALIAS=ci-only" >> "$GITHUB_ENV"
+          echo "FLIPPER_ANDROID_KEY_PASSWORD=CI_DISPOSABLE_PASSWORD_2026" >> "$GITHUB_ENV"
+      - name: Compile signed release solely to validate Gradle signing path
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p android_satellite --no-daemon :app:assembleRelease
+      - name: Verify disposable certificate and version code
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android_satellite/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -q "versionCode='150001'"
+          echo "Disposable CI-key signing path passed. This APK is NOT an owner update." >> "$GITHUB_STEP_SUMMARY"
+      - name: Never release test-key APK or key
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$RUNNER_TEMP/ci-throwaway.jks"
+          rm -f android_satellite/app/build/outputs/apk/release/app-release.apk
