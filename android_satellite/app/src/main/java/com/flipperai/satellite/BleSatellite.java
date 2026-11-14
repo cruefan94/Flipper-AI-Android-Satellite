@@ -41,6 +41,7 @@ public final class BleSatellite implements SatelliteTransport {
   private volatile boolean stockRpcDetected,stockRpcSubscribed;
   private volatile int rpcNotificationsReceived;
   private volatile int rpcFlowCredits=-1;
+  private volatile GattDiscoverySnapshot lastGattDiscovery=GattDiscoverySnapshot.notChecked();
   private volatile boolean rpcPingPending=false;
   private final BleWriteGuard writeGuard=new BleWriteGuard();
   private static final int MAX_QUEUED=8;
@@ -95,6 +96,7 @@ public final class BleSatellite implements SatelliteTransport {
   }
   private synchronized void openConnection(BluetoothDevice device){
     stopScan();disconnect();lastDevice=device;
+    lastGattDiscovery=GattDiscoverySnapshot.notChecked();
     if(device==null)return;
     events.status("Connecting to selected Flipper");
     final int bond;
@@ -181,6 +183,8 @@ public final class BleSatellite implements SatelliteTransport {
   public boolean isStockRpcSubscribed(){return hasStockRpc() && stockRpcSubscribed;}
   public int stockRpcNotificationCount(){return rpcNotificationsReceived;}
   public int stockRpcFlowCredits(){return rpcFlowCredits;}
+  /** Last completed discovery, including if the link later dropped. No device identifiers. */
+  public String lastGattDiscoveryReport(){return lastGattDiscovery.report();}
   public synchronized boolean sendStockRpcPing(){
     if(!isStockRpcSubscribed() || rpcFlowCredits<5 || rpcPingPending){events.status("RPC ping unavailable: connect and wait for flow-control value.");return false;}
     BluetoothGattService service=gatt.getService(MOMENTUM_RPC_SERVICE);
@@ -327,10 +331,23 @@ public final class BleSatellite implements SatelliteTransport {
       synchronized(BleSatellite.this) {
       if(link!=gatt)return;
       if(!approved()){disconnect();return;}
-      BluetoothGattService service=link.getService(SERVICE);
       if(code!=BluetoothGatt.GATT_SUCCESS){
+        lastGattDiscovery=GattDiscoverySnapshot.failed();
         events.status("Bluetooth service discovery failed (GATT "+code+")");disconnect();return;
       }
+      java.util.ArrayList<UUID> observedServices=new java.util.ArrayList<>();
+      try {
+        for(BluetoothGattService discoveredService:link.getServices()) {
+          if(discoveredService!=null)observedServices.add(discoveredService.getUuid());
+        }
+      } catch(SecurityException | IllegalStateException notAvailable) {
+        lastGattDiscovery=GattDiscoverySnapshot.failed();
+        events.status("Cannot read GATT service discovery results");
+        disconnect();return;
+      }
+      lastGattDiscovery=GattDiscoverySnapshot.observed(
+        observedServices,SERVICE,MOMENTUM_RPC_SERVICE);
+      BluetoothGattService service=link.getService(SERVICE);
       if(service==null){
         BluetoothGattService rpc=link.getService(MOMENTUM_RPC_SERVICE);
         if(rpc!=null && rpc.getCharacteristic(MOMENTUM_RPC_WRITE)!=null &&
@@ -360,8 +377,8 @@ public final class BleSatellite implements SatelliteTransport {
             enabled=false;
           }
           events.status(enabled
-            ? "Stock Momentum RPC found; enabling RPC indications..."
-            : "Stock Momentum RPC detected, but notification setup failed.");
+            ? "AI service absent in Android discovery; Momentum RPC found. Enabling RPC indications..."
+            : "AI service absent in Android discovery; Momentum RPC detected but notifications failed.");
           return;
         }
         events.status("Bluetooth connected, but neither stock Momentum RPC nor AI service was found.");
