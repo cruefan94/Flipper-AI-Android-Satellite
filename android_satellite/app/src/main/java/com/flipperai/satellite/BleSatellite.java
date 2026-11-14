@@ -36,6 +36,10 @@ public final class BleSatellite implements SatelliteTransport {
   private int scanGeneration;
   private int connectionGeneration;
   private boolean retry147Used;
+  private boolean userDisconnected=true;
+  private int recoveryAttempts=0;
+  private int recoveryToken=0;
+  private static final long[] RECOVERY_DELAYS_MS={2000L,5000L,10000L,30000L,30000L};
   /* Read by UI and written from Android Bluetooth Binder callbacks. */
   private volatile boolean authorized,subscribed,mtuPending;
   private volatile boolean stockRpcDetected,stockRpcSubscribed;
@@ -90,8 +94,33 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   public synchronized void connect(BluetoothDevice device){
+    recoveryToken++;
+    recoveryAttempts=0;
+    userDisconnected=false;
     retry147Used=false;
     openConnection(device);
+  }
+  /** Explicit user stop: never reconnect after this or after Activity shutdown. */
+  public synchronized void manualDisconnect(){
+    userDisconnected=true;
+    recoveryToken++;
+    recoveryAttempts=0;
+    disconnect();
+  }
+  private synchronized void scheduleRecovery(BluetoothDevice failedDevice,int gattStatus){
+    if(userDisconnected || failedDevice==null || failedDevice!=lastDevice ||
+       recoveryAttempts>=RECOVERY_DELAYS_MS.length)return;
+    final int token=++recoveryToken;
+    final int attempt=++recoveryAttempts;
+    final long delay=RECOVERY_DELAYS_MS[attempt-1];
+    events.status("BLE disconnected (GATT "+gattStatus+"); reconnecting in "+(delay/1000)+"s ("+attempt+"/5)");
+    ui.postDelayed(()->{
+      synchronized(BleSatellite.this){
+        if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice)return;
+        events.status("Reconnecting to selected Flipper ("+attempt+"/5)");
+        openConnection(failedDevice);
+      }
+    },delay);
   }
   private synchronized void openConnection(BluetoothDevice device){
     stopScan();disconnect();lastDevice=device;
@@ -199,7 +228,7 @@ public final class BleSatellite implements SatelliteTransport {
 
   @Override public boolean isReady(){return subscribed && approved() && state.phase()==TransportState.Phase.READY;}
   @Override public boolean sendFrame(String data){return send(data);}
-  @Override public void close(){stopScan();disconnect();}
+  @Override public void close(){stopScan();manualDisconnect();}
   public synchronized boolean send(String frame){
     if(frame==null || !isReady() || gatt==null){events.status("AI channel not ready");return false;}
     byte[] bytes=frame.getBytes(StandardCharsets.UTF_8);
@@ -315,10 +344,12 @@ public final class BleSatellite implements SatelliteTransport {
             }
           },1800);
         }else{
+          final BluetoothDevice failedDevice=lastDevice;
           disconnect();
           events.status(code==147
             ? "GATT 147 persists: Bluetooth link rejected. Try the paired Flipper entry; AI service is still required."
             : "Disconnected (GATT "+code+")");
+          scheduleRecovery(failedDevice,code);
         }
       }
       }
@@ -406,6 +437,7 @@ public final class BleSatellite implements SatelliteTransport {
       BluetoothGattCharacteristic owner=d.getCharacteristic();
       if(owner!=null && MOMENTUM_RPC_NOTIFY.equals(owner.getUuid()) && stockRpcDetected){
         stockRpcSubscribed=code==BluetoothGatt.GATT_SUCCESS;
+        if(stockRpcSubscribed)recoveryAttempts=0;
         events.status(stockRpcSubscribed
           ? "Stock Momentum RPC indications enabled; awaiting protocol messages (AI not ready)."
           : "Stock Momentum RPC indication subscription failed (GATT "+code+").");
@@ -447,6 +479,7 @@ public final class BleSatellite implements SatelliteTransport {
         disconnect();return;
       }
       subscribed=true;
+      recoveryAttempts=0;
       events.status("AI BLE ready, max frame "+state.payloadLimit()+" bytes");
       }
     }
