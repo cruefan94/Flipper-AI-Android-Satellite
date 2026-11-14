@@ -79,18 +79,27 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       "Pair and connect your Flipper Zero. AI model management and chat are on separate screens.",
       14,SatelliteUi.MUTED,false);
     root.addView(sectionIntro);
+    SatelliteUi.sectionTitle(this,root,"CONNECTION STATUS");
     status=SatelliteUi.text(this,"No AI connection",15,SatelliteUi.ORANGE,false);
     root.addView(status);
-    TextView offlineHelp=new TextView(this);
-    offlineHelp.setText("Offline AI runs on this Android phone when a compatible local model is installed and running. The Flipper accesses it over Bluetooth. Without the phone, Flipper tools remain available but full AI chat does not.");
+    TextView offlineHelp=SatelliteUi.text(this,
+      "Offline AI runs on your Android phone when a compatible model is installed. Bluetooth pairing does not by itself verify the custom AI channel.",
+      14,SatelliteUi.MUTED,false);
+    offlineHelp.setPadding(0,SatelliteUi.dp(this,8),0,SatelliteUi.dp(this,10));
     root.addView(offlineHelp);
     connectionState=SatelliteUi.text(this,"",19,SatelliteUi.WHITE,true);
-    connectionState.setText("AI CONNECTION: NOT CONNECTED");root.addView(connectionState);
+    connectionState.setText("AI CONNECTION: NOT CONNECTED");
+    connectionState.setPadding(SatelliteUi.dp(this,12),SatelliteUi.dp(this,14),
+      SatelliteUi.dp(this,12),SatelliteUi.dp(this,14));
+    connectionState.setBackground(SatelliteUi.panel(this,false));
+    root.addView(connectionState);
     connectionHistory=SatelliteUi.text(this,"",14,SatelliteUi.MUTED,false);
     connectionHistory.setText("Bluetooth device discovery is separate from the AI channel.");
     root.addView(connectionHistory);
-    TextView categoryPrompt=new TextView(this);
-    categoryPrompt.setText("Choose ONE device source:");
+    SatelliteUi.sectionTitle(this,root,"SELECT DEVICE");
+    TextView categoryPrompt=SatelliteUi.text(this,
+      "Choose paired or discoverable devices, then select the Flipper you want.",
+      14,SatelliteUi.MUTED,false);
     root.addView(categoryPrompt);
     RadioGroup sources=new RadioGroup(this);
     sources.setOrientation(RadioGroup.HORIZONTAL);
@@ -106,7 +115,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     pairedSection.setPadding(12,12,12,12);
     pairedSection.setBackground(SatelliteUi.panel(this,false));
     root.addView(pairedSection);
-    pairedHeading=new TextView(this);pairedHeading.setText("PAIRED / CONNECTED DEVICES");pairedSection.addView(pairedHeading);
+    pairedHeading=SatelliteUi.text(this,"PAIRED / CONNECTED DEVICES",14,SatelliteUi.ORANGE,true);
+    pairedSection.addView(pairedHeading);
     devices=new Spinner(this);pairedSection.addView(devices);
     sectionButton(pairedSection,"Select paired device",()->selectFrom(devices,false));
     sectionButton(pairedSection,"Refresh paired devices",()->{
@@ -118,14 +128,17 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     discoverableSection.setPadding(12,12,12,12);
     discoverableSection.setBackground(SatelliteUi.panel(this,false));
     root.addView(discoverableSection);
-    nearbyHeading=new TextView(this);nearbyHeading.setText("DISCOVERABLE DEVICES");discoverableSection.addView(nearbyHeading);
+    nearbyHeading=SatelliteUi.text(this,"DISCOVERABLE DEVICES",14,SatelliteUi.ORANGE,true);
+    discoverableSection.addView(nearbyHeading);
     nearbyDevices=new Spinner(this);discoverableSection.addView(nearbyDevices);
     sectionButton(discoverableSection,"Select discovered device",()->selectFrom(nearbyDevices,true));
     sectionButton(discoverableSection,"Scan for nearby devices",()->{
       if(permissions())beginScan();
       else scanAfterPermission=true;
     });
-    deviceInfo=new TextView(this);deviceInfo.setText("No device selected.");root.addView(deviceInfo);
+    deviceInfo=SatelliteUi.text(this,"No device selected.",14,SatelliteUi.WHITE,false);
+    deviceInfo.setPadding(0,SatelliteUi.dp(this,10),0,SatelliteUi.dp(this,8));
+    root.addView(deviceInfo);
     button("Clear device selection",()->{
       ble.disconnect();
       selectedAddress=null;
@@ -149,6 +162,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     pairedChoice.setChecked(true);
     discoverableSection.setVisibility(android.view.View.GONE);
     if(permissionsAlreadyGranted())showPairedDevices();
+    SatelliteUi.sectionTitle(this,root,"BLUETOOTH ACTIONS");
     button("Connect selected",()->{
       if(!permissions())return;
       BluetoothDevice selected=selectedDevice();
@@ -164,6 +178,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     });
     button("Disconnect",()->{if(permissions())ble.disconnect();});
     button("TEST MOMENTUM RPC PING",()->ble.sendStockRpcPing());
+    SatelliteUi.sectionTitle(this,root,"ADVANCED");
     button("Advanced AI settings and diagnostics",()->{
       advancedVisible=!advancedVisible;
       advancedSection.setVisibility(advancedVisible?android.view.View.VISIBLE:android.view.View.GONE);
