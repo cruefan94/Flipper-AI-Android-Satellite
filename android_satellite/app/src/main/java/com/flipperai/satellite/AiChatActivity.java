@@ -77,6 +77,7 @@ public final class AiChatActivity extends Activity {
     });
     smallAction(voiceControls,"CHOOSE VOICE",()->speech.pickVoice(this));
     smallAction(voiceControls,"STOP",()->speech.stop());
+    smallAction(voiceControls,"TEST AI",this::chooseEngineSelfTest);
 
     chatScroll=new ScrollView(this);
     chatScroll.setFillViewport(true);
@@ -209,6 +210,69 @@ public final class AiChatActivity extends Activity {
         dialog.dismiss();
       }).setNegativeButton("CANCEL",null).show();
   }
+  /** Explicit in-chat live engine checks. Tests never silently cross transports:
+   * offline calls the actual embedded model (not canned diagnostics); cloud
+   * uses the configured HTTPS Worker only after in-session consent.
+   */
+  private void chooseEngineSelfTest(){
+    if(busy||closing){setStatus("Finish the current AI request before testing.");return;}
+    new android.app.AlertDialog.Builder(this)
+      .setTitle("Verify AI engine")
+      .setItems(new String[]{
+        "TEST EMBEDDED OFFLINE • no internet",
+        "TEST ONLINE WORKER • sends a fixed test prompt"
+      },(dialog,which)->testEngineLive(which==1))
+      .setNegativeButton("CANCEL",null).show();
+  }
+
+  private void testEngineLive(boolean online){
+    if(busy||closing)return;
+    if(online && (!consent || !cloud.ready())){
+      setStatus("Online test requires CLOUD configuration and explicit cloud permission.");
+      return;
+    }
+    if(!online && !EmbeddedModelStore.installed(this)){
+      setStatus("Offline model missing. Import a compatible .litertlm file under MODELS.");
+      return;
+    }
+    final int generation=++requestGeneration;
+    final boolean consentAtStart=consent;
+    busy=true;send.setEnabled(false);
+    setStatus(online?"Testing online Worker with an explicit fixed prompt..."
+                    :"Testing actual offline model inference (no cloud)...");
+    worker.execute(()->{
+      String message;
+      boolean verified=false;
+      try {
+        final String reply;
+        if(online){
+          // No actual user prompt is sent by this explicit test.
+          reply=router.ask("Reply with OK.",InferenceRouter.Mode.ONLINE,consentAtStart);
+        } else {
+          if(!embedded.ready())
+            embedded.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
+          reply=embedded.answer("Reply with OK.");
+        }
+        if(reply==null || reply.trim().isEmpty())
+          throw new IllegalStateException("Engine returned no text");
+        message=online ? "Verified LIVE online Worker response (not a BLE AI1 test)."
+                       : "Verified LIVE embedded offline response (no cloud).";
+        verified=true;
+      }catch(Exception e){
+        message=(online?"Online":"Offline")+" AI engine test FAILED: "+e.getMessage();
+      }
+      final String result=message;
+      final boolean success=verified;
+      runOnUiThread(()->{
+        if(closing)return;
+        if(generation==requestGeneration && (!online || (consentAtStart && consent))){
+          setStatus(result);
+        }else if(!closing)setStatus("AI engine test result discarded after settings changed.");
+        busy=false;send.setEnabled(true);
+      });
+    });
+  }
+
   private void cloudSettings(){
     LinearLayout fields=SatelliteUi.column(this);
     int pad=dp(16);fields.setPadding(pad,pad,pad,pad);
