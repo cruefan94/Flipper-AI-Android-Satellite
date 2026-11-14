@@ -177,7 +177,7 @@ public final class AiChatActivity extends Activity {
         embedded.clear();
         if(EmbeddedModelStore.installed(this)){
           embedded.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
-          setStatus("OFFLINE • Model imported • Ready for AI chat");
+          setStatus("Model imported • Inference not yet verified on this phone • Use TEST AI");
         }else setStatus("OFFLINE • No model file • Basic diagnostics only");
       }catch(Exception e){setStatus("Embedded AI unavailable: "+e.getMessage());}
     });
@@ -262,7 +262,6 @@ public final class AiChatActivity extends Activity {
         message=(online?"Online":"Offline")+" AI engine test FAILED: "+e.getMessage();
       }
       final String result=message;
-      final boolean success=verified;
       runOnUiThread(()->{
         if(closing)return;
         if(generation==requestGeneration && (!online || (consentAtStart && consent))){
@@ -315,19 +314,27 @@ public final class AiChatActivity extends Activity {
     setStatus("Processing "+requestedMode+" request...");
     worker.execute(()->{
       String result;
+      boolean succeeded=false;
       try{
         if(requestedMode==InferenceRouter.Mode.OFFLINE && !embedded.ready()
             && !new OfflineDiagnosticEngine().supports(question))
           throw new IllegalStateException("Import a compatible model for general questions.");
         result=router.ask(question,requestedMode,approved);
+        succeeded=true;
       }catch(Exception e){result="AI unavailable: "+e.getMessage();}
       final String answer=result;
+      final boolean responseSucceeded=succeeded;
       runOnUiThread(()->{
         if(closing)return;
         if(generation==requestGeneration && (!approved||consent)){
-          append("AI",answer);
-          speech.speak(ChatMarkdownFormatter.plainSpeech(answer));
-          setStatus(requestedMode+" • Response complete");
+          if(responseSucceeded){
+            append("AI",answer);
+            speech.speak(ChatMarkdownFormatter.plainSpeech(answer));
+            setStatus(requestedMode+" • Response complete");
+          }else{
+            append("SYSTEM",answer);
+            setStatus(requestedMode+" • Request failed");
+          }
         }else setStatus("Old response discarded due to changed settings.");
         busy=false;send.setEnabled(true);
       });
