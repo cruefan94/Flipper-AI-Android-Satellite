@@ -29,6 +29,7 @@ public final class BleSatellite implements SatelliteTransport {
   private final Events events;
   private final Handler ui=new Handler(Looper.getMainLooper());
   private final TransportState state=new TransportState();
+  private final GattDiscoveryEvidence discoveryEvidence=new GattDiscoveryEvidence();
   private final ArrayDeque<byte[]> pending=new ArrayDeque<>();
   private BluetoothLeScanner scanner;
   private volatile BluetoothGatt gatt;
@@ -94,6 +95,8 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   public synchronized void connect(BluetoothDevice device){
+    // A new explicitly selected connection must not reuse another device's evidence.
+    discoveryEvidence.clear();
     recoveryToken++;
     recoveryAttempts=0;
     userDisconnected=false;
@@ -124,6 +127,8 @@ public final class BleSatellite implements SatelliteTransport {
   }
   private synchronized void openConnection(BluetoothDevice device){
     stopScan();disconnect();lastDevice=device;
+    // Automatic retries retain the previous completed result, marked historical.
+    discoveryEvidence.beginAttempt();
     if(device==null)return;
     events.status("Connecting to selected Flipper");
     final int bond;
@@ -186,6 +191,7 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   public synchronized void disconnect(){
+    discoveryEvidence.closeLink();
     connectionGeneration++;
     state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;stockRpcSubscribed=false;rpcNotificationsReceived=0;rpcFlowCredits=-1;rpcPingPending=false;writeGuard.reset();
     pending.clear();BluetoothGatt old=gatt;gatt=null;
@@ -204,6 +210,9 @@ public final class BleSatellite implements SatelliteTransport {
       }
     }
   }
+  /** Safe to include in support reports: no address, bond ID, token or prompt. */
+  public String gattDiscoveryReport(){return discoveryEvidence.report();}
+  public String gattDiscoveryNextStep(){return discoveryEvidence.nextAction();}
   public int maxFrameBytes(){return state.payloadLimit();}
   @Override public Kind kind(){return Kind.BLE;}
   public boolean hasStockRpc(){return stockRpcDetected && gatt!=null && approved();}
@@ -358,12 +367,16 @@ public final class BleSatellite implements SatelliteTransport {
       synchronized(BleSatellite.this) {
       if(link!=gatt)return;
       if(!approved()){disconnect();return;}
-      BluetoothGattService service=link.getService(SERVICE);
       if(code!=BluetoothGatt.GATT_SUCCESS){
+        discoveryEvidence.failed(code);
         events.status("Bluetooth service discovery failed (GATT "+code+")");disconnect();return;
       }
+      BluetoothGattService service=link.getService(SERVICE);
+      BluetoothGattService rpc=link.getService(MOMENTUM_RPC_SERVICE);
+      java.util.List<BluetoothGattService> services=link.getServices();
+      discoveryEvidence.succeeded(service!=null,rpc!=null,
+        services==null?0:services.size());
       if(service==null){
-        BluetoothGattService rpc=link.getService(MOMENTUM_RPC_SERVICE);
         if(rpc!=null && rpc.getCharacteristic(MOMENTUM_RPC_WRITE)!=null &&
            rpc.getCharacteristic(MOMENTUM_RPC_NOTIFY)!=null){
           stockRpcDetected=true;
