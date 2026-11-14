@@ -18,6 +18,8 @@ javac -cp "$DEST" -d "$DEST" "$SRC/EmbeddedOrLocalEngine.java" "$ROOT/android_sa
 java -cp "$DEST" EmbeddedOrLocalEngineTest
 javac -cp "$DEST" -d "$DEST" "$SRC/GattProfilePolicy.java" "$ROOT/android_satellite/tests/GattProfilePolicyTest.java"
 java -cp "$DEST" GattProfilePolicyTest
+javac -cp "$DEST" -d "$DEST" "$SRC/GattDiscoverySnapshot.java" "$ROOT/android_satellite/tests/GattDiscoverySnapshotTest.java"
+java -cp "$DEST" GattDiscoverySnapshotTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SessionEpochTest.java"
 java -cp "$DEST" SessionEpochTest
 javac -cp "$DEST" -d "$DEST" "$SRC/BleSessionJobs.java" "$ROOT/android_satellite/tests/BleSessionJobsTest.java"
