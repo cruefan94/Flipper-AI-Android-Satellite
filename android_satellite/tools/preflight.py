@@ -8,7 +8,7 @@ needed = ['BleSatellite', 'MainActivity', 'SatelliteProtocol', 'ProtocolSession'
           'SatelliteRequestHandler', 'InferenceRouter', 'WorkerCloudEngine',
           'WorkerEndpointPolicy', 'OfflineDiagnosticEngine', 'TransportState',
           'BondGate', 'FrameCodec', 'GattProfilePolicy', 'SessionEpoch', 'SatelliteTransport', 'SatelliteTransportCoordinator', 'WifiRelayEndpointPolicy', 'WifiRelayEnvelope',
-          'BleWriteGuard', 'ConsentEpoch', 'LocalModelEngine',
+          'BleWriteGuard', 'GattDiscoverySnapshot', 'ConsentEpoch', 'LocalModelEngine',
           'LocalModelEndpointPolicy', 'OfflineModelOrDiagnostics']
 missing = [str(package / (name + '.java')) for name in needed
            if not (package / (name + '.java')).is_file()]
