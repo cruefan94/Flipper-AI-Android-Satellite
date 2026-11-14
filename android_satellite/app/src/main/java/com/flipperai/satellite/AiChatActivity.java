@@ -43,12 +43,19 @@ public final class AiChatActivity extends Activity {
   private boolean busy=false;
   private boolean closing=false;
   private int requestGeneration=0;
+  private String loadedModelRevision="";
   private int dp(int n){return SatelliteUi.dp(this,n);}
   @Override public void onCreate(Bundle state){
     super.onCreate(state);
     embedded=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
     router=new InferenceRouter(new OfflineModelOrDiagnostics(
       embedded,new OfflineDiagnosticEngine()),cloud);
+    // Restore only connection details, not permission to transmit prompts.
+    CloudCredentialStore.Credentials savedCloud=CloudCredentialStore.load(this);
+    if(savedCloud!=null) {
+      try {cloud.configure(savedCloud.endpoint,savedCloud.token);}
+      catch(Exception invalid){CloudCredentialStore.clear(this);cloud.clear();}
+    }
     // On modern Android, we apply IME insets ourselves. ADJUST_RESIZE plus
     // ime.bottom padding can resize the screen twice and cause visible flashes.
     getWindow().setSoftInputMode(Build.VERSION.SDK_INT>=30
@@ -217,6 +224,32 @@ public final class AiChatActivity extends Activity {
     applyChatWindowInsets(page);
     // The parent owns initial focus until the user explicitly taps the composer.
     page.requestFocus();
+    if(state!=null) {
+      String previous=state.getString("ai_history","");
+      if(!previous.isEmpty()) {
+        history.append(previous);
+        styledHistory.append(previous);
+        transcript.setText(styledHistory);
+      }
+      prompt.setText(state.getString("ai_draft",""));
+      try{mode=InferenceRouter.Mode.valueOf(state.getString("ai_mode","OFFLINE"));}
+      catch(IllegalArgumentException invalid){mode=InferenceRouter.Mode.OFFLINE;}
+      toolsExpanded=state.getBoolean("ai_tools",false);
+      toolsPanel.setVisibility(toolsExpanded && !keyboardCompact?View.VISIBLE:View.GONE);
+      setStatus("Chat restored • Cloud permission requires a new opt-in after recreation.");
+    }
+  }
+  @Override protected void onSaveInstanceState(Bundle out) {
+    out.putString("ai_history",history.toString());
+    out.putString("ai_draft",prompt==null?"":prompt.getText().toString());
+    out.putString("ai_mode",mode.name());
+    out.putBoolean("ai_tools",toolsExpanded);
+    super.onSaveInstanceState(out);
+  }
+  @Override public void onConfigurationChanged(android.content.res.Configuration config) {
+    super.onConfigurationChanged(config);
+    // Keep this Activity and its running inference/voice alive on rotation.
+    getWindow().getDecorView().requestApplyInsets();
   }
   /**
    * One IME owner: API 30+ uses ADJUST_NOTHING and applies insets manually.
@@ -262,9 +295,20 @@ public final class AiChatActivity extends Activity {
     });
     page.requestApplyInsets();
   }
+  private String modelRevision(){
+    java.io.File file=EmbeddedModelStore.modelFile(this);
+    return file.isFile() && file.length()>0
+      ?file.getAbsolutePath()+":"+file.length()+":"+file.lastModified():"not-installed";
+  }
   @Override protected void onResume(){
     super.onResume();
+    // Switching to another app and back must not reset the loaded model
+    // conversation or interrupt a queued request. Reload only on model change.
+    final String revision=modelRevision();
+    if(revision.equals(loadedModelRevision))return;
+    loadedModelRevision=revision;
     worker.execute(()->{
+      if(!revision.equals(modelRevision()))return;
       try{
         embedded.clear();
         if(EmbeddedModelStore.installed(this)){
@@ -308,28 +352,39 @@ public final class AiChatActivity extends Activity {
     LinearLayout fields=SatelliteUi.column(this);
     int pad=dp(16);fields.setPadding(pad,pad,pad,pad);
     TextView warning=SatelliteUi.text(this,
-      "Online AI sends your chat prompts to an HTTPS Worker and its AI provider only after you opt in. Token stays in memory and is cleared on exit.",
+      "Online AI sends ASK prompts only with your permission. Worker address and device token are encrypted on this phone until explicitly cleared. Gemini API key stays in Cloudflare.",
       14,SatelliteUi.WHITE,false);fields.addView(warning);
+    CloudCredentialStore.Credentials saved=CloudCredentialStore.load(this);
     EditText endpoint=new EditText(this);endpoint.setSingleLine(true);
-    endpoint.setHint("https://your-worker.workers.dev/ask");fields.addView(endpoint);
+    endpoint.setHint("https://your-worker.workers.dev/ask");
+    if(saved!=null)endpoint.setText(saved.endpoint);
+    fields.addView(endpoint);
     EditText token=new EditText(this);token.setSingleLine(true);
-    token.setInputType(129);token.setHint("Device token (not stored)");fields.addView(token);
+    token.setInputType(129);token.setHint("Device token (encrypted on phone)");
+    if(saved!=null)token.setText(saved.token);
+    fields.addView(token);
     CheckBox allow=new CheckBox(this);
     allow.setText("I authorize cloud processing of my ASK prompts");
     allow.setChecked(consent);fields.addView(allow);
     new android.app.AlertDialog.Builder(this).setTitle("Cloud AI permission")
       .setView(fields)
       .setNegativeButton("DISABLE CLOUD",(d,w)->{
-        consent=false;cloud.clear();++requestGeneration;
-        setStatus("Cloud permission revoked and credentials cleared.");
+        consent=false;cloud.clear();CloudCredentialStore.clear(this);++requestGeneration;
+        setStatus("Cloud permission revoked and saved Worker credentials deleted.");
       })
       .setPositiveButton("SAVE",(d,w)->{
         consent=false;cloud.clear();++requestGeneration;
-        if(!allow.isChecked()){setStatus("Cloud disabled.");return;}
         try{
-          cloud.configure(endpoint.getText().toString(),token.getText().toString());
-          consent=true;setStatus("Cloud configured for this session. Use ONLINE or HYBRID mode.");
-        }catch(Exception e){setStatus("Cloud configuration rejected: "+e.getMessage());}
+          String url=endpoint.getText().toString();
+          String deviceToken=token.getText().toString();
+          // Persist connection details independently of cloud consent.
+          CloudCredentialStore.save(this,url,deviceToken);
+          cloud.configure(url,deviceToken);
+          consent=allow.isChecked();
+          setStatus(consent
+            ?"Cloud settings saved securely • Consent active for this session."
+            :"Cloud settings saved securely • Cloud permission disabled.");
+        }catch(Exception e){setStatus("Cloud settings not saved: "+e.getMessage());}
       }).show();
   }
   /** No microphone access until TALK was explicitly tapped. */
@@ -432,7 +487,8 @@ public final class AiChatActivity extends Activity {
     super.onPause();
   }
   @Override protected void onStop(){
-    if(speech!=null)speech.stop();
+    // Do not cut off an already requested spoken AI answer merely because the
+    // user opens another app. The microphone is still cancelled on onPause().
     super.onStop();
   }
   @Override protected void onDestroy(){
