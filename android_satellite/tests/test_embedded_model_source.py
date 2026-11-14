@@ -10,6 +10,7 @@ GRADLE=(APP/"build.gradle").read_text()
 ENGINE=(SRC/"EmbeddedLlmEngine.kt").read_text()
 STORE=(SRC/"EmbeddedModelStore.java").read_text()
 UI=(SRC/"MainActivity.java").read_text()
+MODELS=(SRC/"ModelsActivity.java").read_text()
 PREFERRED=(SRC/"EmbeddedOrLocalEngine.java").read_text()
 MANIFEST=(APP/"src/main/AndroidManifest.xml").read_text()
 
@@ -22,8 +23,10 @@ class EmbeddedModelSourceTests(unittest.TestCase):
         self.assertIn("sendMessage(prompt)",ENGINE)
 
     def test_model_weights_are_imported_not_bundled(self):
-        self.assertIn("Intent.ACTION_OPEN_DOCUMENT",UI)
-        self.assertIn("EmbeddedModelStore.importFromDocument(",UI)
+        self.assertIn("Intent.ACTION_OPEN_DOCUMENT",MODELS)
+        self.assertIn("EmbeddedModelStore.importFromDocument(",MODELS)
+        self.assertIn('advancedButton("OPEN OFFLINE MODELS"',UI)
+        self.assertNotIn("EmbeddedModelStore.importFromDocument(",UI)
         self.assertIn("getFilesDir()",STORE)
         self.assertIn("FileOutputStream(staging)",STORE)
         self.assertIn("StandardCopyOption.ATOMIC_MOVE",STORE)
@@ -32,15 +35,18 @@ class EmbeddedModelSourceTests(unittest.TestCase):
 
     def test_inference_is_not_on_ui_thread(self):
         self.assertIn("Looper.myLooper() != Looper.getMainLooper()",ENGINE)
-        self.assertIn('inferenceWorker.execute(()->{',UI)
-        self.assertIn("embeddedModel.answer(",UI)
+        self.assertIn('worker.execute(()->{',MODELS)
+        self.assertIn('model.answer("Reply with OK.")',MODELS)
+        self.assertIn("inferenceWorker.execute(()->{",UI)
         self.assertIn("oldConversation?.close()",ENGINE)
         self.assertIn("oldEngine?.close()",ENGINE)
 
     def test_embedded_priority_and_cloud_consent_not_bypassed(self):
         self.assertIn("if(embedded.ready())return embedded.answer(prompt);",PREFERRED)
         self.assertIn("new EmbeddedOrLocalEngine(embeddedModel,localModel)",UI)
-        self.assertIn('Verified LIVE embedded offline model response:',UI)
+        self.assertIn('Verified LIVE embedded offline model response:',MODELS)
+        self.assertIn('embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath())',UI)
+        self.assertIn('activeModelRevision=modelRevision()',UI)
         self.assertIn('android:usesCleartextTraffic="false"',MANIFEST)
 
     def test_model_import_fails_closed(self):
