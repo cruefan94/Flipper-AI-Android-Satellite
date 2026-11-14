@@ -291,8 +291,14 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(!permissions())return;
       showStatus(transports.isReady()
           ? "AI GATT transport ready; HELLO/ASK exchange must still be verified on the Flipper"
-          : ble.hasStockRpc() ? "Stock Momentum RPC detected. Indications: "+(ble.isStockRpcSubscribed()?"enabled":"not enabled")+". Received: "+ble.stockRpcNotificationCount()+". AI bridge not installed."
+          : ble.hasStockRpc() ? "Stock Momentum RPC detected. Indications: "+(ble.isStockRpcSubscribed()?"enabled":"not enabled")+". Received: "+ble.stockRpcNotificationCount()+". Android AI service absent in current discovery; firmware registration not independently confirmed."
           : "No authorized AI GATT or stock Momentum RPC session.");
+    });
+    advancedButton("Explain last BLE discovery",()->{
+      new android.app.AlertDialog.Builder(this)
+        .setTitle("Bluetooth AI1 diagnostic")
+        .setMessage(ble.gattDiscoveryReport()+"\n\n"+ble.gattDiscoveryNextStep())
+        .setPositiveButton("OK",null).show();
     });
     advancedButton("Copy BLE hardware test report",()->{
       // No MAC addresses, tokens, device IDs or user prompts are included.
@@ -301,6 +307,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         +"Stock Momentum RPC: "+(ble.hasStockRpc()?"DETECTED":"NOT DETECTED")+"\n"
         +"RPC indications: "+(ble.isStockRpcSubscribed()?"ENABLED":"NOT ENABLED")+"\n"
         +"RPC notifications received: "+ble.stockRpcNotificationCount()+"\n"
+        +ble.gattDiscoveryReport()+"\n"
+        +"Recommended next check: "+ble.gattDiscoveryNextStep()+"\n"
         +"Offline model file: "+(EmbeddedModelStore.installed(this)?"IMPORTED":"NOT IMPORTED")+"\n"
         +"Note: model file presence does not prove live AI inference.\n"
         +"Dedicated AI BLE and protocol must be tested on physical custom Momentum firmware.";

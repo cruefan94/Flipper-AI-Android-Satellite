@@ -38,6 +38,8 @@ javac -cp "$DEST" -d "$DEST" "$SRC/BleWriteGuard.java" "$ROOT/android_satellite/
 java -cp "$DEST" BleWriteGuardTest
 javac -cp "$DEST" -d "$DEST" "$SRC/BlePickerRows.java" "$ROOT/android_satellite/tests/BlePickerRowsTest.java"
 java -cp "$DEST" BlePickerRowsTest
+javac -cp "$DEST" -d "$DEST" "$SRC/GattDiscoveryEvidence.java" "$ROOT/android_satellite/tests/GattDiscoveryEvidenceTest.java"
+java -cp "$DEST" GattDiscoveryEvidenceTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/TransportStateConcurrencyTest.java"
 java -cp "$DEST" TransportStateConcurrencyTest
 javac -cp "$DEST" -d "$DEST" "$SRC/SatelliteTransport.java" "$SRC/SatelliteTransportCoordinator.java" "$ROOT/android_satellite/tests/SatelliteTransportCoordinatorTest.java"
