@@ -45,9 +45,10 @@ class NavigationRegressionTests(unittest.TestCase):
         self.assertNotIn("RadioScannerActivity.class",DASH)
         self.assertNotIn('nav.addView(text("QUICK NAVIGATION"',DASH)
 
-    def test_imported_model_does_not_show_stale_untested_warning(self):
-        self.assertIn("OFFLINE • Model imported • Ready for AI chat",CHAT)
-        self.assertNotIn("Model file imported; live inference needs testing",CHAT)
+    def test_imported_model_is_honestly_labeled_until_live_engine_test(self):
+        self.assertIn("Model imported • Inference not yet verified on this phone",CHAT)
+        self.assertNotIn("OFFLINE • Model imported • Ready for AI chat",CHAT)
+        self.assertIn('smallAction(voiceControls,"TEST AI",this::chooseEngineSelfTest)',CHAT)
         self.assertIn("OFFLINE • No model file • Basic diagnostics only",CHAT)
         self.assertIn("router.ask(question,requestedMode,approved)",CHAT)
 

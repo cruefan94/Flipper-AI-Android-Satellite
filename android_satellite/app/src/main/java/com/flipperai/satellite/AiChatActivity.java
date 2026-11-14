@@ -77,6 +77,7 @@ public final class AiChatActivity extends Activity {
     });
     smallAction(voiceControls,"CHOOSE VOICE",()->speech.pickVoice(this));
     smallAction(voiceControls,"STOP",()->speech.stop());
+    smallAction(voiceControls,"TEST AI",this::chooseEngineSelfTest);
 
     chatScroll=new ScrollView(this);
     chatScroll.setFillViewport(true);
@@ -176,7 +177,7 @@ public final class AiChatActivity extends Activity {
         embedded.clear();
         if(EmbeddedModelStore.installed(this)){
           embedded.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
-          setStatus("OFFLINE • Model imported • Ready for AI chat");
+          setStatus("Model imported • Inference not yet verified on this phone • Use TEST AI");
         }else setStatus("OFFLINE • No model file • Basic diagnostics only");
       }catch(Exception e){setStatus("Embedded AI unavailable: "+e.getMessage());}
     });
@@ -209,6 +210,68 @@ public final class AiChatActivity extends Activity {
         dialog.dismiss();
       }).setNegativeButton("CANCEL",null).show();
   }
+  /** Explicit in-chat live engine checks. Tests never silently cross transports:
+   * offline calls the actual embedded model (not canned diagnostics); cloud
+   * uses the configured HTTPS Worker only after in-session consent.
+   */
+  private void chooseEngineSelfTest(){
+    if(busy||closing){setStatus("Finish the current AI request before testing.");return;}
+    new android.app.AlertDialog.Builder(this)
+      .setTitle("Verify AI engine")
+      .setItems(new String[]{
+        "TEST EMBEDDED OFFLINE • no internet",
+        "TEST ONLINE WORKER • sends a fixed test prompt"
+      },(dialog,which)->testEngineLive(which==1))
+      .setNegativeButton("CANCEL",null).show();
+  }
+
+  private void testEngineLive(boolean online){
+    if(busy||closing)return;
+    if(online && (!consent || !cloud.ready())){
+      setStatus("Online test requires CLOUD configuration and explicit cloud permission.");
+      return;
+    }
+    if(!online && !EmbeddedModelStore.installed(this)){
+      setStatus("Offline model missing. Import a compatible .litertlm file under MODELS.");
+      return;
+    }
+    final int generation=++requestGeneration;
+    final boolean consentAtStart=consent;
+    busy=true;send.setEnabled(false);
+    setStatus(online?"Testing online Worker with an explicit fixed prompt..."
+                    :"Testing actual offline model inference (no cloud)...");
+    worker.execute(()->{
+      String message;
+      boolean verified=false;
+      try {
+        final String reply;
+        if(online){
+          // No actual user prompt is sent by this explicit test.
+          reply=router.ask("Reply with OK.",InferenceRouter.Mode.ONLINE,consentAtStart);
+        } else {
+          if(!embedded.ready())
+            embedded.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
+          reply=embedded.answer("Reply with OK.");
+        }
+        if(reply==null || reply.trim().isEmpty())
+          throw new IllegalStateException("Engine returned no text");
+        message=online ? "Verified LIVE online Worker response (not a BLE AI1 test)."
+                       : "Verified LIVE embedded offline response (no cloud).";
+        verified=true;
+      }catch(Exception e){
+        message=(online?"Online":"Offline")+" AI engine test FAILED: "+e.getMessage();
+      }
+      final String result=message;
+      runOnUiThread(()->{
+        if(closing)return;
+        if(generation==requestGeneration && (!online || (consentAtStart && consent))){
+          setStatus(result);
+        }else if(!closing)setStatus("AI engine test result discarded after settings changed.");
+        busy=false;send.setEnabled(true);
+      });
+    });
+  }
+
   private void cloudSettings(){
     LinearLayout fields=SatelliteUi.column(this);
     int pad=dp(16);fields.setPadding(pad,pad,pad,pad);
@@ -251,19 +314,27 @@ public final class AiChatActivity extends Activity {
     setStatus("Processing "+requestedMode+" request...");
     worker.execute(()->{
       String result;
+      boolean succeeded=false;
       try{
         if(requestedMode==InferenceRouter.Mode.OFFLINE && !embedded.ready()
             && !new OfflineDiagnosticEngine().supports(question))
           throw new IllegalStateException("Import a compatible model for general questions.");
         result=router.ask(question,requestedMode,approved);
+        succeeded=true;
       }catch(Exception e){result="AI unavailable: "+e.getMessage();}
       final String answer=result;
+      final boolean responseSucceeded=succeeded;
       runOnUiThread(()->{
         if(closing)return;
         if(generation==requestGeneration && (!approved||consent)){
-          append("AI",answer);
-          speech.speak(ChatMarkdownFormatter.plainSpeech(answer));
-          setStatus(requestedMode+" • Response complete");
+          if(responseSucceeded){
+            append("AI",answer);
+            speech.speak(ChatMarkdownFormatter.plainSpeech(answer));
+            setStatus(requestedMode+" • Response complete");
+          }else{
+            append("SYSTEM",answer);
+            setStatus(requestedMode+" • Request failed");
+          }
         }else setStatus("Old response discarded due to changed settings.");
         busy=false;send.setEnabled(true);
       });
