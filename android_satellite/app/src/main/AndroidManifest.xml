@@ -25,8 +25,8 @@
     <activity android:name=".PhoneCompanionActivity" android:exported="false"/>
     <activity android:name=".GitHubActivity" android:exported="false"/>
     <activity android:name=".ModelsActivity" android:exported="false"/>
-    <activity android:name=".AiChatActivity" android:exported="false" android:windowSoftInputMode="adjustResize"/>
-    <activity android:name=".MainActivity" android:exported="false"/>
+    <activity android:name=".AiChatActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden" android:windowSoftInputMode="adjustResize"/>
+    <activity android:name=".MainActivity" android:exported="false" android:configChanges="orientation|screenSize|keyboardHidden"/>
     <activity android:name=".DashboardActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
   </application>
 </manifest>

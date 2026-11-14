@@ -11,7 +11,9 @@ import javax.net.ssl.HttpsURLConnection;
 import org.json.JSONObject;
 
 /** HTTPS-only client for the existing Worker /ask contract.
- * Credentials remain in memory and must never be logged or persisted.
+ * Credentials are held in memory during requests; optional user-requested
+ * secure persistence is handled separately by CloudCredentialStore with
+ * Android Keystore encryption. Never log Worker credentials or API keys.
  * Run answer() off Android's main thread.
  */
 public final class WorkerCloudEngine implements InferenceRouter.OnlineEngine {
