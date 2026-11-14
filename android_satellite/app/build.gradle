@@ -1,6 +1,50 @@
 plugins { id 'com.android.application'; id 'org.jetbrains.kotlin.android' }
-android { namespace 'com.flipperai.satellite'; compileSdk 35
- defaultConfig { applicationId 'com.flipperai.satellite'; minSdk 26; targetSdk 35; versionCode 2; versionName '0.7.0-ui-restored' }
+
+// CI supplies one increasing Android versionCode per workflow run. Development
+// workstations may build without CI-specific configuration, retaining code 2.
+// Higher versionCode alone is NOT an update: package ID and signing certificate
+// must also match the APK already installed on the user's phone.
+def ciVersionCode = System.getenv('FLIPPER_AI_VERSION_CODE')
+if(ciVersionCode && !ciVersionCode.isInteger())
+  throw new GradleException('FLIPPER_AI_VERSION_CODE must be a positive integer')
+def packageCode = ciVersionCode ? ciVersionCode.toInteger() : 2
+if(packageCode < 1) throw new GradleException('Android versionCode must be positive')
+
+// Optional, private, stable production keystore supplied through Actions secrets.
+// No signing key, password, certificate file, or model weights are committed.
+def signingPath = System.getenv('FLIPPER_ANDROID_SIGNING_KEYSTORE_PATH')
+def signingStorePassword = System.getenv('FLIPPER_ANDROID_KEYSTORE_PASSWORD')
+def signingAlias = System.getenv('FLIPPER_ANDROID_KEY_ALIAS')
+def signingKeyPassword = System.getenv('FLIPPER_ANDROID_KEY_PASSWORD')
+def hasStableSigning = signingPath && signingStorePassword && signingAlias && signingKeyPassword
+if(hasStableSigning && !file(signingPath).isFile())
+  throw new GradleException('Android release keystore file unavailable')
+
+android {
+ namespace 'com.flipperai.satellite'
+ compileSdk 35
+ defaultConfig {
+   applicationId 'com.flipperai.satellite'
+   minSdk 26
+   targetSdk 35
+   versionCode packageCode
+   versionName '0.7.0-ui-restored'
+ }
+ signingConfigs {
+   stableRelease {
+     if(hasStableSigning) {
+       storeFile file(signingPath)
+       storePassword signingStorePassword
+       keyAlias signingAlias
+       keyPassword signingKeyPassword
+     }
+   }
+ }
+ buildTypes {
+   release {
+     if(hasStableSigning) signingConfig signingConfigs.stableRelease
+   }
+ }
  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
 

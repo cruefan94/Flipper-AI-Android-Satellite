@@ -30,6 +30,34 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Set monotonic Android build version
+        shell: bash
+        run: |
+          echo "FLIPPER_AI_VERSION_CODE=$((100000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
+      - name: Prepare optional stable release signing on trusted development branch
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/develop/android-apk-build'
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.FLIPPER_ANDROID_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.FLIPPER_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.FLIPPER_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.FLIPPER_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_BASE64" ] && [ -z "$STORE_PASSWORD" ] && [ -z "$KEY_ALIAS" ] && [ -z "$KEY_PASSWORD" ]; then
+            echo "STABLE_SIGNING_ENABLED=false" >> "$GITHUB_ENV"
+            echo "Stable release signing not configured; continuing with clearly labeled debug APK only."
+          elif [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ] || [ -z "$KEY_PASSWORD" ]; then
+            echo "::error::Stable Android signing secrets are incomplete. No signed release will be built."
+            exit 1
+          else
+            umask 077
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/flipper-ai-stable-release.jks"
+            test -s "$RUNNER_TEMP/flipper-ai-stable-release.jks"
+            chmod 600 "$RUNNER_TEMP/flipper-ai-stable-release.jks"
+            echo "FLIPPER_ANDROID_SIGNING_KEYSTORE_PATH=$RUNNER_TEMP/flipper-ai-stable-release.jks" >> "$GITHUB_ENV"
+            echo "STABLE_SIGNING_ENABLED=true" >> "$GITHUB_ENV"
+          fi
       - name: Verify mirrored source
         run: python3 android_satellite/tools/preflight.py
       - name: JVM protocol and routing tests
@@ -61,10 +89,44 @@ jobs:
             android_satellite/app/build/outputs/logs/**
           if-no-files-found: ignore
           retention-days: 7
-      - name: Upload APK
+      - name: Upload debug APK (not an in-place update guarantee)
         uses: actions/upload-artifact@v4
         with:
-          name: FlipperAI-Satellite-build-${{ github.run_number }}-${{ github.sha }}-UNTESTED
+          name: FlipperAI-Satellite-DEBUG-UNTESTED-${{ github.run_number }}-${{ github.sha }}
           path: android_satellite/app/build/outputs/apk/debug/${{ env.APK_NAME }}
           if-no-files-found: error
           retention-days: 7
+      - name: Build stable-key signed release candidate
+        if: env.STABLE_SIGNING_ENABLED == 'true'
+        shell: bash
+        env:
+          FLIPPER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.FLIPPER_ANDROID_KEYSTORE_PASSWORD }}
+          FLIPPER_ANDROID_KEY_ALIAS: ${{ secrets.FLIPPER_ANDROID_KEY_ALIAS }}
+          FLIPPER_ANDROID_KEY_PASSWORD: ${{ secrets.FLIPPER_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          gradle -p android_satellite --no-daemon :app:assembleRelease
+      - name: Verify release APK signature and version
+        if: env.STABLE_SIGNING_ENABLED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="android_satellite/app/build/outputs/apk/release/app-release.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          FOUND=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | sed -n "s/.*versionCode='\\([0-9]*\\)'.*/\\1/p" | head -n 1)
+          test "$FOUND" = "$FLIPPER_AI_VERSION_CODE" || { echo "::error::Release versionCode mismatch"; exit 1; }
+          echo "Stable-key release APK signature verified. Version code $FOUND." >> "$GITHUB_STEP_SUMMARY"
+          echo "Compare signing certificate fingerprint against the APK already installed before attempting an update." >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload signed update candidate
+        if: env.STABLE_SIGNING_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlipperAI-Satellite-STABLE-SIGNED-UPDATE-CANDIDATE-UNTESTED-${{ github.run_number }}
+          path: android_satellite/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove temporary signing keystore
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/flipper-ai-stable-release.jks"
