@@ -21,6 +21,7 @@
     <uses-native-library android:name="libvndksupport.so" android:required="false"/>
     <uses-native-library android:name="libOpenCL.so" android:required="false"/>
     <service android:name=".RadioPlayerService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
+    <activity android:name=".BatteryAssistantActivity" android:exported="false"/>
     <activity android:name=".RadioScannerActivity" android:exported="false"/>
     <activity android:name=".PhoneCompanionActivity" android:exported="false"/>
     <activity android:name=".GitHubActivity" android:exported="false"/>
