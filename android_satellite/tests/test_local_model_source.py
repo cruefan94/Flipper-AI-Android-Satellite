@@ -14,7 +14,7 @@ ROUTER=(SRC/"InferenceRouter.java").read_text()
 class LocalModelSourceTest(unittest.TestCase):
     def test_cleartext_only_loopback(self):
         self.assertIn('cleartextTrafficPermitted="false"',SECURITY)
-        self.assertIn('<domain>127.0.0.1</domain>',SECURITY)
+        self.assertIn('<domain includeSubdomains="false">127.0.0.1</domain>',SECURITY)
         self.assertNotIn('<domain includeSubdomains="true">',SECURITY)
         self.assertIn('android:networkSecurityConfig="@xml/local_model_security"',MANIFEST)
         self.assertIn('android:usesCleartextTraffic="false"',MANIFEST)
