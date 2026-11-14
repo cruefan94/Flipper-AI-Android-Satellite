@@ -157,7 +157,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     deviceInfo.setPadding(0,SatelliteUi.dp(this,10),0,SatelliteUi.dp(this,8));
     root.addView(deviceInfo);
     button("Clear device selection",()->{
-      ble.disconnect();
+      ble.manualDisconnect();
       selectedAddress=null;
       deviceInfo.setText("No device selected.");
       showStatus("Device selection cleared.");
@@ -167,7 +167,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     sources.setOnCheckedChangeListener((group,id)->{
       boolean newDiscoverable=id==discoverableChoice.getId();
       if(discoverableMode!=newDiscoverable){
-        ble.disconnect();
+        ble.manualDisconnect();
         selectedAddress=null;
         deviceInfo.setText("No device selected. Choose a device from this category.");
         connectionState.setText("AI CONNECTION: NOT CONNECTED");
@@ -193,7 +193,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(selected==null){showStatus("Scan and select a Flipper first");return;}
       ble.pair(selected);
     });
-    button("Disconnect",()->{if(permissions())ble.disconnect();});
+    button("Disconnect",()->{if(permissions())ble.manualDisconnect();});
     button("TEST MOMENTUM RPC PING",()->ble.sendStockRpcPing());
     SatelliteUi.sectionTitle(this,root,"ADVANCED");
     button("Advanced AI settings and diagnostics",()->{
@@ -469,6 +469,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       else if(text.startsWith("AI BLE ready"))connectionState.setText("AI CONNECTION: CONNECTED / READY");
       else if(text.startsWith("Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC DETECTED (AI NOT READY)");
       else if(text.startsWith("Connected;"))connectionState.setText("BLUETOOTH CONNECTED — CHECKING AI SERVICE");
+      else if(text.startsWith("Reconnecting") || text.contains("reconnecting in"))connectionState.setText("BLUETOOTH: RECONNECTING... (AI NOT READY)");
       else if(text.startsWith("Connecting") || text.contains("Retrying once"))connectionState.setText("AI CONNECTION: CONNECTING...");
       else if(text.startsWith("Disconnected") || text.startsWith("GATT") || text.contains("service is not installed"))
         connectionState.setText("AI CONNECTION: NOT CONNECTED");
