@@ -8,6 +8,8 @@ import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.Bundle;
 import android.widget.*;
 import java.util.concurrent.ExecutorService;
@@ -35,6 +37,21 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final LinkedHashMap<String,String> nearbyNames=new LinkedHashMap<>();
   private String selectedAddress;
   private int scanEpoch;
+  // Bluetooth scan callbacks can arrive dozens of times per second. The
+  // spinner is refreshed at most once per short interval, and keeps its ID.
+  private final Handler pickerUi=new Handler(Looper.getMainLooper());
+  private BlePickerRows pairedRows=BlePickerRows.empty();
+  private BlePickerRows nearbyRows=BlePickerRows.empty();
+  private boolean nearbyRefreshScheduled=false;
+  private final Runnable nearbyRefresh=()->{
+    nearbyRefreshScheduled=false;
+    if(isFinishing() || isDestroyed())return;
+    refreshList(nearbyDevices,nearbyLabels());
+    showStatus("Discovered "+nearby.size()+" nearby BLE device(s). Select the Flipper you want.");
+  };
+  // Offline models are managed in MODELS, but BLE must recognize an import
+  // after returning from that screen without recreating the whole Activity.
+  private volatile String activeModelRevision="";
   private boolean scanAfterPermission;
   private boolean refreshAfterPermission;
   private final String[] labels={"OFFLINE","HYBRID","ONLINE"};
@@ -43,7 +60,6 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final LocalModelEngine localModel=new LocalModelEngine();
   private EmbeddedLlmEngine embeddedModel;
   private InferenceRouter router;
-  private static final int PICK_EMBEDDED_MODEL=4127;
   private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
   private final BleSessionJobs bleSessionJobs=new BleSessionJobs(inferenceWorker);
   private CheckBox cloudConsent;
@@ -56,6 +72,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     embeddedModel=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
     if(EmbeddedModelStore.installed(this))
       embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
+    activeModelRevision=modelRevision();
     router=new InferenceRouter(
       new OfflineModelOrDiagnostics(new EmbeddedOrLocalEngine(embeddedModel,localModel),
         new OfflineDiagnosticEngine()),cloud);
@@ -192,38 +209,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     mode=new Spinner(this);
     mode.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
     advancedSection.addView(mode);
-    TextView builtInLabel=new TextView(this);
-    builtInLabel.setText("Embedded OFFLINE AI: download Qwen3-0.6B.litertlm (586 MB; INT8) from the model page, then import it with Android Files. Do NOT choose the newer dynamic INT4 file, which requires a newer runtime. LiteRT-LM runs inside this app; model weights are not bundled.");
+    TextView builtInLabel=SatelliteUi.text(this,
+      "Manage imported .litertlm/ZIP models in OFFLINE MODELS. " +
+      "Import and live testing are kept on that dedicated screen; Bluetooth " +
+      "will use the installed model when you return.",
+      14,SatelliteUi.MUTED,false);
     advancedSection.addView(builtInLabel);
-    advancedButton("Find compatible Qwen3-0.6B model",()->{
-      startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW,
-        android.net.Uri.parse("https://huggingface.co/litert-community/Qwen3-0.6B")));
-    });
-    advancedButton("Import offline model (.litertlm or ZIP)",()->{
-      android.content.Intent picker=new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
-      picker.addCategory(android.content.Intent.CATEGORY_OPENABLE);
-      picker.setType("*/*");
-      startActivityForResult(picker,PICK_EMBEDDED_MODEL);
-    });
-    advancedButton("Test embedded AI inference",()->{
-      if(!embeddedModel.ready()){showStatus("Import a .litertlm model before testing embedded AI");return;}
-      showStatus("Loading and testing embedded AI on phone (this may take time)...");
-      inferenceWorker.execute(()->{
-        try{
-          String answer=embeddedModel.answer("Reply with OK.");
-          showStatus("Verified LIVE embedded offline model response: "+answer);
-        }catch(Exception e){showStatus("Embedded model failed: "+e.getMessage());}
-      });
-    });
-    advancedButton("Remove imported embedded model",()->{
-      showStatus("Removing private offline model file...");
-      inferenceWorker.execute(()->{
-        embeddedModel.clear();
-        showStatus(EmbeddedModelStore.delete(this)
-          ? "Embedded model removed; diagnostic fallback still available"
-          : "Could not delete imported offline model file");
-      });
-    });
+    advancedButton("OPEN OFFLINE MODELS",()->SatelliteUi.open(this,ModelsActivity.class));
     TextView localLabel=new TextView(this);
     localLabel.setText("Alternative offline backend: an OpenAI-compatible server on this phone, restricted to 127.0.0.1. Embedded model takes priority when installed.");
     advancedSection.addView(localLabel);
@@ -324,8 +316,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     advancedSection.addView(caveat);
   }
   private void beginScan(){
+    pickerUi.removeCallbacks(nearbyRefresh);
+    nearbyRefreshScheduled=false;
     nearby.clear();nearbyNames.clear();
-    nearbyDevices.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"None — scanning for nearby devices..."}));
+    selectedAddress=null;
+    deviceInfo.setText("No device selected. Scanning for nearby BLE devices...");
+    refreshList(nearbyDevices,new LinkedHashMap<String,String>());
+    showStatus("Scanning for nearby devices...");
     final int epoch=++scanEpoch;
     ble.startScan();
     new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(()->{
@@ -349,13 +346,16 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       BluetoothManager manager=(BluetoothManager)getSystemService(BLUETOOTH_SERVICE);
       BluetoothAdapter adapter=manager==null?null:manager.getAdapter();
       if(adapter==null || !adapter.isEnabled()){
+        discovered.clear();deviceLabels.clear();
+        refreshList(devices,deviceLabels);
         showStatus("Enable Bluetooth to view paired devices");return;
       }
       java.util.Set<BluetoothDevice> bonded=adapter.getBondedDevices();
+      discovered.clear();deviceLabels.clear();
       if(bonded==null || bonded.isEmpty()){
+        refreshList(devices,deviceLabels);
         showStatus("No paired devices found. Pair your Flipper in Android Bluetooth settings.");return;
       }
-      discovered.clear();deviceLabels.clear();
       java.util.Set<String> connected=new java.util.HashSet<>();
       try{
         for(BluetoothDevice active:manager.getConnectedDevices(BluetoothProfile.GATT))
@@ -379,42 +379,49 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     return name==null || name.trim().isEmpty()?"Unknown Bluetooth device":name.trim();
   }
   private void refreshList(Spinner spinner,LinkedHashMap<String,String> labels){
-    java.util.ArrayList<String> values=new java.util.ArrayList<>();
-    values.add("None — no device selected");
-    values.addAll(labels.values());
-    spinner.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,values));
+    BlePickerRows previous=spinner==nearbyDevices?nearbyRows:pairedRows;
+    String selectedId=previous.idAt(spinner.getSelectedItemPosition());
+    BlePickerRows next=BlePickerRows.from(labels);
+    if(spinner==nearbyDevices)nearbyRows=next;
+    else pairedRows=next;
+    spinner.setAdapter(new ArrayAdapter<String>(this,
+      android.R.layout.simple_spinner_dropdown_item,next.labels()));
+    // Never mistake two same-named devices for one another or reset the user's
+    // pending selection each time a BLE advertisement arrives.
+    spinner.setSelection(next.positionFor(selectedId));
   }
   private void selectFrom(Spinner spinner,boolean fromNearby){
-    String label=spinner.getSelectedItem()==null?null:spinner.getSelectedItem().toString();
-    if(label==null || label.startsWith("None —")){
+    if(fromNearby!=discoverableMode){
+      showStatus("Switch device category before selecting.");return;
+    }
+    BlePickerRows rows=fromNearby?nearbyRows:pairedRows;
+    String id=rows.idAt(spinner.getSelectedItemPosition());
+    if(id==null){
       selectedAddress=null;
-      deviceInfo.setText("No device selected.");return;
+      deviceInfo.setText("No device selected.");
+      return;
     }
-    if(fromNearby!=discoverableMode){showStatus("Switch device category before selecting.");return;}
-    LinkedHashMap<String,String> names=fromNearby?nearbyLabels():deviceLabels;
-    for(java.util.Map.Entry<String,String> entry:names.entrySet()){
-      if(entry.getValue().equals(label)){
-        selectedAddress=entry.getKey();
-        (fromNearby?devices:nearbyDevices).setSelection(0);
-        BluetoothDevice device=fromNearby?nearby.get(selectedAddress):discovered.get(selectedAddress);
-        if(device==null)return;
-        String kind="Unknown";
-        try{
-          int type=device.getType();
-          kind=type==BluetoothDevice.DEVICE_TYPE_LE?"Bluetooth Low Energy":
-            type==BluetoothDevice.DEVICE_TYPE_DUAL?"Bluetooth Classic + LE":
-            type==BluetoothDevice.DEVICE_TYPE_CLASSIC?"Bluetooth Classic":"Unknown Bluetooth type";
-        }catch(SecurityException ignored){}
-        int bond=BluetoothDevice.BOND_NONE;
-        try{bond=device.getBondState();}catch(SecurityException ignored){}
-        deviceInfo.setText("Selected: "+deviceName(device,null)+"\nType: "+kind+
-          "\nPairing: "+(bond==BluetoothDevice.BOND_BONDED?"Paired":bond==BluetoothDevice.BOND_BONDING?"Pairing":"Not paired")+
-          "\nSource: "+(fromNearby?"BLE discovery":"Android paired devices")+
-          "\nAI channel: "+(ble.isReady()?"Ready":"Not connected"));
-        return;
-      }
+    BluetoothDevice device=fromNearby?nearby.get(id):discovered.get(id);
+    if(device==null){
+      selectedAddress=null;
+      deviceInfo.setText("Device no longer in this list. Refresh or scan again.");
+      return;
     }
-    showStatus("Choose a device from the list first.");
+    selectedAddress=id;
+    (fromNearby?devices:nearbyDevices).setSelection(0);
+    String kind="Unknown";
+    try{
+      int type=device.getType();
+      kind=type==BluetoothDevice.DEVICE_TYPE_LE?"Bluetooth Low Energy":
+        type==BluetoothDevice.DEVICE_TYPE_DUAL?"Bluetooth Classic + LE":
+        type==BluetoothDevice.DEVICE_TYPE_CLASSIC?"Bluetooth Classic":"Unknown Bluetooth type";
+    }catch(SecurityException ignored){}
+    int bond=BluetoothDevice.BOND_NONE;
+    try{bond=device.getBondState();}catch(SecurityException ignored){}
+    deviceInfo.setText("Selected: "+deviceName(device,null)+"\nType: "+kind+
+      "\nPairing: "+(bond==BluetoothDevice.BOND_BONDED?"Paired":bond==BluetoothDevice.BOND_BONDING?"Pairing":"Not paired")+
+      "\nSource: "+(fromNearby?"BLE discovery":"Android paired devices")+
+      "\nAI channel: "+(ble.isReady()?"Ready":"Not connected"));
   }
   private LinkedHashMap<String,String> nearbyLabels(){
     LinkedHashMap<String,String> names=new LinkedHashMap<>();
@@ -528,38 +535,50 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       try{
         String address=device.getAddress();
         if(address==null)return;
+        boolean changed=!nearby.containsKey(address);
         nearby.put(address,device);
-        if(advertisedName!=null && !advertisedName.trim().isEmpty())nearbyNames.put(address,advertisedName);
-        LinkedHashMap<String,String> labels=new LinkedHashMap<>();
-        for(java.util.Map.Entry<String,BluetoothDevice> e:nearby.entrySet()){
-          String name=deviceName(e.getValue(),nearbyNames.get(e.getKey()));
-          labels.put(e.getKey(),name);
+        if(advertisedName!=null && !advertisedName.trim().isEmpty()){
+          if(!advertisedName.equals(nearbyNames.get(address)))changed=true;
+          nearbyNames.put(address,advertisedName);
         }
-        refreshList(nearbyDevices,labels);
-        showStatus("Discovered "+nearby.size()+" nearby BLE device(s).");
+        if(changed && !nearbyRefreshScheduled){
+          nearbyRefreshScheduled=true;
+          pickerUi.postDelayed(nearbyRefresh,300);
+        }
       }catch(SecurityException e){showStatus("Allow Nearby devices permission to view results.");}
     });
   }
-  @Override protected void onActivityResult(int requestCode,int resultCode,android.content.Intent data){
-    super.onActivityResult(requestCode,resultCode,data);
-    if(requestCode!=PICK_EMBEDDED_MODEL || resultCode!=RESULT_OK || data==null)return;
-    android.net.Uri selected=data.getData();
-    showStatus("Importing model into private Android storage...");
-    inferenceWorker.execute(()->{
-      try{
-        embeddedModel.clear(); // Stop old inference before replacing the same model file.
-        long bytes=EmbeddedModelStore.importFromDocument(this,selected);
-        embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
-        showStatus("Imported "+(bytes/(1024*1024))+" MiB locally. Tap Test embedded AI inference to verify the model.");
-      }catch(Exception e){
-        // A failed import retains the previously installed model.
-        if(EmbeddedModelStore.installed(this))
-          embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
-        showStatus("Model import failed: "+e.getMessage());
-      }
-    });
+  private String modelRevision(){
+    java.io.File installed=EmbeddedModelStore.modelFile(this);
+    return installed.isFile() && installed.length()>0
+      ?installed.length()+":"+installed.lastModified():"not-installed";
+  }
+  @Override protected void onResume(){
+    super.onResume();
+    final String revision=modelRevision();
+    if(!revision.equals(activeModelRevision) && !inferenceWorker.isShutdown()){
+      activeModelRevision=revision;
+      inferenceWorker.execute(()->{
+        // If a model is being imported while returning from MODELS, don't
+        // reconfigure from an obsolete snapshot or interrupt active inference.
+        if(!revision.equals(modelRevision()))return;
+        try{
+          if(EmbeddedModelStore.installed(this))
+            embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
+          else embeddedModel.clear();
+          showStatus(EmbeddedModelStore.installed(this)
+            ?"Updated offline model is available to BLE AI."
+            :"No offline model installed. Basic diagnostics remain available.");
+        }catch(Exception e){
+          showStatus("Offline model could not be loaded for BLE: "+e.getMessage());
+        }
+      });
+    }
   }
   @Override public void onDestroy(){
+    scanEpoch++;
+    pickerUi.removeCallbacks(nearbyRefresh);
+    nearbyRefreshScheduled=false;
     connectionEpoch.advance();
     bleSessionJobs.close();
     ble.stopScan();transports.close();
