@@ -70,11 +70,14 @@ public final class DashboardActivity extends Activity {
 
     // A single navigational route per screen, including tablets in landscape.
     // Old landscape sidebar repeated the same destinations as the cards.
-    boolean wide=getResources().getDisplayMetrics().widthPixels
-      /getResources().getDisplayMetrics().density>=700;
+    int viewportDp=Math.round(getResources().getDisplayMetrics().widthPixels
+      /getResources().getDisplayMetrics().density);
+    boolean wide=viewportDp>=700;
+    // The content width must also fit inside the page's 13dp side padding.
+    int cardWidthDp=Math.max(1,Math.min(680,viewportDp-26));
     LinearLayout content=column();
     LinearLayout.LayoutParams contentParams=new LinearLayout.LayoutParams(
-      wide?dp(680):-1,-2);
+      wide?dp(cardWidthDp):-1,-2);
     contentParams.gravity=Gravity.CENTER_HORIZONTAL;
     root.addView(content,contentParams);
     SatelliteUi.sectionTitle(this,content,"ESSENTIALS");
