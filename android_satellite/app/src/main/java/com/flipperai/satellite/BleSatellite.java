@@ -288,8 +288,10 @@ public final class BleSatellite implements SatelliteTransport {
     /* An old timeout can never disconnect a newly connected phone or a
      * later GATT write. The token and active GATT instance must both match. */
     if(link!=gatt || !writeGuard.isPending(token))return;
-    events.status("AI GATT write timed out; reconnecting is required");
+    events.status("AI GATT write timed out; resetting BLE connection");
+    final BluetoothDevice failedDevice=lastDevice;
     disconnect();
+    scheduleRecovery(failedDevice,-2);
   }
   private synchronized boolean transitionConnected(){
     try{
