@@ -156,7 +156,9 @@ public final class BleSatellite implements SatelliteTransport {
   private synchronized void expireSetup(BluetoothGatt link){
     if(link!=gatt || isReady() || (stockRpcDetected && stockRpcSubscribed))return;
     events.status("AI GATT connection setup timed out");
+    final BluetoothDevice timedOutDevice=lastDevice;
     disconnect();
+    scheduleRecovery(timedOutDevice,-1);
   }
   public void reconnect(){if(lastDevice!=null)connect(lastDevice);}
   /** Pair the device explicitly chosen from scan results, without connecting first. */
