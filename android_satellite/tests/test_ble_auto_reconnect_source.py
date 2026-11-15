@@ -29,6 +29,11 @@ class ReconnectSourceTests(unittest.TestCase):
         self.assertGreaterEqual(UI.count("ble.manualDisconnect();"),3)
         self.assertIn('BLUETOOTH: RECONNECTING... (AI NOT READY)', UI)
 
+    def test_duplicate_connected_event_is_idempotent(self):
+        self.assertIn("if(state.alreadyConnected())", BLE)
+        self.assertIn("Duplicate BLE connected callback ignored", BLE)
+        self.assertIn("if(link!=gatt)return;", BLE)
+
     def test_stock_rpc_not_ai_ready(self):
         self.assertIn("stockRpcSubscribed", BLE)
         self.assertIn("AI not ready", BLE)
