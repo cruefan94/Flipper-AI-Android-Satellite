@@ -42,6 +42,8 @@ javac -cp "$DEST" -d "$DEST" "$SRC/GattDiscoveryEvidence.java" "$ROOT/android_sa
 java -cp "$DEST" GattDiscoveryEvidenceTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/TransportStateConcurrencyTest.java"
 java -cp "$DEST" TransportStateConcurrencyTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/TransportStateDuplicateConnectedTest.java"
+java -cp "$DEST" TransportStateDuplicateConnectedTest
 javac -cp "$DEST" -d "$DEST" "$SRC/SatelliteTransport.java" "$SRC/SatelliteTransportCoordinator.java" "$ROOT/android_satellite/tests/SatelliteTransportCoordinatorTest.java"
 java -cp "$DEST" SatelliteTransportCoordinatorTest
 javac -cp "$DEST" -d "$DEST" "$SRC/WifiRelayEndpointPolicy.java" "$SRC/WifiRelayEnvelope.java" "$ROOT/android_satellite/tests/WifiRelaySecurityTest.java"
