@@ -19,6 +19,8 @@ class ReconnectSourceTests(unittest.TestCase):
     def test_recovery_after_disconnect_and_setup_timeout(self):
         self.assertIn("scheduleRecovery(failedDevice,code);", BLE)
         self.assertIn("scheduleRecovery(timedOutDevice,-1);", BLE)
+        self.assertIn("scheduleRecovery(failedDevice,-2);", BLE)
+        self.assertIn("if(link!=gatt || !writeGuard.isPending(token))return;", BLE)
         self.assertIn("if(link!=gatt || isReady() || (stockRpcDetected && stockRpcSubscribed))return;", BLE)
         self.assertIn("if(link!=gatt)return;", BLE)
 
