@@ -157,7 +157,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     deviceInfo.setPadding(0,SatelliteUi.dp(this,10),0,SatelliteUi.dp(this,8));
     root.addView(deviceInfo);
     button("Clear device selection",()->{
-      ble.disconnect();
+      ble.manualDisconnect();
       selectedAddress=null;
       deviceInfo.setText("No device selected.");
       showStatus("Device selection cleared.");
@@ -167,7 +167,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     sources.setOnCheckedChangeListener((group,id)->{
       boolean newDiscoverable=id==discoverableChoice.getId();
       if(discoverableMode!=newDiscoverable){
-        ble.disconnect();
+        ble.manualDisconnect();
         selectedAddress=null;
         deviceInfo.setText("No device selected. Choose a device from this category.");
         connectionState.setText("AI CONNECTION: NOT CONNECTED");
@@ -193,7 +193,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(selected==null){showStatus("Scan and select a Flipper first");return;}
       ble.pair(selected);
     });
-    button("Disconnect",()->{if(permissions())ble.disconnect();});
+    button("Disconnect",()->{if(permissions())ble.manualDisconnect();});
     button("TEST MOMENTUM RPC PING",()->ble.sendStockRpcPing());
     SatelliteUi.sectionTitle(this,root,"ADVANCED");
     button("Advanced AI settings and diagnostics",()->{
@@ -291,8 +291,14 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(!permissions())return;
       showStatus(transports.isReady()
           ? "AI GATT transport ready; HELLO/ASK exchange must still be verified on the Flipper"
-          : ble.hasStockRpc() ? "Stock Momentum RPC detected. Indications: "+(ble.isStockRpcSubscribed()?"enabled":"not enabled")+". Received: "+ble.stockRpcNotificationCount()+". AI bridge not installed."
+          : ble.hasStockRpc() ? "Stock Momentum RPC detected. Indications: "+(ble.isStockRpcSubscribed()?"enabled":"not enabled")+". Received: "+ble.stockRpcNotificationCount()+". Android AI service absent in current discovery; firmware registration not independently confirmed."
           : "No authorized AI GATT or stock Momentum RPC session.");
+    });
+    advancedButton("Explain last BLE discovery",()->{
+      new android.app.AlertDialog.Builder(this)
+        .setTitle("Bluetooth AI1 diagnostic")
+        .setMessage(ble.gattDiscoveryReport()+"\n\n"+ble.gattDiscoveryNextStep())
+        .setPositiveButton("OK",null).show();
     });
     advancedButton("Copy BLE hardware test report",()->{
       // No MAC addresses, tokens, device IDs or user prompts are included.
@@ -301,6 +307,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         +"Stock Momentum RPC: "+(ble.hasStockRpc()?"DETECTED":"NOT DETECTED")+"\n"
         +"RPC indications: "+(ble.isStockRpcSubscribed()?"ENABLED":"NOT ENABLED")+"\n"
         +"RPC notifications received: "+ble.stockRpcNotificationCount()+"\n"
+        +ble.gattDiscoveryReport()+"\n"
+        +"Recommended next check: "+ble.gattDiscoveryNextStep()+"\n"
         +"Offline model file: "+(EmbeddedModelStore.installed(this)?"IMPORTED":"NOT IMPORTED")+"\n"
         +"Note: model file presence does not prove live AI inference.\n"
         +"Dedicated AI BLE and protocol must be tested on physical custom Momentum firmware.";
@@ -469,6 +477,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       else if(text.startsWith("AI BLE ready"))connectionState.setText("AI CONNECTION: CONNECTED / READY");
       else if(text.startsWith("Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC DETECTED (AI NOT READY)");
       else if(text.startsWith("Connected;"))connectionState.setText("BLUETOOTH CONNECTED — CHECKING AI SERVICE");
+      else if(text.startsWith("Reconnecting") || text.contains("reconnecting in"))connectionState.setText("BLUETOOTH: RECONNECTING... (AI NOT READY)");
       else if(text.startsWith("Connecting") || text.contains("Retrying once"))connectionState.setText("AI CONNECTION: CONNECTING...");
       else if(text.startsWith("Disconnected") || text.startsWith("GATT") || text.contains("service is not installed"))
         connectionState.setText("AI CONNECTION: NOT CONNECTED");
