@@ -330,7 +330,11 @@ public final class BleSatellite implements SatelliteTransport {
       if(status==BluetoothProfile.STATE_CONNECTED && code==BluetoothGatt.GATT_SUCCESS){
         /* Android may deliver a duplicate callback or an old transition.
          * Reject invalid transitions without throwing on a Binder thread. */
-        if(!transitionConnected()){
+        if(state.alreadyConnected()){
+           events.status("Duplicate BLE connected callback ignored");
+           return;
+         }
+         if(!transitionConnected()){
           events.status("Unexpected BLE connection state; reset required");
           disconnect();
           return;
