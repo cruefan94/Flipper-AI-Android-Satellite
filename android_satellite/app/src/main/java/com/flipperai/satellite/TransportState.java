@@ -10,6 +10,10 @@ public final class TransportState {
     public synchronized Phase phase() { return phase; }
     public synchronized void begin() { phase=Phase.CONNECTING; mtu=23; }
     public synchronized void connected() { if(phase!=Phase.CONNECTING) throw new IllegalStateException("connect order");phase=Phase.DISCOVERING; }
+    /** Same-GATT duplicate CONNECTED callbacks are harmless after first acceptance. */
+    public synchronized boolean alreadyConnected() {
+        return phase==Phase.DISCOVERING || phase==Phase.SUBSCRIBING || phase==Phase.READY;
+    }
     public synchronized void subscribing() { if(phase!=Phase.DISCOVERING) throw new IllegalStateException("discovery order");phase=Phase.SUBSCRIBING; }
     public synchronized void ready() { if(phase!=Phase.SUBSCRIBING) throw new IllegalStateException("subscription order");phase=Phase.READY; }
     public synchronized void disconnected() { phase=Phase.DISCONNECTED;mtu=23; }
