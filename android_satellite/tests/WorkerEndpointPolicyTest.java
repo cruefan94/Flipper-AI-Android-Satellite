@@ -11,8 +11,8 @@ public class WorkerEndpointPolicyTest {
     // Reject pasted whitespace rather than silently changing the configured endpoint.
     bad(" https://example.workers.dev/ask",token);
     bad("https://example.workers.dev/ask ",token);
-    bad("\\thttps://example.workers.dev/ask",token);
-    bad("https://example.workers.dev/ask\\n",token);
+    bad("\thttps://example.workers.dev/ask",token);
+    bad("https://example.workers.dev/ask\n",token);
     bad("https://user@example.workers.dev/ask",token);
     bad("https://example.workers.dev/ask?x=1",token);
     bad("https://example.workers.dev:8443/ask",token);
