@@ -6,7 +6,7 @@ public final class WorkerEndpointPolicy {
   public static String validate(String rawUrl,String deviceToken) {
     if(rawUrl==null || deviceToken==null)throw new IllegalArgumentException("Missing cloud configuration");
     URI uri;
-    try {uri=URI.create(rawUrl.trim());}
+    try {uri=URI.create(rawUrl);}
     catch(IllegalArgumentException e){throw new IllegalArgumentException("Invalid cloud Worker URL");}
     if(!"https".equalsIgnoreCase(uri.getScheme()) || uri.getUserInfo()!=null ||
        uri.getHost()==null || uri.getFragment()!=null || uri.getQuery()!=null ||

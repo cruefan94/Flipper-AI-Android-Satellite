@@ -8,6 +8,11 @@ public class WorkerEndpointPolicyTest {
     String token="0123456789abcdef0123456789abcdef";
     if(!WorkerEndpointPolicy.validate("https://example.workers.dev/ask",token).equals("https://example.workers.dev/ask"))throw new AssertionError();
     bad("http://example.workers.dev/ask",token);
+    // Reject pasted whitespace rather than silently changing the configured endpoint.
+    bad(" https://example.workers.dev/ask",token);
+    bad("https://example.workers.dev/ask ",token);
+    bad("\thttps://example.workers.dev/ask",token);
+    bad("https://example.workers.dev/ask\n",token);
     bad("https://user@example.workers.dev/ask",token);
     bad("https://example.workers.dev/ask?x=1",token);
     bad("https://example.workers.dev:8443/ask",token);
