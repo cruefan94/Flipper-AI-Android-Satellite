@@ -32,6 +32,8 @@ javac -cp "$DEST" -d "$DEST" "$SRC/BleSessionJobs.java" "$ROOT/android_satellite
 java -cp "$DEST" BleSessionJobsTest
 javac -cp "$DEST" -d "$DEST" "$SRC/WorkerEndpointPolicy.java" "$ROOT/android_satellite/tests/WorkerEndpointPolicyTest.java"
 java -cp "$DEST" WorkerEndpointPolicyTest
+javac -cp "$DEST" -d "$DEST" "$SRC/WorkerHttpStatus.java" "$ROOT/android_satellite/tests/WorkerHttpStatusTest.java"
+java -cp "$DEST" WorkerHttpStatusTest
 javac -cp "$DEST" -d "$DEST" "$SRC/LocalModelEndpointPolicy.java" "$ROOT/android_satellite/tests/LocalModelEndpointPolicyTest.java"
 java -cp "$DEST" LocalModelEndpointPolicyTest
 javac -cp "$DEST" -d "$DEST" "$SRC/BleWriteGuard.java" "$ROOT/android_satellite/tests/BleWriteGuardTest.java"
