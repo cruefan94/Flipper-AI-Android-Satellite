@@ -17,7 +17,7 @@
     <intent><action android:name="android.intent.action.TTS_SERVICE"/></intent>
     <intent><action android:name="android.speech.RecognitionService"/></intent>
   </queries>
-  <application android:label="Flipper AI Satellite" android:theme="@style/FlipperAiTheme" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
+  <application android:label="${satelliteAppLabel}" android:theme="@style/FlipperAiTheme" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/local_model_security" android:allowBackup="false">
     <uses-native-library android:name="libvndksupport.so" android:required="false"/>
     <uses-native-library android:name="libOpenCL.so" android:required="false"/>
     <service android:name=".RadioPlayerService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
