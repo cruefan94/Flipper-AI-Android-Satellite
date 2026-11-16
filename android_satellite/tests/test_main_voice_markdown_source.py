@@ -18,8 +18,12 @@ BLE=(JAVA/"MainActivity.java").read_text()
 class MainVoiceMarkdown(unittest.TestCase):
     def test_main_package_and_existing_model_are_preserved(self):
         self.assertIn("applicationId 'com.flipperai.satellite'",GRADLE)
-        self.assertNotIn("applicationIdSuffix",GRADLE)
-        self.assertIn('android:label="Flipper AI Satellite"',MANIFEST)
+        # Separate test package is permitted only behind explicit opt-in.
+        self.assertIn("if (satelliteSideBySide)",GRADLE)
+        self.assertIn("applicationIdSuffix '.test'",GRADLE)
+        self.assertIn("?: 'false'",GRADLE)
+        self.assertIn("'Flipper AI Satellite Test' : 'Flipper AI Satellite'",GRADLE)
+        self.assertIn('android:label="${satelliteAppLabel}"',MANIFEST)
         self.assertIn("EmbeddedModelStore.installed(this)",CHAT)
         self.assertIn("embedded.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath())",CHAT)
 
