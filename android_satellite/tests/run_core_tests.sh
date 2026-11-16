@@ -30,6 +30,8 @@ javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SessionEpochTest.jav
 java -cp "$DEST" SessionEpochTest
 javac -cp "$DEST" -d "$DEST" "$SRC/BleSessionJobs.java" "$ROOT/android_satellite/tests/BleSessionJobsTest.java"
 java -cp "$DEST" BleSessionJobsTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/BleSessionReconnectIsolationTest.java"
+java -cp "$DEST" BleSessionReconnectIsolationTest
 javac -cp "$DEST" -d "$DEST" "$SRC/WorkerEndpointPolicy.java" "$ROOT/android_satellite/tests/WorkerEndpointPolicyTest.java"
 java -cp "$DEST" WorkerEndpointPolicyTest
 javac -cp "$DEST" -d "$DEST" "$SRC/WorkerHttpStatus.java" "$ROOT/android_satellite/tests/WorkerHttpStatusTest.java"
