@@ -6,10 +6,6 @@ on:
     paths:
       - 'android_satellite/**'
       - '.github/workflows/android-side-by-side-test-apk.yml'
-  pull_request:
-    paths:
-      - 'android_satellite/**'
-      - '.github/workflows/android-side-by-side-test-apk.yml'
 permissions:
   contents: read
 jobs:

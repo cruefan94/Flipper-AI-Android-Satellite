@@ -1,10 +1,6 @@
 name: Android Satellite — isolated BLE navigation test APK
 
 on:
-  pull_request:
-    paths:
-      - 'android_satellite/**'
-      - '.github/workflows/android-ble-navigation-test-apk.yml'
   workflow_dispatch:
 
 permissions:
