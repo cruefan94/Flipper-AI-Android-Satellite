@@ -18,6 +18,17 @@ class WorkerNetworkRedactionSourceTest(unittest.TestCase):
         self.assertNotIn("networkFailure);", handler)
         self.assertNotIn("networkFailure,", handler)
 
+    def test_revoked_request_takes_priority_over_disconnect_io(self):
+        source = SOURCE.read_text(encoding="utf-8")
+        handler = source.split("catch(IOException networkFailure)", 1)[1].split("finally", 1)[0]
+        self.assertIn("if(generation!=requestGeneration)", handler)
+        self.assertIn('throw new IllegalStateException("Cloud authorization revoked")', handler)
+        self.assertLess(handler.index("Cloud authorization revoked"),
+                        handler.index("Cloud network or TLS request failed."))
+        # Cancellation must not leak the original IOException as a cause.
+        self.assertNotIn("new IllegalStateException(networkFailure", handler)
+        self.assertNotIn("throw networkFailure", handler)
+
     def test_authentication_diagnostic_is_separate(self):
         source = SOURCE.read_text(encoding="utf-8")
         self.assertIn("WorkerHttpStatus.describe(status)", source)
