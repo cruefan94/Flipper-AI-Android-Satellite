@@ -6,6 +6,8 @@ plugins {
 // CI assigns a monotonically increasing versionCode to prevent downgrade
 // errors. Local developers retain the previous value by default.
 def satelliteVersionCode = (findProperty('satelliteVersionCode') ?: '2').toString().toInteger()
+// Opt-in second app for hardware testing; never attempts to replace user's working APK.
+def satelliteSideBySide = (findProperty('satelliteSideBySide') ?: 'false').toString().toBoolean()
 
 // A persistent signing key must be provided by protected GitHub Actions secrets.
 // Without it, Gradle uses its normal per-run debug key and the APK should be
@@ -22,7 +24,8 @@ android {
         minSdk 26
         targetSdk 35
         versionCode satelliteVersionCode
-        versionName '0.7.0-ui-restored'
+        versionName satelliteSideBySide ? '0.7.0-ui-restored-test' : '0.7.0-ui-restored'
+        manifestPlaceholders = [satelliteAppLabel: satelliteSideBySide ? 'Flipper AI Satellite Test' : 'Flipper AI Satellite']
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -40,6 +43,9 @@ android {
     }
     buildTypes {
         debug {
+            if (satelliteSideBySide) {
+                applicationIdSuffix '.test'
+            }
             if (useStableKeystore) {
                 signingConfig signingConfigs.persistentDebug
             }
