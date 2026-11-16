@@ -45,6 +45,45 @@ public final class BleSessionJobsTest {
       CountDownLatch again=new CountDownLatch(1);
       check(jobs.submit(again::countDown),"new connection accepts BLE work");
       check(again.await(2,TimeUnit.SECONDS),"reconnected BLE operation runs");
+      // Race: disconnect begins while a worker's execute() is still
+      // submitting a BLE job. Cancellation must wait for submission and
+      // then cancel the queued FutureTask before it can run.
+      CountDownLatch submitting=new CountDownLatch(1);
+      CountDownLatch allowSubmit=new CountDownLatch(1);
+      CountDownLatch cancelled=new CountDownLatch(1);
+      AtomicInteger racedRuns=new AtomicInteger();
+      Executor heldExecutor=task->{
+        submitting.countDown();
+        await(allowSubmit);
+        executor.execute(task);
+      };
+      BleSessionJobs racingJobs=new BleSessionJobs(heldExecutor);
+      Thread submitter=new Thread(()->check(racingJobs.submit(racedRuns::incrementAndGet),
+        "race submission accepted"));
+      Thread disconnector=new Thread(()->{
+        racingJobs.cancelAll();
+        cancelled.countDown();
+      });
+      // Keep the executor busy until cancellation has completed.
+      CountDownLatch raceOccupied=new CountDownLatch(1),raceRelease=new CountDownLatch(1);
+      Future<?> blocker=executor.submit(()->{
+        raceOccupied.countDown();
+        await(raceRelease);
+      });
+      check(raceOccupied.await(2,TimeUnit.SECONDS),"race executor occupied");
+      submitter.start();
+      check(submitting.await(2,TimeUnit.SECONDS),"race submission entered");
+      disconnector.start();
+      allowSubmit.countDown();
+      submitter.join(2000);
+      check(!submitter.isAlive(),"race submitter completed");
+      check(cancelled.await(2,TimeUnit.SECONDS),"race disconnect completed");
+      raceRelease.countDown();
+      blocker.get(2,TimeUnit.SECONDS);
+      executor.submit(()->{}).get(2,TimeUnit.SECONDS);
+      check(racedRuns.get()==0,"disconnect cancels job submitted concurrently");
+      disconnector.join(2000);
+      racingJobs.close();
       jobs.close();
       check(!jobs.submit(executed::incrementAndGet),"Activity teardown rejects BLE requests");
       check(executed.get()==0,"closed gate must not execute requests");
