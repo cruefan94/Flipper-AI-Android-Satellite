@@ -48,7 +48,11 @@ android {
     buildTypes {
         debug {
             if (satelliteSideBySide) {
-                applicationIdSuffix satelliteNavigationTest ? '.navtest' : '.test'
+                applicationIdSuffix '.test'
+                // Keep the existing side-by-side Test identity untouched.
+                if (satelliteNavigationTest) {
+                    applicationIdSuffix '.navtest'
+                }
             }
             if (useStableKeystore) {
                 signingConfig signingConfigs.persistentDebug
