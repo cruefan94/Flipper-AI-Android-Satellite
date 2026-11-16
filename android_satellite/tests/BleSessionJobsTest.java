@@ -83,6 +83,37 @@ public final class BleSessionJobsTest {
       executor.submit(()->{}).get(2,TimeUnit.SECONDS);
       check(racedRuns.get()==0,"disconnect cancels job submitted concurrently");
       disconnector.join(2000);
+      // Rejected executor submissions must not escape as uncaught failures
+      // or accidentally run after the BLE session is invalidated.
+      AtomicInteger rejectedRuns=new AtomicInteger();
+      BleSessionJobs rejectedJobs=new BleSessionJobs(task->{
+        throw new RejectedExecutionException("executor shutting down");
+      });
+      check(!rejectedJobs.submit(rejectedRuns::incrementAndGet),
+        "executor rejection returns false");
+      rejectedJobs.cancelAll();
+      rejectedJobs.close();
+      check(!rejectedJobs.submit(rejectedRuns::incrementAndGet),
+        "closed rejected executor cannot accept BLE work");
+      check(rejectedRuns.get()==0,"rejected BLE jobs never run");
+
+      // Activity teardown cancels queued BLE work while leaving unrelated
+      // tasks on the shared Android inference executor unaffected.
+      CountDownLatch closeOccupied=new CountDownLatch(1),closeRelease=new CountDownLatch(1);
+      Future<?> closeBlocker=executor.submit(()->{
+        closeOccupied.countDown();
+        await(closeRelease);
+      });
+      check(closeOccupied.await(2,TimeUnit.SECONDS),"close executor occupied");
+      AtomicInteger closeRuns=new AtomicInteger();
+      BleSessionJobs closingJobs=new BleSessionJobs(executor);
+      check(closingJobs.submit(closeRuns::incrementAndGet),"queued job before close");
+      closingJobs.close();
+      check(!closingJobs.submit(closeRuns::incrementAndGet),"close rejects new job");
+      closeRelease.countDown();
+      closeBlocker.get(2,TimeUnit.SECONDS);
+      executor.submit(()->{}).get(2,TimeUnit.SECONDS);
+      check(closeRuns.get()==0,"close cancels queued BLE work");
       racingJobs.close();
       jobs.close();
       check(!jobs.submit(executed::incrementAndGet),"Activity teardown rejects BLE requests");
