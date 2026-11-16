@@ -22,7 +22,8 @@ public class WorkerEndpointPolicyTest {
     bad("https://example.workers.dev/ask/../ask",token);
     bad("https://example.workers.dev:443/ask",token);
     bad("https://example.workers.dev/ask","0123456789abcde");
-    bad("https://example.workers.dev/ask",token+"\\n");
+    bad("https://example.workers.dev/ask",token+"\n");
+    bad("https://example.workers.dev/ask",token+"\t");
     bad("https://example.workers.dev/ask",token+" ");
     // The maximum supported token length is permitted; longer tokens fail closed.
     String maxToken = "A".repeat(256);
