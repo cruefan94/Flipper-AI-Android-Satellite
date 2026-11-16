@@ -20,6 +20,18 @@ class CloudRevocationSourceTest(unittest.TestCase):
         self.assertIn('if(generation!=requestGeneration)throw new IllegalStateException("Cloud authorization revoked");',ENGINE)
         self.assertIn("if(active==conn)active=null;",ENGINE)
         self.assertIn("conn.disconnect();",ENGINE)
+    def test_revocation_wins_over_late_http_error(self):
+        # The status check is a network-completion boundary: a cancelled
+        # request must not surface a stale 401/502 after consent was revoked.
+        start=ENGINE.index("int status=conn.getResponseCode();")
+        end=ENGINE.index("if(status!=200)throw new IllegalStateException(WorkerHttpStatus.describe(status));",start)
+        guard=ENGINE[start:end]
+        self.assertIn("synchronized(this)",guard)
+        self.assertIn("if(generation!=requestGeneration)",guard)
+        self.assertIn('throw new IllegalStateException("Cloud authorization revoked");',guard)
+        self.assertLess(ENGINE.index("int status=conn.getResponseCode();"),
+                        ENGINE.index("if(status!=200)throw new IllegalStateException(WorkerHttpStatus.describe(status));"))
+
     def test_setup_failures_also_release_active_connection(self):
         setup=ENGINE.index("conn.setInstanceFollowRedirects(false);")
         guard=ENGINE.rfind("    try {",0,setup)
