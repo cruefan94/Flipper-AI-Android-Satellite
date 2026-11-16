@@ -22,7 +22,7 @@ public final class BleSessionJobs {
     if(worker==null)throw new IllegalArgumentException("Worker is required");
     this.worker=worker;
   }
-  public boolean submit(Runnable operation) {
+  /** Serialize enqueue with disconnect cancellation so a request cannot slip\n   * between the pending-set snapshot and worker submission. */\n  public synchronized boolean submit(Runnable operation) {
     if(operation==null)throw new IllegalArgumentException("Operation is required");
     if(closed)return false;
     FutureTask<Void> task=new FutureTask<Void>(operation,null) {
@@ -39,11 +39,11 @@ public final class BleSessionJobs {
     }
   }
   /** Called synchronously when the BLE link or its session is invalidated. */
-  public void cancelAll() {
+  public synchronized void cancelAll() {
     for(FutureTask<?> task:pending)task.cancel(true);
   }
   /** Permanently rejects further BLE work after Activity shutdown. */
-  public void close() {
+  public synchronized void close() {
     closed=true;
     cancelAll();
   }
