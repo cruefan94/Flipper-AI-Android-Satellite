@@ -2,6 +2,7 @@ package com.flipperai.satellite;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.Proxy;
@@ -85,6 +86,12 @@ public final class WorkerCloudEngine implements InferenceRouter.OnlineEngine {
         if(generation!=requestGeneration)throw new IllegalStateException("Cloud authorization revoked");
       }
       return reply;
+    } catch(IOException networkFailure) {
+      // Android/Java IO exception messages can contain the full request URL,
+      // including private Worker routing information. Do not propagate the
+      // original message or cause into chat, diagnostics, or support reports.
+      throw new IllegalStateException(
+        "Cloud network or TLS request failed. Check connectivity and the Worker service; use offline mode if available.");
     } finally {
       synchronized(this) {if(active==conn)active=null;}
       conn.disconnect();
