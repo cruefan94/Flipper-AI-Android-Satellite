@@ -71,7 +71,7 @@ jobs:
           APK=android_satellite/app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "application-label:\x27Flipper AI Satellite Test\x27"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "application-label:'Flipper AI Satellite Test'"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "name='com.flipperai.satellite.test' versionCode='${{ github.run_number }}'"
       - name: Give APK a unique download filename
         run: |
