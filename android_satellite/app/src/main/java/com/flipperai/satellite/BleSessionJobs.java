@@ -22,7 +22,9 @@ public final class BleSessionJobs {
     if(worker==null)throw new IllegalArgumentException("Worker is required");
     this.worker=worker;
   }
-  /** Serialize enqueue with disconnect cancellation so a request cannot slip\n   * between the pending-set snapshot and worker submission. */\n  public synchronized boolean submit(Runnable operation) {
+  /** Serialize enqueue with disconnect cancellation so a request cannot slip
+   * between the pending-set snapshot and worker submission. */
+  public synchronized boolean submit(Runnable operation) {
     if(operation==null)throw new IllegalArgumentException("Operation is required");
     if(closed)return false;
     FutureTask<Void> task=new FutureTask<Void>(operation,null) {
