@@ -69,6 +69,12 @@ public final class WorkerCloudEngine implements InferenceRouter.OnlineEngine {
       conn.setFixedLengthStreamingMode(body.length);
       try(OutputStream out=conn.getOutputStream()){out.write(body);}
       int status=conn.getResponseCode();
+      // Revocation can race with a completed HTTP error response. Consent
+      // cancellation takes precedence over stale 401/502 diagnostics.
+      synchronized(this) {
+        if(generation!=requestGeneration)
+          throw new IllegalStateException("Cloud authorization revoked");
+      }
       if(status!=200)throw new IllegalStateException(WorkerHttpStatus.describe(status));
       ByteArrayOutputStream data=new ByteArrayOutputStream();
       try(InputStream in=conn.getInputStream()){
