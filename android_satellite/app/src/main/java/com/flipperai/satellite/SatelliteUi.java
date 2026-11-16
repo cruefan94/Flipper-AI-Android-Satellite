@@ -72,15 +72,24 @@ public final class SatelliteUi {
     return label;
   }
   public static void open(Activity from,Class<?> destination){
-    if(!from.getClass().equals(destination))
-      from.startActivity(new Intent(from,destination));
+    if(from.getClass().equals(destination))return;
+    Intent i=new Intent(from,destination);
+    // Reuse the living BLE Activity instead of creating another GATT owner.
+    if(destination==MainActivity.class)
+      i.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+    from.startActivity(i);
+  }
+  public static void goHome(Activity from){
+    Intent i=new Intent(from,DashboardActivity.class);
+    // CLEAR_TOP destroys the BLE Activity on its way to the dashboard.
+    // Reorder the existing dashboard instead, keeping the BLE link alive.
+    i.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+    from.startActivity(i);
+    // Other screens still release their resources after navigation.
+    // Explicit Disconnect and app task exit remain the BLE teardown paths.
+    if(!(from instanceof MainActivity))from.finish();
   }
   public static void backHome(Activity from,LinearLayout page){
-    action(from,page,"‹  DASHBOARD",()->{
-      Intent i=new Intent(from,DashboardActivity.class);
-      i.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
-      from.startActivity(i);
-      from.finish();
-    });
+    action(from,page,"‹  DASHBOARD",()->goHome(from));
   }
 }

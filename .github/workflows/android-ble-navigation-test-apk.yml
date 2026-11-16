@@ -1,0 +1,66 @@
+name: Android Satellite — isolated BLE navigation test APK
+
+on:
+  pull_request:
+    paths:
+      - 'android_satellite/**'
+      - '.github/workflows/android-ble-navigation-test-apk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-nav-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout public Android source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Run Android source and JVM regression tests
+        run: |
+          set -euo pipefail
+          python3 android_satellite/tools/preflight.py
+          sh android_satellite/tests/run_core_tests.sh
+          python3 -m unittest discover -s android_satellite/tests -p 'test_*.py' -v
+      - name: Build BLE navigation test package (separate application ID)
+        run: |
+          set -euo pipefail
+          gradle -p android_satellite --no-daemon --stacktrace -PsatelliteVersionCode=${{ github.run_number }} -PsatelliteSideBySide=true -PsatelliteNavigationTest=true :app:assembleDebug
+      - name: Verify separate package ID, app label and APK signature
+        run: |
+          set -euo pipefail
+          APK="android_satellite/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "name='com.flipperai.satellite.navtest' versionCode='${{ github.run_number }}'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "application-label:'Flipper AI BLE Nav Test'"
+          sha256sum "$APK"
+          echo "No original or prior test app replacement. BLE/GATT hardware is UNTESTED." >> "$GITHUB_STEP_SUMMARY"
+      - name: Name downloadable isolated test APK
+        run: |
+          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-8)"
+          APK_NAME="FlipperAI-BLE-NAV-TEST-${{ github.run_number }}-${SHORT_SHA}-UNTESTED.apk"
+          cp android_satellite/app/build/outputs/apk/debug/app-debug.apk "android_satellite/app/build/outputs/apk/debug/$APK_NAME"
+          echo "APK_NAME=$APK_NAME" >> "$GITHUB_ENV"
+      - name: Upload isolated test APK (not installed)
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlipperAI-BLE-NAV-TEST-${{ github.run_number }}-${{ github.sha }}-UNTESTED
+          path: android_satellite/app/build/outputs/apk/debug/${{ env.APK_NAME }}
+          if-no-files-found: error
+          retention-days: 7

@@ -584,6 +584,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       });
     }
   }
+  @Override public void onBackPressed(){
+    // Android system Back must follow the same connection-preserving route as
+    // the dashboard button, not finish() this Bluetooth Activity.
+    SatelliteUi.goHome(this);
+  }
   @Override public void onDestroy(){
     scanEpoch++;
     pickerUi.removeCallbacks(nearbyRefresh);

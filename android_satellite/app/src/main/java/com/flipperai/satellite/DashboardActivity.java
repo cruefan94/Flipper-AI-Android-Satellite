@@ -58,6 +58,10 @@ public final class DashboardActivity extends Activity {
     super.onResume();
     render();
   }
+  @Override public void onBackPressed(){
+    // Exiting the app task, unlike switching screens, releases the BLE owner.
+    finishAffinity();
+  }
   private void render(){
     root.removeAllViews();
     LinearLayout brand=column();
