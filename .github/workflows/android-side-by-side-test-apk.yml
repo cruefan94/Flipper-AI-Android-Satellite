@@ -5,11 +5,11 @@ on:
     branches: [fix/android-side-by-side-test-install-20261116]
     paths:
       - 'android_satellite/**'
-      - '.github/workflows/android-apk.yml'
+      - '.github/workflows/android-side-by-side-test-apk.yml'
   pull_request:
     paths:
       - 'android_satellite/**'
-      - '.github/workflows/android-apk.yml'
+      - '.github/workflows/android-side-by-side-test-apk.yml'
 permissions:
   contents: read
 jobs:
