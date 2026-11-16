@@ -87,6 +87,13 @@ public final class WorkerCloudEngine implements InferenceRouter.OnlineEngine {
       }
       return reply;
     } catch(IOException networkFailure) {
+      // Disconnecting an in-flight HTTPS request on consent revocation may
+      // surface as IOException. Report revocation rather than a misleading
+      // connectivity failure, without exposing the exception or its cause.
+      synchronized(this) {
+        if(generation!=requestGeneration)
+          throw new IllegalStateException("Cloud authorization revoked");
+      }
       // Android/Java IO exception messages can contain the full request URL,
       // including private Worker routing information. Do not propagate the
       // original message or cause into chat, diagnostics, or support reports.
