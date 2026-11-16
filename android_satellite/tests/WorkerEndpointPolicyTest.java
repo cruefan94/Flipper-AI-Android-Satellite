@@ -14,6 +14,21 @@ public class WorkerEndpointPolicyTest {
     bad("https://example.workers.dev/health",token);
     bad("https://example.workers.dev/ask","short");
     bad("https://example.workers.dev/ask",token+" ");
+    // Reject URLs that could redirect or smuggle configuration through URI components.
+    bad("https://example.workers.dev/ask#fragment",token);
+    bad("https://example.workers.dev/ask?device_token=hidden",token);
+    bad("https://example.workers.dev/ask/",token);
+    bad("https://example.workers.dev/%61sk",token);
+    bad("https://example.workers.dev/ask/../ask",token);
+    bad("https://example.workers.dev:443/ask",token);
+    bad("https://example.workers.dev/ask","0123456789abcde");
+    bad("https://example.workers.dev/ask",token+"\\n");
+    bad("https://example.workers.dev/ask",token+" ");
+    // The maximum supported token length is permitted; longer tokens fail closed.
+    String maxToken = "A".repeat(256);
+    if(!WorkerEndpointPolicy.validate("https://example.workers.dev/ask",maxToken)
+        .equals("https://example.workers.dev/ask")) throw new AssertionError("max token rejected");
+    bad("https://example.workers.dev/ask",maxToken+"A");
     System.out.println("WorkerEndpointPolicy tests passed");
   }
 }
