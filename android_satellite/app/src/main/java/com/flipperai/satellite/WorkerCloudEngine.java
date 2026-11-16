@@ -68,7 +68,7 @@ public final class WorkerCloudEngine implements InferenceRouter.OnlineEngine {
       conn.setFixedLengthStreamingMode(body.length);
       try(OutputStream out=conn.getOutputStream()){out.write(body);}
       int status=conn.getResponseCode();
-      if(status!=200)throw new IllegalStateException("Worker returned HTTP "+status);
+      if(status!=200)throw new IllegalStateException(WorkerHttpStatus.describe(status));
       ByteArrayOutputStream data=new ByteArrayOutputStream();
       try(InputStream in=conn.getInputStream()){
         byte[] chunk=new byte[512];int n;
