@@ -752,7 +752,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     bleSessionJobs.close();
     // The started foreground service owns GATT and may outlive this Activity.
     if(bleService!=null)bleService.detach(this);
-    transports.detachCurrentKind(SatelliteTransport.Kind.BLE);
+    if(ble!=null)transports.detach(ble);
     if(bleBound){unbindService(bleBinding);bleBound=false;}
     ble=null;bleService=null;
     cloud.clear();localModel.clear();llamaModel.clear();
