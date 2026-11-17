@@ -144,10 +144,28 @@ public final class BleAiRequestProcessorTest {
       require(f.cloudCount.get()==0,"no cloud request on policy revocation");
     }finally{f.finish();}
   }
+  static void testHybridWithoutConsentStaysLocal()throws Exception{
+    Fixture f=new Fixture();
+    try{
+      f.processor.resetLink();
+      require(f.processor.receive(frame("HELLO",1,"flipper-v1")),"HELLO submitted");
+      require(f.link.take().equals(frame("HELLO_ACK",1,"android-v1")),"HELLO acknowledged");
+      // Selecting HYBRID is not permission to transmit prompts to cloud.
+      f.processor.setPolicy(InferenceRouter.Mode.HYBRID,false);
+      require(f.processor.receive(frame("ASK",2,"private prompt")),"hybrid ASK submitted");
+      require(f.link.take().equals(frame("ANSWER",2,"LOCAL private prompt")),"hybrid without consent remains offline");
+      require(f.cloudCount.get()==0,"hybrid without consent never invokes cloud");
+      f.processor.setPolicy(InferenceRouter.Mode.OFFLINE,false);
+      require(f.processor.receive(frame("ASK",3,"next")),"offline ASK submitted");
+      require(f.link.take().equals(frame("ANSWER",3,"LOCAL next")),"offline remains usable after policy change");
+      require(f.cloudCount.get()==0,"offline policy never invokes cloud");
+    }finally{f.finish();}
+  }
   public static void main(String[] args)throws Exception{
     testBackgroundHelloAndAsk();
     testDisconnectedDropsSlowReply();
     testCloudNeedsFreshExplicitConsent();
+    testHybridWithoutConsentStaysLocal();
     testPolicyRevocationCancelsInflightReply();
     testNoRequestsWithoutAuthorizedLink();
     System.out.println("BleAiRequestProcessorTest PASS");
