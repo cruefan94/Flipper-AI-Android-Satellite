@@ -114,16 +114,21 @@ public final class BleSatellite implements SatelliteTransport {
     disconnect();
   }
   private synchronized void scheduleRecovery(BluetoothDevice failedDevice,int gattStatus){
-    if(userDisconnected || failedDevice==null || failedDevice!=lastDevice ||
-       recoveryAttempts>=RECOVERY_DELAYS_MS.length)return;
+    if(userDisconnected || failedDevice==null || failedDevice!=lastDevice)return;
     final int token=++recoveryToken;
-    final int attempt=++recoveryAttempts;
-    final long delay=RECOVERY_DELAYS_MS[attempt-1];
-    events.status("BLE disconnected (GATT "+gattStatus+"); reconnecting in "+(delay/1000)+"s ("+attempt+"/"+RECOVERY_DELAYS_MS.length+")");
+    // Retry indefinitely while the user-selected device remains bonded and the
+    // foreground service is alive. Saturate the backoff at 60 seconds rather
+    // than silently abandoning an out-of-range Flipper after eight attempts.
+    // Manual disconnect and a different selection invalidate the retry token.
+    recoveryAttempts=Math.min(recoveryAttempts+1,RECOVERY_DELAYS_MS.length);
+    final int stage=recoveryAttempts;
+    final long delay=RECOVERY_DELAYS_MS[stage-1];
+    events.status("BLE disconnected (GATT "+gattStatus+"); reconnecting in "
+      +(delay/1000)+"s (backoff "+stage+"/"+RECOVERY_DELAYS_MS.length+")");
     ui.postDelayed(()->{
       synchronized(BleSatellite.this){
         if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice)return;
-        events.status("Reconnecting to selected Flipper ("+attempt+"/"+RECOVERY_DELAYS_MS.length+")");
+        events.status("Reconnecting to selected Flipper (backoff "+stage+"/"+RECOVERY_DELAYS_MS.length+")");
         openConnection(failedDevice);
       }
     },delay);
