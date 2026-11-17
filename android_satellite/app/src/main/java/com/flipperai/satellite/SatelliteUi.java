@@ -7,21 +7,25 @@ import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.widget.*;
 
-/** Shared dark/orange Flipper AI navigation styling for all native screens. */
+/** Shared midnight/teal Flipper AI styling for every native screen. */
 public final class SatelliteUi {
-  public static final int BACKGROUND=0xff080b10;
-  public static final int PANEL=0xff161c25;
-  public static final int ORANGE=0xffff9614;
-  public static final int WHITE=0xfff4f6f9;
-  public static final int MUTED=0xffbac3ce;
-  public static final int BORDER=0xff536276;
+  // Dark navy surfaces, high-contrast teal actions, restrained warm highlights.
+  public static final int BACKGROUND=0xff0b1422;
+  public static final int PANEL=0xff172637;
+  public static final int ACCENT=0xff43dfc4;
+  public static final int AMBER=0xffffc06a;
+  // Backwards-compatible semantic alias until all screen-specific code migrates.
+  public static final int ORANGE=ACCENT;
+  public static final int WHITE=0xfff1f7ff;
+  public static final int MUTED=0xffb5c8da;
+  public static final int BORDER=0xff405b73;
   private SatelliteUi(){}
   public static int dp(Activity a,int n){return Math.round(n*a.getResources().getDisplayMetrics().density);}
   public static GradientDrawable panel(Activity a,boolean active){
     GradientDrawable shape=new GradientDrawable();
-    shape.setColor(active?0xff302014:PANEL);
-    shape.setCornerRadius(dp(a,12));
-    shape.setStroke(dp(a,1),active?ORANGE:BORDER);
+    shape.setColor(active?0xff1a3544:PANEL);
+    shape.setCornerRadius(dp(a,16));
+    shape.setStroke(dp(a,1),active?ACCENT:BORDER);
     return shape;
   }
   public static TextView text(Activity a,String content,int size,int color,boolean strong){
@@ -53,7 +57,9 @@ public final class SatelliteUi {
     TextView v=text(a,title,16,WHITE,true);
     v.setGravity(Gravity.CENTER_VERTICAL);
     v.setPadding(dp(a,15),dp(a,14),dp(a,15),dp(a,14));
-    v.setBackground(panel(a,false));
+    v.setBackground(new android.graphics.drawable.RippleDrawable(
+      android.content.res.ColorStateList.valueOf(0x3343dfc4),
+      panel(a,false),null));
     // One consistently sized, accessible touch surface across app screens.
     v.setMinHeight(dp(a,52));
     v.setFocusable(true);
@@ -64,6 +70,17 @@ public final class SatelliteUi {
     parent.addView(v,lp);
     v.setOnClickListener(x->callback.run());
     return v;
+  }
+  /** Highlight the one recommended action in a group without changing its behavior. */
+  public static TextView primaryAction(Activity a,LinearLayout parent,String title,Runnable callback){
+    TextView action=action(a,parent,title,callback);
+    GradientDrawable fill=new GradientDrawable();
+    fill.setColor(ACCENT);
+    fill.setCornerRadius(dp(a,16));
+    action.setTextColor(BACKGROUND);
+    action.setBackground(new android.graphics.drawable.RippleDrawable(
+      android.content.res.ColorStateList.valueOf(0x330b1422),fill,null));
+    return action;
   }
   public static TextView sectionTitle(Activity a,LinearLayout parent,String heading){
     TextView label=text(a,heading,15,ORANGE,true);
