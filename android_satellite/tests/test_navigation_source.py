@@ -36,7 +36,7 @@ class NavigationRegressionTests(unittest.TestCase):
 
     def test_dark_theme_and_dedicated_navigation(self):
         self.assertIn('android:theme="@style/FlipperAiTheme"',M.read_text())
-        self.assertIn("#ff9614",THEME)
+        self.assertIn("#43dfc4",THEME)
         self.assertIn("FLIPPER AI SATELLITE",DASH)
         for destination in ["AiChatActivity.class","MainActivity.class",
                             "ModelsActivity.class","PhoneCompanionActivity.class",
