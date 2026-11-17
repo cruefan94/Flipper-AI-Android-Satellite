@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.widget.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Dedicated embedded AI model setup screen, separate from chat and BLE management. */
 public final class ModelsActivity extends Activity {
@@ -16,6 +17,7 @@ public final class ModelsActivity extends Activity {
   private TextView status;
   private ProgressBar operationProgress;
   private boolean operationRunning=false;
+  private final AtomicBoolean downloadCancelled=new AtomicBoolean(false);
   @Override public void onCreate(Bundle saved){
     super.onCreate(saved);
     model=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
@@ -37,6 +39,68 @@ public final class ModelsActivity extends Activity {
       "The newer dynamic INT4 version requires a newer runtime.",
       14,SatelliteUi.MUTED,false);
     page.addView(instructions);
+
+    SatelliteUi.gap(this,page,15);
+    SatelliteUi.sectionTitle(this,page,"ONE-TAP MODEL DOWNLOAD");
+    page.addView(SatelliteUi.text(this,
+      "Free Qwen3-0.6B INT8 (~614 MB), Apache-2.0. Tap to download from Hugging Face "
+      +"over HTTPS and verify the pinned SHA-256. Wi-Fi recommended; mobile data may be charged. "
+      +"Existing model is preserved if download fails. Import is not required again after an app update.",
+      14,SatelliteUi.MUTED,false));
+    SatelliteUi.action(this,page,"DOWNLOAD & INSTALL QWEN3-0.6B",()->{
+      if(!beginOperation("Starting verified Qwen3 download..."))return;
+      downloadCancelled.set(false);
+      worker.execute(()->{
+        try {
+          model.clear();
+          final int[] lastReported={-5};
+          VettedModelDownloader.installQwen3(this,(received,total)->{
+            int percent=(int)(received*100/total);
+            if(percent>=lastReported[0]+5 || received==total) {
+              lastReported[0]=percent;
+              setStatus("Downloading Qwen3-0.6B: "+percent+"% ("
+                +(received/(1024*1024))+" of "+(total/(1024*1024))+" MiB)");
+            }
+            return !downloadCancelled.get();
+          });
+          if(!downloadCancelled.get()){
+            LlamaCppSettings.setEnabled(this,false);
+            setStatus("Verified model installed and selected. Tap TEST LIVE OFFLINE AI to verify inference.");
+          }else setStatus("Download cancelled. Previous model preserved.");
+        }catch(Exception e){
+          setStatus("Download stopped: "+e.getMessage()+". Previous model preserved.");
+        }finally{finishOperation();}
+      });
+    });
+    SatelliteUi.action(this,page,"CANCEL CURRENT DOWNLOAD",()->{
+      downloadCancelled.set(true);
+      setStatus("Cancelling download; previous model remains installed.");
+    });
+    SatelliteUi.sectionTitle(this,page,"CHOOSE YOUR INSTALLED AI");
+    SatelliteUi.action(this,page,"USE INSTALLED LITERT MODEL",()->{
+      if(!EmbeddedModelStore.installed(this)){
+        setStatus("No LiteRT model installed. Use the download or import button first.");return;
+      }
+      LlamaCppSettings.setEnabled(this,false);
+      setStatus("LiteRT selected. Your installed model is reused without another import.");
+    });
+    SatelliteUi.action(this,page,"USE LLAMA.CPP (TERMUX SERVER)",()->{
+      LlamaCppSettings.setEnabled(this,true);
+      setStatus("llama.cpp selected. Start llama-server on this phone at "
+        +LlamaCppProfile.ENDPOINT+". Model weights stay in Termux; no import here.");
+    });
+    SatelliteUi.action(this,page,"TEST LLAMA.CPP SERVER",()->{
+      if(!beginOperation("Checking local llama.cpp server..."))return;
+      worker.execute(()->{
+        LocalModelEngine probe=new LocalModelEngine();
+        try{
+          LlamaCppSettings.configure(probe);
+          String reply=probe.answer(LlamaCppProfile.PROMPT_TEST);
+          setStatus("Verified localhost llama.cpp response: "+reply);
+        }catch(Exception e){setStatus("Local llama.cpp unavailable: "+e.getMessage());}
+        finally{probe.clear();finishOperation();}
+      });
+    });
     SatelliteUi.gap(this,page,15);
     SatelliteUi.action(this,page,"1  OPEN COMPATIBLE MODEL FILES",()->{
       Intent browser=new Intent(Intent.ACTION_VIEW,
@@ -82,7 +146,12 @@ public final class ModelsActivity extends Activity {
     SatelliteUi.backHome(this,page);
     refreshModelStatus();
   }
+
   private void refreshModelStatus(){
+    if(LlamaCppSettings.enabled(this)) {
+      setStatus("llama.cpp is selected. Start and test your Termux localhost server.");
+      return;
+    }
     if(EmbeddedModelStore.installed(this)){
       long mib=EmbeddedModelStore.modelFile(this).length()/(1024L*1024L);
       setStatus("Imported file found ("+mib+" MiB). Inference NOT verified on this phone; tap Test Live Offline AI.");
@@ -116,6 +185,7 @@ public final class ModelsActivity extends Activity {
       try{
         model.clear();
         long bytes=EmbeddedModelStore.importFromDocument(this,selected);
+        LlamaCppSettings.setEnabled(this,false);
         setStatus("Model installed ("+(bytes/(1024L*1024L))+" MiB). No APK compilation needed. Tap TEST LIVE OFFLINE AI to verify compatibility.");
       }catch(Exception e){
         setStatus("Import failed: "+e.getMessage()+
@@ -124,6 +194,7 @@ public final class ModelsActivity extends Activity {
     });
   }
   @Override protected void onDestroy(){
+    downloadCancelled.set(true);
     if(!worker.isShutdown()){
       worker.execute(()->model.clear());
       worker.shutdown();
