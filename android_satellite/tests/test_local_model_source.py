@@ -37,17 +37,21 @@ class LocalModelSourceTest(unittest.TestCase):
         self.assertIn("This does not install or verify a model",UI)
         self.assertIn("Verified live localhost model response:",UI)
 
-    def test_ble_notification_epoch_bound_before_ui_enqueue(self):
-        self.assertIn("final int receivedEpoch=connectionEpoch.current();",UI)
-        self.assertIn("connectionEpoch.matches(receivedEpoch) && ble.isReady()",UI)
-        self.assertIn("processReceived(text,receivedEpoch)",UI)
-        self.assertIn("final int epoch=receivedEpoch;",UI)
+    def test_ble_notification_epoch_owned_by_persistent_service(self):
+        service=(SRC/"BleConnectionService.java").read_text()
+        processor=(SRC/"BleAiRequestProcessor.java").read_text()
+        self.assertIn("aiRequests.receive(frame)",service)
+        self.assertIn("final int epoch=linkEpoch.current();",processor)
+        self.assertIn("linkEpoch.matches(epoch)",processor)
+        self.assertNotIn("processReceived(",UI)
 
-    def test_disconnect_during_activity_destroy_does_not_post_to_dead_worker(self):
+    def test_disconnect_during_activity_destroy_does_not_stop_service_request_worker(self):
+        service=(SRC/"BleConnectionService.java").read_text()
         self.assertIn("if(!inferenceWorker.isShutdown())",UI)
-        self.assertIn("RejectedExecutionException ignored",UI)
         self.assertIn("bleService.detach(this);",UI)
         self.assertIn("unbindService(bleBinding);",UI)
+        self.assertIn("inferenceWorker.purge();",service)
+        self.assertIn("aiRequests.close();",service)
         self.assertNotIn("ble.stopScan();transports.close();",UI)
         self.assertLess(UI.index("unbindService(bleBinding);",UI.index("@Override public void onDestroy()")),
                         UI.index("inferenceWorker.shutdown();",UI.index("@Override public void onDestroy()")))
