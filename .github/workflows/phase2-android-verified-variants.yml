@@ -59,7 +59,12 @@ jobs:
           printf '%s\n' "$BADGING" | grep -F "name='com.flipperai.satellite' versionCode='${{ github.run_number }}'"
           printf '%s\n' "$BADGING" | grep -F "application-label:'Flipper AI Satellite'"
           mkdir -p out
-          cp "$APK" "out/FlipperAI-Satellite-ALL-FEATURES-DEBUG-UNTESTED.apk"
+          # One uniquely named APK per GitHub run/attempt, easy to locate on phone.
+          BUILD_DATE="$(date -u +%Y%m%d)"
+          SHORT_SHA="$(git rev-parse --short=8 HEAD)"
+          DOWNLOAD_LABEL="FlipperAI-Android_${BUILD_DATE}_run${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}_sha${SHORT_SHA}_ALLFEATURES-DEBUG-UNTESTED"
+          cp "$APK" "out/${DOWNLOAD_LABEL}.apk"
+          echo "APK_DOWNLOAD_LABEL=$DOWNLOAD_LABEL" >> "$GITHUB_ENV"
       - name: Generate fail-closed single APK integrity and provenance
         env:
           HEAD_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
@@ -122,7 +127,7 @@ jobs:
       - name: Upload the single combined Android APK and integrity report
         uses: actions/upload-artifact@v4
         with:
-          name: FlipperAI-Satellite-One-APK-UNTESTED-${{ github.run_number }}-${{ github.sha }}
+          name: ${{ env.APK_DOWNLOAD_LABEL }}
           path: out/
           if-no-files-found: error
           retention-days: 7
