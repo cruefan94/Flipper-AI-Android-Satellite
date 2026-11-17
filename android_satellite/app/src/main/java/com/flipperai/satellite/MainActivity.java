@@ -40,8 +40,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       showStatus("Bluetooth service attached. Connections survive screen changes.");
     }
     @Override public void onServiceDisconnected(ComponentName name){
+      if(ble!=null)transports.detach(ble);
       bleService=null;ble=null;
-      transports.detachCurrentKind(SatelliteTransport.Kind.BLE);
       showStatus("Android disconnected the Bluetooth service.");
     }
   };
@@ -117,8 +117,12 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     requests=new SatelliteRequestHandler(router);
     // Binding does not start a foreground service. Only user-initiated Connect
     // activates persistent background operation.
-    bleBound=bindService(new Intent(this,BleConnectionService.class),
-      bleBinding,Context.BIND_AUTO_CREATE);
+    try {
+      bleBound=bindService(new Intent(this,BleConnectionService.class),
+        bleBinding,Context.BIND_AUTO_CREATE);
+    }catch(SecurityException failure){
+      bleBound=false;
+    }
     ScrollView scroller=new ScrollView(this);
     scroller.setBackgroundColor(SatelliteUi.BACKGROUND);
     root=new LinearLayout(this);
@@ -202,7 +206,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     deviceInfo.setPadding(0,SatelliteUi.dp(this,10),0,SatelliteUi.dp(this,8));
     root.addView(deviceInfo);
     button("Clear device selection",()->{
-      ble.manualDisconnect();
+      if(bleService!=null)bleService.stopFromUser();
+      else if(ble!=null)ble.manualDisconnect();
       selectedAddress=null;
       deviceInfo.setText("No device selected.");
       showStatus("Device selection cleared.");
@@ -212,7 +217,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     sources.setOnCheckedChangeListener((group,id)->{
       boolean newDiscoverable=id==discoverableChoice.getId();
       if(discoverableMode!=newDiscoverable){
-        ble.manualDisconnect();
+        // Picker switching must never terminate the active service-owned link.
         selectedAddress=null;
         deviceInfo.setText("No device selected. Choose a device from this category.");
         connectionState.setText("AI CONNECTION: NOT CONNECTED");
@@ -232,7 +237,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       connectFromUser(selected);
     });
     button("Pair selected",()->{
-      if(!permissions())return;
+      if(!permissions() || !connectionServiceReady())return;
       BluetoothDevice selected=selectedDevice();
       if(selected==null){showStatus("Scan and select a Flipper first");return;}
       ble.pair(selected);
