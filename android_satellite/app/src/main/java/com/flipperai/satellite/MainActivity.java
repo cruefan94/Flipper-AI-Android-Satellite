@@ -36,6 +36,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       ble=bleService.transport();
       bleService.attach(MainActivity.this);
       transports.register(ble);
+      bleService.refreshOfflineModels();
+      syncBleAiPolicy();
       if(recentConnections!=null)renderRecentConnections();
       showStatus("Bluetooth service attached. Connections survive screen changes.");
     }
@@ -90,12 +92,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private EmbeddedLlmEngine embeddedModel;
   private InferenceRouter router;
   private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
-  private final BleSessionJobs bleSessionJobs=new BleSessionJobs(inferenceWorker);
   private CheckBox cloudConsent;
-  private final ConsentEpoch consentEpoch=new ConsentEpoch();
-  private SatelliteRequestHandler requests;
-  private final ProtocolSession session=new ProtocolSession();
-  private final SessionEpoch connectionEpoch=new SessionEpoch();
   @Override public void onCreate(Bundle b) {
 
     super.onCreate(b);
@@ -114,7 +111,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       new EmbeddedOrLocalEngine(embeddedModel,localModel),llamaModel,llamaEnabled);
     router=new InferenceRouter(
       new OfflineModelOrDiagnostics(offlineBackend,new OfflineDiagnosticEngine()),cloud);
-    requests=new SatelliteRequestHandler(router);
+    // The BLE service owns the sole AI1 protocol and inference session.
     // Binding does not start a foreground service. Only user-initiated Connect
     // activates persistent background operation.
     try {
@@ -279,6 +276,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     mode=new Spinner(this);
     mode.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
     advancedSection.addView(mode);
+    mode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+      @Override public void onItemSelected(AdapterView<?> parent,android.view.View view,
+          int position,long id){syncBleAiPolicy();}
+      @Override public void onNothingSelected(AdapterView<?> parent){}
+    });
     TextView builtInLabel=SatelliteUi.text(this,
       "Manage LiteRT and optional Termux llama.cpp backends in OFFLINE MODELS. " +
       "Default remains the installed LiteRT model; choosing llama.cpp " +
@@ -299,11 +301,15 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     advancedButton("Use installed offline model",()->{
       try{
         localModel.configure(localUrl.getText().toString(),localName.getText().toString());
+        if(bleService!=null)bleService.configureLoopback(
+          localUrl.getText().toString(),localName.getText().toString());
         showStatus("Local model address saved for this session (loopback only). This does not install or verify a model. Tap Test local model connection to confirm real inference.");
       }catch(Exception e){showStatus(e.getMessage());}
     });
     advancedButton("Disable local model",()->{
-      localModel.clear();showStatus("Local model disabled; offline diagnostic rules remain available");
+      localModel.clear();
+      if(bleService!=null)bleService.disableLoopback();
+      showStatus("Local model disabled; offline diagnostic rules remain available");
     });
     advancedButton("Test local model connection",()->{
       if(!localModel.ready()){
@@ -339,6 +345,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         String endpoint=url.getText().toString();
         CloudCredentialStore.save(this,endpoint,effective);
         cloud.configure(endpoint,effective);
+        syncBleAiPolicy();
         token.setText("");
         showStatus("Worker settings securely saved. Cloud AI still requires consent.");
       }catch(Exception e){
@@ -350,8 +357,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     cloudConsent.setText("I authorize sending ASK prompts to my cloud Worker and AI provider");
     cloudConsent.setChecked(false);
     cloudConsent.setOnCheckedChangeListener((button,checked)->{
-      consentEpoch.changed();
       if(!checked)cloud.revokeActive();
+      syncBleAiPolicy();
     });
     advancedSection.addView(cloudConsent);
     advancedButton("Disable and clear cloud",()->{
@@ -624,6 +631,12 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       showStatus("Recent-device shortcuts cleared; Bluetooth pairings unchanged.");
     });
   }
+  private void syncBleAiPolicy(){
+    if(bleService==null || mode==null || cloudConsent==null)return;
+    bleService.setVisibleAiPolicy(
+      InferenceRouter.Mode.valueOf(labels[mode.getSelectedItemPosition()]),
+      cloudConsent.isChecked());
+  }
   private void showStatus(String text){
     runOnUiThread(()->{if(status!=null && !isFinishing() && !isDestroyed())status.setText(text);});
   }
@@ -645,60 +658,20 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(text.startsWith("Disconnected") || text.startsWith("GATT") || text.startsWith("Connected;") || text.startsWith("AI BLE ready") || text.startsWith("BLUETOOTH CONNECTED: Stock Momentum RPC") || text.startsWith("Stock Momentum RPC") || text.contains("service is not installed"))
         connectionHistory.setText("Last connection event: "+text);
     });
-    if(text.startsWith("Disconnected") || text.startsWith("Connecting")){
+    if(text.startsWith("Disconnected") || text.startsWith("Connecting") ||
+       text.startsWith("BLE disconnected")){
       transports.invalidateSession();
-      connectionEpoch.advance();
-      // Stop queued and running BLE requests and revoke any HTTP transmission.
-      // Unrelated Android model imports/tests stay on the same worker untouched.
-      bleSessionJobs.cancelAll();
+      // A new Bluetooth link requires a fresh cloud authorization.
+      if(cloudConsent!=null && cloudConsent.isChecked())
+        cloudConsent.setChecked(false);
       cloud.revokeActive();
       localModel.revokeActive();
-      /* Android can dispatch delayed GATT callbacks while Activity is closing.
-       * Never schedule work on a worker already shut down by onDestroy(). */
-      if(!inferenceWorker.isShutdown()) {
-        try { inferenceWorker.execute(session::reset); }
-        catch(java.util.concurrent.RejectedExecutionException ignored) {
-          /* Shutdown raced this callback; no new session will be used. */
-        }
-      }
     }
     showStatus(text);
   }
   @Override public void received(String text){
-    /* Snapshot on the BLE callback thread, not after a UI callback delay.
-     * A notification queued before disconnect must never be processed in
-     * the next authenticated connection's protocol session. */
-    final int receivedEpoch=connectionEpoch.current();
-    runOnUiThread(()->{
-      if(connectionEpoch.matches(receivedEpoch) && ble.isReady())
-        processReceived(text,receivedEpoch);
-    });
-  }
-  private void processReceived(String text,int receivedEpoch){
-    if(!connectionEpoch.matches(receivedEpoch) || !ble.isReady())return;
-    showStatus("Flipper request received");
-    InferenceRouter.Mode selected=InferenceRouter.Mode.valueOf(labels[mode.getSelectedItemPosition()]);
-    boolean consent=cloudConsent.isChecked();
-    final int consentGeneration=consentEpoch.snapshot();
-    final int epoch=receivedEpoch;
-    int frameLimit=ble.maxFrameBytes();
-    final long transportGeneration=transports.generation();
-    if(!bleSessionJobs.submit(()->{
-      if(!connectionEpoch.matches(epoch))return;
-      /* The worker can be queued behind a slow model request. Never use a
-       * stale UI consent snapshot to start a later cloud transmission. */
-      if(consent && !consentEpoch.current(consentGeneration))return;
-      requests.configure(selected,consent);
-      String response=session.dispatch(text,frameLimit,requests);
-      runOnUiThread(()->{
-        if(!connectionEpoch.matches(epoch) || !ble.isReady())return;
-        if(consent && (!cloudConsent.isChecked() || !consentEpoch.current(consentGeneration))){
-          showStatus("Cloud consent revoked; response discarded");return;
-        }
-        if(response!=null && !transports.sendFrameIfCurrent(response,transportGeneration))
-          showStatus("Cannot respond: AI transport changed or disconnected");
-      });
-    }))showStatus("BLE request rejected: AI worker has stopped");
+    // Single service-owned AI1 request pipeline: Activity is display-only.
+    // Never infer twice or replay messages after navigating between screens.
   }
   @Override public void device(BluetoothDevice device,String advertisedName){
     runOnUiThread(()->{
@@ -723,9 +696,22 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     return installed.isFile() && installed.length()>0
       ?installed.length()+":"+installed.lastModified():"not-installed";
   }
+  @Override protected void onPause(){
+    // Service remains connected across navigation; background inference is
+    // offline-only and cloud consent is revoked when these controls hide.
+    if(cloudConsent!=null && cloudConsent.isChecked())
+      cloudConsent.setChecked(false);
+    if(bleService!=null)bleService.leaveAiSettingsScreen();
+    cloud.revokeActive();
+    super.onPause();
+  }
   @Override protected void onResume(){
     super.onResume();
     renderRecentConnections();
+    if(bleService!=null){
+      bleService.refreshOfflineModels();
+      syncBleAiPolicy();
+    }
     boolean preferred=LlamaCppSettings.enabled(this);
     if(preferred!=llamaEnabled){
       if(preferred)LlamaCppSettings.configure(llamaModel);
@@ -762,8 +748,6 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     scanEpoch++;
     pickerUi.removeCallbacks(nearbyRefresh);
     nearbyRefreshScheduled=false;
-    connectionEpoch.advance();
-    bleSessionJobs.close();
     // The started foreground service owns GATT and may outlive this Activity.
     if(bleService!=null)bleService.detach(this);
     if(ble!=null)transports.detach(ble);
