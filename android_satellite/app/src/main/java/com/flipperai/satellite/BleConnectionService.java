@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.os.Binder;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.SystemClock;
 import java.util.Objects;
 
 /**
@@ -31,6 +32,7 @@ public final class BleConnectionService extends Service implements BleSatellite.
   private volatile BleSatellite.Events currentListener;
   private volatile String lastStatus="Flipper Bluetooth not connected";
   private boolean foreground;
+  private final BleLinkHealth linkHealth=new BleLinkHealth();
 
   @Override public void onCreate(){
     super.onCreate();
@@ -42,6 +44,16 @@ public final class BleConnectionService extends Service implements BleSatellite.
   }
   @Override public IBinder onBind(Intent intent){return binder;}
   public BleSatellite transport(){return transport;}
+  /** A redacted report for user-led physical BLE stability testing. */
+  public String linkHealthReport(){
+    return linkHealth.snapshot(SystemClock.elapsedRealtime()).report();
+  }
+  /** Track intentional device switches separately from unplanned link drops. */
+  public void connectFromUser(BluetoothDevice chosen) {
+    if(chosen==null || transport==null)return;
+    linkHealth.userDisconnect(SystemClock.elapsedRealtime());
+    transport.connect(chosen);
+  }
   public void attach(BleSatellite.Events listener){
     currentListener=Objects.requireNonNull(listener);
     listener.status(lastStatus);
@@ -88,11 +100,13 @@ public final class BleConnectionService extends Service implements BleSatellite.
     return START_NOT_STICKY; // Never resurrect a disconnected session after process death.
   }
   public void stopFromUser(){
+    linkHealth.userDisconnect(SystemClock.elapsedRealtime());
     if(transport!=null)transport.manualDisconnect();
     if(foreground){stopForeground(STOP_FOREGROUND_REMOVE);foreground=false;}
     stopSelf();
   }
   @Override public void onDestroy(){
+    linkHealth.userDisconnect(SystemClock.elapsedRealtime());
     foreground=false;
     currentListener=null;
     if(transport!=null)transport.close();
@@ -100,12 +114,21 @@ public final class BleConnectionService extends Service implements BleSatellite.
   }
   @Override public void status(String message){
     lastStatus=message;
-    // Store only authenticated, currently bonded successful connections.
+    long now=SystemClock.elapsedRealtime();
+    if(message.startsWith("Reconnecting to selected Flipper"))
+      linkHealth.recoveryAttempt();
+    if(message.startsWith("Disconnected") || message.startsWith("BLE disconnected"))
+      linkHealth.unexpectedDisconnect(now);
+    // Only genuinely bonded subscribed channels become verified sessions.
     if(message.startsWith("AI BLE ready") ||
         message.startsWith("Stock Momentum RPC indications enabled")){
       try {
         BluetoothDevice confirmed=transport.confirmedBondedDevice();
-        if(confirmed!=null)RecentFlipperStore.remember(this,confirmed);
+        if(confirmed!=null){
+          linkHealth.verified(now,message.startsWith("AI BLE ready")
+            ?BleLinkHealth.Channel.CUSTOM_AI1:BleLinkHealth.Channel.STOCK_RPC);
+          RecentFlipperStore.remember(this,confirmed);
+        }
       }catch(SecurityException | IllegalStateException ignored){}
     }
     BleSatellite.Events listener=currentListener;
