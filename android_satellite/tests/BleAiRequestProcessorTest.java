@@ -133,9 +133,12 @@ public final class BleAiRequestProcessorTest {
       f.slowRelease.set(new CountDownLatch(1));
       require(f.processor.receive(frame("ASK",2,"slow")),"slow ASK submitted");
       require(f.slowStarted.get().await(3,TimeUnit.SECONDS),"inference entered");
-      f.processor.setPolicy(InferenceRouter.Mode.OFFLINE,false);
+      // A no-op OFFLINE,false -> OFFLINE,false is not a policy revocation.
+      // Change mode while inference is in flight, without authorizing cloud.
+      f.processor.setPolicy(InferenceRouter.Mode.HYBRID,false);
       f.slowRelease.get().countDown();
       require(f.link.empty(),"revoked policy cannot send stale inference reply");
+      f.processor.setPolicy(InferenceRouter.Mode.OFFLINE,false);
       require(f.processor.receive(frame("ASK",3,"fresh")),"fresh offline ASK submitted");
       require(f.link.take().equals(frame("ANSWER",3,"LOCAL fresh")),"new offline request succeeds");
       require(f.cloudCount.get()==0,"no cloud request on policy revocation");
