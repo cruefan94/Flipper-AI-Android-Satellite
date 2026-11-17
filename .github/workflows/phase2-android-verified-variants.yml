@@ -1,4 +1,4 @@
-name: Phase 2 Android Satellite — one tested three-variant CI bundle
+name: Flipper AI Satellite — single combined APK verified build
 
 on:
   pull_request:
@@ -11,12 +11,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: phase2-android-${{ github.event.pull_request.number || github.ref }}
+  group: flipper-ai-one-apk-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   verify-and-build:
-    name: Host regressions + production/test/navtest isolated APKs
+    name: Host regressions + one full-feature Android APK
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -44,7 +44,7 @@ jobs:
           python3 android_satellite/tools/preflight.py
           bash android_satellite/tests/run_core_tests.sh
           python3 -m unittest discover -s android_satellite/tests -p 'test_*.py' -v
-      - name: Build ordinary Satellite APK without stable release key
+      - name: Build one complete Flipper AI Satellite APK (debug, not an automatic upgrade)
         shell: bash
         run: |
           set -euo pipefail
@@ -54,39 +54,11 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")"
-          printf '%s\n' "$BADGING" | grep -F "name='com.flipperai.satellite' versionCode='${{ github.run_number }}'"
+          printf '%s\\n' "$BADGING" | grep -F "name='com.flipperai.satellite' versionCode='${{ github.run_number }}'"
+          printf '%s\\n' "$BADGING" | grep -F "application-label:'Flipper AI Satellite'"
           mkdir -p out
-          cp "$APK" "out/FlipperAI-Satellite-DEBUG-UNTESTED.apk"
-      - name: Build separate side-by-side test app (clean outputs)
-        shell: bash
-        run: |
-          set -euo pipefail
-          gradle -p android_satellite --no-daemon --stacktrace \
-            -PsatelliteVersionCode=${{ github.run_number }} \
-            -PsatelliteSideBySide=true :app:clean :app:assembleDebug
-          APK="android_satellite/app/build/outputs/apk/debug/app-debug.apk"
-          test -s "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")"
-          printf '%s\n' "$BADGING" | grep -F "name='com.flipperai.satellite.test' versionCode='${{ github.run_number }}'"
-          printf '%s\n' "$BADGING" | grep -F "application-label:'Flipper AI Satellite Test'"
-          cp "$APK" "out/FlipperAI-Satellite-TEST-UNTESTED.apk"
-      - name: Build separate BLE navigation app (clean outputs)
-        shell: bash
-        run: |
-          set -euo pipefail
-          gradle -p android_satellite --no-daemon --stacktrace \
-            -PsatelliteVersionCode=${{ github.run_number }} \
-            -PsatelliteSideBySide=true -PsatelliteNavigationTest=true \
-            :app:clean :app:assembleDebug
-          APK="android_satellite/app/build/outputs/apk/debug/app-debug.apk"
-          test -s "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")"
-          printf '%s\n' "$BADGING" | grep -F "name='com.flipperai.satellite.navtest' versionCode='${{ github.run_number }}'"
-          printf '%s\n' "$BADGING" | grep -F "application-label:'Flipper AI BLE Nav Test'"
-          cp "$APK" "out/FlipperAI-Satellite-BLE-NAV-UNTESTED.apk"
-      - name: Generate fail-closed hashes and source identity
+          cp "$APK" "out/FlipperAI-Satellite-ALL-FEATURES-DEBUG-UNTESTED.apk"
+      - name: Generate fail-closed single APK integrity and provenance
         env:
           HEAD_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         shell: bash
@@ -96,34 +68,45 @@ jobs:
           python3 - <<'PY'
           import hashlib, json, os, pathlib, subprocess
           output = pathlib.Path('out')
-          variants = {
-              'ordinary': ('FlipperAI-Satellite-DEBUG-UNTESTED.apk', 'com.flipperai.satellite'),
-              'side-by-side': ('FlipperAI-Satellite-TEST-UNTESTED.apk', 'com.flipperai.satellite.test'),
-              'ble-navigation': ('FlipperAI-Satellite-BLE-NAV-UNTESTED.apk', 'com.flipperai.satellite.navtest'),
-          }
+          binaries = list(output.glob('*.apk'))
+          if len(binaries) != 1:
+              raise SystemExit(f'Expected exactly one complete APK, found {len(binaries)}')
+          binary = binaries[0]
           source = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if source != os.environ['HEAD_SOURCE_SHA']:
+              raise SystemExit('Checkout source differs from the requested PR head; refusing upload')
+          data = binary.read_bytes()
+          if not data:
+              raise SystemExit('Empty Android package')
           evidence = {
-              'schema': 1,
+              'schema': 2,
               'repository': os.environ['GITHUB_REPOSITORY'],
               'built_checkout_sha': source,
               'pull_request_head_sha': os.environ['HEAD_SOURCE_SHA'],
               'workflow_run': os.environ['GITHUB_RUN_ID'],
               'version_code': int(os.environ['GITHUB_RUN_NUMBER']),
               'scope': 'CI compiled and signed-debug-package-verified; NOT tested on phone or Flipper',
-              'variants': {},
-          }
-          for key, (name, package) in variants.items():
-              binary = output / name
-              data = binary.read_bytes()
-              if not data: raise SystemExit('Empty APK: ' + name)
-              evidence['variants'][key] = {
-                  'name': name, 'package': package, 'bytes': len(data),
+              'variant_policy': 'one_combined_apk_only',
+              'package': 'com.flipperai.satellite',
+              'apk': {
+                  'name': binary.name,
+                  'bytes': len(data),
                   'sha256': hashlib.sha256(data).hexdigest(),
-              }
-          (output / 'BUILD_EVIDENCE.json').write_text(json.dumps(evidence, sort_keys=True, indent=2) + '\n')
+              },
+              'installation_notice': (
+                  'Debug signature may differ from the installed app. '
+                  'Do not uninstall the working app to force an upgrade: '
+                  'app-private model data and preferences may be lost.'
+              ),
+          }
+          (output / 'BUILD_EVIDENCE.json').write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + '\\n')
           PY
-          echo 'Three APK identities and signatures checked; tests ran once.' >> "$GITHUB_STEP_SUMMARY"
-          echo 'No cloud secrets, production signing material, automatic install, or hardware validation.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Exactly ONE APK generated with ordinary Flipper AI Satellite identity.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Features are together in one app. Host tests and debug APK signature were verified.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'IMPORTANT: debug signing does NOT guarantee an upgrade over the installed app.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Do not uninstall the current phone app merely to install this build or lose its model data.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'No cloud credentials, auto-install, production signing key, or hardware verification.' >> "$GITHUB_STEP_SUMMARY"
       - name: Upload failure diagnostics only (no credentials)
         if: failure()
         uses: actions/upload-artifact@v4
@@ -134,10 +117,10 @@ jobs:
             android_satellite/app/build/outputs/logs/**
           if-no-files-found: ignore
           retention-days: 7
-      - name: Upload verified three-package test bundle
+      - name: Upload the single combined Android APK and integrity report
         uses: actions/upload-artifact@v4
         with:
-          name: Phase2-Android-3-Variants-UNTESTED-${{ github.run_number }}-${{ github.sha }}
+          name: FlipperAI-Satellite-One-APK-UNTESTED-${{ github.run_number }}-${{ github.sha }}
           path: out/
           if-no-files-found: error
           retention-days: 7
