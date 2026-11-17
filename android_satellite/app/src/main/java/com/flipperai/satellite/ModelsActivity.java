@@ -16,6 +16,7 @@ public final class ModelsActivity extends Activity {
   private EmbeddedLlmEngine model;
   private TextView status;
   private ProgressBar operationProgress;
+  private TextView cancelDownload;
   private boolean operationRunning=false;
   private final AtomicBoolean downloadCancelled=new AtomicBoolean(false);
   @Override public void onCreate(Bundle saved){
@@ -23,6 +24,7 @@ public final class ModelsActivity extends Activity {
     model=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
     LinearLayout page=SatelliteUi.scrollPage(this,"OFFLINE AI MODELS",
       "Install a model once on this Android phone. AI can then work without internet.");
+    SatelliteUi.sectionTitle(this,page,"YOUR ACTIVE AI");
     status=SatelliteUi.text(this,"Checking installed models...",16,SatelliteUi.WHITE,false);
     status.setPadding(0,SatelliteUi.dp(this,7),0,SatelliteUi.dp(this,14));
     status.setTextIsSelectable(true);
@@ -31,24 +33,15 @@ public final class ModelsActivity extends Activity {
     operationProgress.setIndeterminate(true);
     operationProgress.setVisibility(android.view.View.GONE);
     page.addView(operationProgress);
-    SatelliteUi.sectionTitle(this,page,"INSTALL & MANAGE");
-    TextView instructions=SatelliteUi.text(this,
-      "Import a .litertlm model directly or a ZIP containing exactly one .litertlm model plus small README/LICENSE files. "+
-      "Import installs the model data—no APK rebuild or code compilation is needed. "+
-      "Compatible example: Qwen3-0.6B.litertlm (~586 MB INT8); other models may need a different runtime. "+
-      "The newer dynamic INT4 version requires a newer runtime.",
-      14,SatelliteUi.MUTED,false);
-    page.addView(instructions);
-
-    SatelliteUi.gap(this,page,15);
-    SatelliteUi.sectionTitle(this,page,"ONE-TAP MODEL DOWNLOAD");
+    SatelliteUi.sectionTitle(this,page,"QUICK INSTALL");
     page.addView(SatelliteUi.text(this,
-      "Free Qwen3-0.6B INT8 (~614 MB), Apache-2.0. Tap to download from Hugging Face "
-      +"over HTTPS and verify the pinned SHA-256. Wi-Fi recommended; mobile data may be charged. "
-      +"Existing model is preserved if download fails. Import is not required again after an app update.",
+      "Qwen3-0.6B is free (about 614 MB). Download once over Wi-Fi and verify it here. "
+      +"Your current model stays safe if a new download fails.",
       14,SatelliteUi.MUTED,false));
-    SatelliteUi.action(this,page,"DOWNLOAD & INSTALL QWEN3-0.6B",()->{
+    SatelliteUi.gap(this,page,6);
+    SatelliteUi.primaryAction(this,page,"DOWNLOAD & INSTALL QWEN3-0.6B",()->{
       if(!beginOperation("Starting verified Qwen3 download..."))return;
+      cancelDownload.setVisibility(android.view.View.VISIBLE);
       downloadCancelled.set(false);
       worker.execute(()->{
         try {
@@ -72,10 +65,11 @@ public final class ModelsActivity extends Activity {
         }finally{finishOperation();}
       });
     });
-    SatelliteUi.action(this,page,"CANCEL CURRENT DOWNLOAD",()->{
+    cancelDownload=SatelliteUi.action(this,page,"CANCEL CURRENT DOWNLOAD",()->{
       downloadCancelled.set(true);
       setStatus("Cancelling download; previous model remains installed.");
     });
+    cancelDownload.setVisibility(android.view.View.GONE);
     SatelliteUi.sectionTitle(this,page,"CHOOSE YOUR INSTALLED AI");
     SatelliteUi.action(this,page,"USE INSTALLED LITERT MODEL",()->{
       if(!EmbeddedModelStore.installed(this)){
@@ -101,18 +95,7 @@ public final class ModelsActivity extends Activity {
         finally{probe.clear();finishOperation();}
       });
     });
-    SatelliteUi.gap(this,page,15);
-    SatelliteUi.action(this,page,"1  OPEN COMPATIBLE MODEL FILES",()->{
-      Intent browser=new Intent(Intent.ACTION_VIEW,
-        Uri.parse("https://huggingface.co/litert-community/Qwen3-0.6B/tree/main"));
-      startActivity(browser);
-    });
-    SatelliteUi.action(this,page,"2  IMPORT .LITERTLM OR MODEL ZIP",()->{
-      Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
-      picker.addCategory(Intent.CATEGORY_OPENABLE);
-      picker.setType("*/*");
-      startActivityForResult(picker,PICK_MODEL);
-    });
+    SatelliteUi.sectionTitle(this,page,"VERIFY YOUR AI");
     SatelliteUi.action(this,page,"3  TEST LIVE OFFLINE AI",()->{
       if(!EmbeddedModelStore.installed(this)){
         setStatus("No model imported. Choose a compatible .litertlm model or ZIP first.");return;
@@ -127,7 +110,30 @@ public final class ModelsActivity extends Activity {
         finally{finishOperation();}
       });
     });
-    SatelliteUi.action(this,page,"REMOVE INSTALLED MODEL",()->{
+    SatelliteUi.sectionTitle(this,page,"MORE MODEL OPTIONS");
+    LinearLayout extraTools=SatelliteUi.column(this);
+    SatelliteUi.action(this,page,"SHOW / HIDE ADVANCED MODEL TOOLS",()->{
+      extraTools.setVisibility(extraTools.getVisibility()==android.view.View.VISIBLE
+        ?android.view.View.GONE:android.view.View.VISIBLE);
+    });
+    extraTools.setVisibility(android.view.View.GONE);
+    page.addView(extraTools);
+    extraTools.addView(SatelliteUi.text(this,
+      "Optional: import a compatible .litertlm or model ZIP, review source files, "
+      +"or remove the installed model. The newer dynamic INT4 model may require a newer runtime.",
+      14,SatelliteUi.MUTED,false));
+    SatelliteUi.action(this,extraTools,"1  OPEN COMPATIBLE MODEL FILES",()->{
+      Intent browser=new Intent(Intent.ACTION_VIEW,
+        Uri.parse("https://huggingface.co/litert-community/Qwen3-0.6B/tree/main"));
+      startActivity(browser);
+    });
+    SatelliteUi.action(this,extraTools,"2  IMPORT .LITERTLM OR MODEL ZIP",()->{
+      Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+      picker.addCategory(Intent.CATEGORY_OPENABLE);
+      picker.setType("*/*");
+      startActivityForResult(picker,PICK_MODEL);
+    });
+    SatelliteUi.action(this,extraTools,"REMOVE INSTALLED MODEL",()->{
       new android.app.AlertDialog.Builder(this).setTitle("Remove offline model?")
         .setMessage("The imported weights will be deleted from app-private storage. AI diagnostic rules will still work.")
         .setNegativeButton("KEEP",null)
@@ -149,13 +155,13 @@ public final class ModelsActivity extends Activity {
 
   private void refreshModelStatus(){
     if(LlamaCppSettings.enabled(this)) {
-      setStatus("llama.cpp is selected. Start and test your Termux localhost server.");
+      setStatus("Selected: Termux llama.cpp. Test your local server below to confirm it is running.");
       return;
     }
     if(EmbeddedModelStore.installed(this)){
       long mib=EmbeddedModelStore.modelFile(this).length()/(1024L*1024L);
-      setStatus("Imported file found ("+mib+" MiB). Inference NOT verified on this phone; tap Test Live Offline AI.");
-    }else setStatus("No embedded offline model imported. AI diagnostics remain available.");
+      setStatus("Selected: Installed LiteRT model ("+mib+" MiB). Use TEST LIVE to verify a response.");
+    }else setStatus("No offline model installed. Use the quick download to get started.");
   }
   private boolean beginOperation(String message){
     if(operationRunning){
@@ -171,6 +177,7 @@ public final class ModelsActivity extends Activity {
     runOnUiThread(()->{
       operationRunning=false;
       if(operationProgress!=null)operationProgress.setVisibility(android.view.View.GONE);
+      if(cancelDownload!=null)cancelDownload.setVisibility(android.view.View.GONE);
     });
   }
   private void setStatus(String message){
