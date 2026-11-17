@@ -248,21 +248,6 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(bleService!=null)bleService.stopFromUser();
       else if(ble!=null)ble.manualDisconnect();
     });
-    // Visible diagnostic button: a useful signal-drop report without device IDs.
-    button("COPY BLUETOOTH RELIABILITY REPORT",()->{
-      if(!connectionServiceReady())return;
-      String report=bleService.linkHealthReport();
-      android.content.ClipboardManager clipboard=
-        (android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
-      if(clipboard==null){showStatus("Android clipboard unavailable.");return;}
-      clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
-        "Flipper AI BLE reliability",report));
-      showStatus("BLE reliability report copied; paste it into the project chat.");
-    });
-    button("TEST MOMENTUM RPC PING",()->{
-      if(!permissions() || !connectionServiceReady())return;
-      ble.sendStockRpcPing();
-    });
     SatelliteUi.sectionTitle(this,root,"ADVANCED");
     button("Advanced AI settings and diagnostics",()->{
       advancedVisible=!advancedVisible;
@@ -274,6 +259,22 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     advancedSection.setBackground(SatelliteUi.panel(this,false));
     advancedSection.setVisibility(android.view.View.GONE);
     root.addView(advancedSection);
+    // Visible diagnostic button: a useful signal-drop report without device IDs.
+    advancedButton("COPY BLUETOOTH RELIABILITY REPORT",()->{
+      if(!connectionServiceReady())return;
+      String report=bleService.linkHealthReport();
+      android.content.ClipboardManager clipboard=
+        (android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+      if(clipboard==null){showStatus("Android clipboard unavailable.");return;}
+      clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
+        "Flipper AI BLE reliability",report));
+      showStatus("BLE reliability report copied; paste it into the project chat.");
+    });
+    advancedButton("TEST MOMENTUM RPC PING",()->{
+      if(!permissions() || !connectionServiceReady())return;
+      ble.sendStockRpcPing();
+    });
+
     mode=new Spinner(this);
     mode.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
     advancedSection.addView(mode);
