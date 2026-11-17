@@ -23,7 +23,8 @@ class BleNavigationSessionRetentionTests(unittest.TestCase):
 
     def test_explicit_disconnect_and_task_exit_still_release_ble(self):
         self.assertIn('if(bleService!=null)bleService.stopFromUser();',BLE)
-        self.assertIn("bleSessionJobs.close();",BLE)
+        self.assertIn("bleService.leaveAiSettingsScreen();",BLE)
+        self.assertNotIn("bleSessionJobs",BLE)
         self.assertIn("bleService.detach(this);",BLE)
         self.assertIn("unbindService(bleBinding);",BLE)
         self.assertNotIn("ble.stopScan();transports.close();",BLE)
