@@ -269,7 +269,7 @@ public final class BleSatellite implements SatelliteTransport {
     BluetoothGattCharacteristic rx=service==null?null:service.getCharacteristic(RX);
     if(rx==null){
       events.status("AI GATT service unavailable");
-      disconnect();
+      recoverTemporaryFailure(-7);
       return false;
     }
     byte[] bytes=pending.peekFirst();
@@ -292,7 +292,7 @@ public final class BleSatellite implements SatelliteTransport {
     if(!sent){
       writeGuard.complete();
       events.status("AI GATT write failed to start");
-      disconnect();
+      recoverTemporaryFailure(-8);
       return false;
     }
     ui.postDelayed(()->expireWrite(link,token),GATT_WRITE_TIMEOUT_MS);
@@ -553,7 +553,7 @@ public final class BleSatellite implements SatelliteTransport {
         if(code==BluetoothGatt.GATT_SUCCESS){pending.pollFirst();drain();}
         else{
           events.status("AI BLE write failed: "+code);
-          disconnect();
+          recoverTemporaryFailure(code);
         }
       }
     }
