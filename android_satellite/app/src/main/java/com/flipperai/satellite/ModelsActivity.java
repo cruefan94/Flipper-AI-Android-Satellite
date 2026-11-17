@@ -33,6 +33,46 @@ public final class ModelsActivity extends Activity {
     operationProgress.setIndeterminate(true);
     operationProgress.setVisibility(android.view.View.GONE);
     page.addView(operationProgress);
+    SatelliteUi.sectionTitle(this,page,"CHOOSE YOUR INSTALLED AI");
+    SatelliteUi.action(this,page,"USE INSTALLED LITERT MODEL",()->{
+      if(!EmbeddedModelStore.installed(this)){
+        setStatus("No LiteRT model installed. Use the download or import button first.");return;
+      }
+      LlamaCppSettings.setEnabled(this,false);
+      setStatus("LiteRT selected. Your installed model is reused without another import.");
+    });
+    SatelliteUi.action(this,page,"USE LLAMA.CPP (TERMUX SERVER)",()->{
+      LlamaCppSettings.setEnabled(this,true);
+      setStatus("llama.cpp selected. Start llama-server on this phone at "
+        +LlamaCppProfile.ENDPOINT+". Model weights stay in Termux; no import here.");
+    });
+    SatelliteUi.action(this,page,"TEST LLAMA.CPP SERVER",()->{
+      if(!beginOperation("Checking local llama.cpp server..."))return;
+      worker.execute(()->{
+        LocalModelEngine probe=new LocalModelEngine();
+        try{
+          LlamaCppSettings.configure(probe);
+          String reply=probe.answer(LlamaCppProfile.PROMPT_TEST);
+          setStatus("Verified localhost llama.cpp response: "+reply);
+        }catch(Exception e){setStatus("Local llama.cpp unavailable: "+e.getMessage());}
+        finally{probe.clear();finishOperation();}
+      });
+    });
+    SatelliteUi.sectionTitle(this,page,"VERIFY YOUR AI");
+    SatelliteUi.action(this,page,"TEST LIVE OFFLINE AI",()->{
+      if(!EmbeddedModelStore.installed(this)){
+        setStatus("No model imported. Choose a compatible .litertlm model or ZIP first.");return;
+      }
+      if(!beginOperation("Testing on-device inference. No cloud or reinstallation needed."))return;
+      worker.execute(()->{
+        try {
+          model.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
+          String answer=model.answer("Reply with OK.");
+          setStatus("Verified LIVE embedded offline model response: "+answer);
+        }catch(Exception e){setStatus("Model could not load or respond: "+e.getMessage());}
+        finally{finishOperation();}
+      });
+    });
     SatelliteUi.sectionTitle(this,page,"QUICK INSTALL");
     page.addView(SatelliteUi.text(this,
       "Qwen3-0.6B is free (about 614 MB). Download once over Wi-Fi and verify it here. "
@@ -70,46 +110,6 @@ public final class ModelsActivity extends Activity {
       setStatus("Cancelling download; previous model remains installed.");
     });
     cancelDownload.setVisibility(android.view.View.GONE);
-    SatelliteUi.sectionTitle(this,page,"CHOOSE YOUR INSTALLED AI");
-    SatelliteUi.action(this,page,"USE INSTALLED LITERT MODEL",()->{
-      if(!EmbeddedModelStore.installed(this)){
-        setStatus("No LiteRT model installed. Use the download or import button first.");return;
-      }
-      LlamaCppSettings.setEnabled(this,false);
-      setStatus("LiteRT selected. Your installed model is reused without another import.");
-    });
-    SatelliteUi.action(this,page,"USE LLAMA.CPP (TERMUX SERVER)",()->{
-      LlamaCppSettings.setEnabled(this,true);
-      setStatus("llama.cpp selected. Start llama-server on this phone at "
-        +LlamaCppProfile.ENDPOINT+". Model weights stay in Termux; no import here.");
-    });
-    SatelliteUi.action(this,page,"TEST LLAMA.CPP SERVER",()->{
-      if(!beginOperation("Checking local llama.cpp server..."))return;
-      worker.execute(()->{
-        LocalModelEngine probe=new LocalModelEngine();
-        try{
-          LlamaCppSettings.configure(probe);
-          String reply=probe.answer(LlamaCppProfile.PROMPT_TEST);
-          setStatus("Verified localhost llama.cpp response: "+reply);
-        }catch(Exception e){setStatus("Local llama.cpp unavailable: "+e.getMessage());}
-        finally{probe.clear();finishOperation();}
-      });
-    });
-    SatelliteUi.sectionTitle(this,page,"VERIFY YOUR AI");
-    SatelliteUi.action(this,page,"3  TEST LIVE OFFLINE AI",()->{
-      if(!EmbeddedModelStore.installed(this)){
-        setStatus("No model imported. Choose a compatible .litertlm model or ZIP first.");return;
-      }
-      if(!beginOperation("Testing on-device inference. No cloud or reinstallation needed."))return;
-      worker.execute(()->{
-        try {
-          model.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
-          String answer=model.answer("Reply with OK.");
-          setStatus("Verified LIVE embedded offline model response: "+answer);
-        }catch(Exception e){setStatus("Model could not load or respond: "+e.getMessage());}
-        finally{finishOperation();}
-      });
-    });
     SatelliteUi.sectionTitle(this,page,"MORE MODEL OPTIONS");
     LinearLayout extraTools=SatelliteUi.column(this);
     SatelliteUi.action(this,page,"SHOW / HIDE ADVANCED MODEL TOOLS",()->{
@@ -122,12 +122,12 @@ public final class ModelsActivity extends Activity {
       "Optional: import a compatible .litertlm or model ZIP, review source files, "
       +"or remove the installed model. The newer dynamic INT4 model may require a newer runtime.",
       14,SatelliteUi.MUTED,false));
-    SatelliteUi.action(this,extraTools,"1  OPEN COMPATIBLE MODEL FILES",()->{
+    SatelliteUi.action(this,extraTools,"VIEW COMPATIBLE MODEL FILES",()->{
       Intent browser=new Intent(Intent.ACTION_VIEW,
         Uri.parse("https://huggingface.co/litert-community/Qwen3-0.6B/tree/main"));
       startActivity(browser);
     });
-    SatelliteUi.action(this,extraTools,"2  IMPORT .LITERTLM OR MODEL ZIP",()->{
+    SatelliteUi.action(this,extraTools,"IMPORT .LITERTLM OR MODEL ZIP",()->{
       Intent picker=new Intent(Intent.ACTION_OPEN_DOCUMENT);
       picker.addCategory(Intent.CATEGORY_OPENABLE);
       picker.setType("*/*");
