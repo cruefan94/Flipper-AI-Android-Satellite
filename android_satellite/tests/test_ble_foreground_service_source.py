@@ -53,11 +53,12 @@ class ServiceOwnedBleTests(unittest.TestCase):
         self.assertIn("renderRecentConnections();",main)
         self.assertIn("MAX_RECENTS=3",(SRC/"RecentFlipperPolicy.java").read_text())
 
-    def test_background_listener_fail_closed(self):
-        self.assertIn("if(listener!=null)listener.received(frame);",service)
-        self.assertNotIn("new SatelliteRequestHandler(",service)
-        self.assertIn("bleSessionJobs.cancelAll();",main)
-        self.assertIn("connectionEpoch.matches(receivedEpoch)",main)
+    def test_background_request_owner_remains_service_not_activity(self):
+        self.assertIn("aiRequests.receive(frame)",service)
+        self.assertIn("new BleAiRequestProcessor(",service)
+        self.assertNotIn("listener.received(frame);",service)
+        self.assertNotIn("processReceived(",main)
+        self.assertIn("leaveAiSettingsScreen()",main)
         self.assertIn("public synchronized void detach(SatelliteTransport adapter)",router)
         self.assertIn("if(userDisconnected || token!=recoveryToken",ble)
         self.assertIn("if(userDisconnected || generation!=connectionGeneration",ble)
