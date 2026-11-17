@@ -93,7 +93,9 @@ class WriteWatchdogSourceTests(unittest.TestCase):
     def test_permission_revocation_mid_subscription_and_mtu_does_not_crash(self):
         self.assertIn('events.status("Bluetooth permission or link lost during subscription");',BLE)
         self.assertIn('events.status("Bluetooth permission or link lost during MTU request");',BLE)
-        self.assertIn('if(!requested){mtuPending=false;disconnect();}',BLE)
+        self.assertIn('if(!requested){mtuPending=false;recoverTemporaryFailure(-6);}',BLE)
+        self.assertIn('private synchronized void recoverTemporaryFailure(int status)',BLE)
+        self.assertIn('scheduleRecovery(failedDevice,status);',BLE)
 
     def test_revoked_bluetooth_permission_cannot_crash_disconnect_cleanup(self):
         self.assertIn("try{old.disconnect();}",BLE)
