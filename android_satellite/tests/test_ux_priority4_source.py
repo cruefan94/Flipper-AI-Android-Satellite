@@ -30,6 +30,16 @@ class NextBuildUxTests(unittest.TestCase):
         self.assertIn("LlamaCppSettings.setEnabled(this,false);", models)
         self.assertIn("LlamaCppSettings.setEnabled(this,true);", models)
 
+    def test_diagnostics_are_behind_advanced_controls(self):
+        ui = (SOURCE / "MainActivity.java").read_text(encoding="utf-8")
+        advance = ui.index("root.addView(advancedSection);")
+        report = ui.index('advancedButton("COPY BLUETOOTH RELIABILITY REPORT"')
+        rpc = ui.index('advancedButton("TEST MOMENTUM RPC PING"')
+        self.assertLess(advance, report)
+        self.assertLess(advance, rpc)
+        self.assertIn('button("Connect selected"', ui)
+        self.assertIn('button("Disconnect"', ui)
+
     def test_ux_does_not_weaken_ai_and_cloud_security(self):
         ui = (SOURCE / "MainActivity.java").read_text(encoding="utf-8")
         self.assertIn("CloudCredentialStore.save(", ui)
