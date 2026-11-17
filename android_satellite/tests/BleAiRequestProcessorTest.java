@@ -161,11 +161,32 @@ public final class BleAiRequestProcessorTest {
       require(f.cloudCount.get()==0,"offline policy never invokes cloud");
     }finally{f.finish();}
   }
+  static void testOnlineConsentToggleFailClosed()throws Exception{
+    Fixture f=new Fixture();
+    try{
+      f.processor.resetLink();
+      require(f.processor.receive(frame("HELLO",1,"flipper-v1")),"HELLO submitted");
+      require(f.link.take().equals(frame("HELLO_ACK",1,"android-v1")),"HELLO acknowledged");
+      f.processor.setPolicy(InferenceRouter.Mode.ONLINE,false);
+      require(f.processor.receive(frame("ASK",2,"private")),"online without consent ASK");
+      require(f.link.take().equals(frame("ANSWER",2,"LOCAL private")),"online without consent stays local");
+      require(f.cloudCount.get()==0,"no cloud call without explicit consent");
+      f.processor.setPolicy(InferenceRouter.Mode.ONLINE,true);
+      require(f.processor.receive(frame("ASK",3,"allowed")),"consented ASK");
+      require(f.link.take().equals(frame("ANSWER",3,"CLOUD allowed")),"consented online request");
+      require(f.cloudCount.get()==1,"exactly one cloud call with consent");
+      f.processor.setPolicy(InferenceRouter.Mode.ONLINE,false);
+      require(f.processor.receive(frame("ASK",4,"revoked")),"revoked ASK");
+      require(f.link.take().equals(frame("ANSWER",4,"LOCAL revoked")),"revocation restores local routing");
+      require(f.cloudCount.get()==1,"revocation prevents additional cloud calls");
+    }finally{f.finish();}
+  }
   public static void main(String[] args)throws Exception{
     testBackgroundHelloAndAsk();
     testDisconnectedDropsSlowReply();
     testCloudNeedsFreshExplicitConsent();
     testHybridWithoutConsentStaysLocal();
+    testOnlineConsentToggleFailClosed();
     testPolicyRevocationCancelsInflightReply();
     testNoRequestsWithoutAuthorizedLink();
     System.out.println("BleAiRequestProcessorTest PASS");
