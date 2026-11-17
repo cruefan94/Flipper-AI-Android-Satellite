@@ -14,7 +14,9 @@ import android.os.SystemClock;
 import java.util.Objects;
 import java.io.File;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ArrayBlockingQueue;
 
 /**
  * Single process-owned GATT owner. Started in the foreground only after an
@@ -38,7 +40,8 @@ public final class BleConnectionService extends Service implements BleSatellite.
   private final BleLinkHealth linkHealth=new BleLinkHealth();
   // The Android Service—not MainActivity—owns the entire AI1 handshake and
   // request worker. This allows Flipper ASK while users view another screen.
-  private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
+  private final ThreadPoolExecutor inferenceWorker=new ThreadPoolExecutor(
+    1,1,0L,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<Runnable>(8));
   private BleAiRequestProcessor aiRequests;
   private EmbeddedLlmEngine embedded;
   private LocalModelEngine loopback;
@@ -217,6 +220,9 @@ public final class BleConnectionService extends Service implements BleSatellite.
     currentListener=null;
     if(aiRequests!=null)aiRequests.close();
     if(transport!=null)transport.close();
+    // FutureTask cancellation does not immediately remove queued tasks.
+    // Purge them before scheduling native model cleanup on the same worker.
+    inferenceWorker.purge();
     // Close native LiteRT resources after any cancelled worker jobs return.
     try{
       inferenceWorker.execute(()->{
