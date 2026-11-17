@@ -26,7 +26,8 @@ class LocalModelSourceTest(unittest.TestCase):
         self.assertIn('conn.setReadTimeout(',ENGINE)
         self.assertIn('conn.disconnect()',ENGINE)
     def test_local_model_and_diagnostic_fallback_in_ui(self):
-        self.assertIn('new OfflineModelOrDiagnostics(new EmbeddedOrLocalEngine(embeddedModel,localModel)',UI)
+        self.assertIn('new EmbeddedOrLocalEngine(embeddedModel,localModel)',UI)
+        self.assertIn('new OfflineModelOrDiagnostics(offlineBackend',UI)
         self.assertIn('advancedButton("Use installed offline model"',UI)
         self.assertIn('advancedButton("Disable local model"',UI)
         self.assertIn('advancedButton("Test local model connection"',UI)
@@ -45,7 +46,10 @@ class LocalModelSourceTest(unittest.TestCase):
     def test_disconnect_during_activity_destroy_does_not_post_to_dead_worker(self):
         self.assertIn("if(!inferenceWorker.isShutdown())",UI)
         self.assertIn("RejectedExecutionException ignored",UI)
-        self.assertLess(UI.index("ble.stopScan();transports.close();",UI.index("@Override public void onDestroy()")),
+        self.assertIn("bleService.detach(this);",UI)
+        self.assertIn("unbindService(bleBinding);",UI)
+        self.assertNotIn("ble.stopScan();transports.close();",UI)
+        self.assertLess(UI.index("unbindService(bleBinding);",UI.index("@Override public void onDestroy()")),
                         UI.index("inferenceWorker.shutdown();",UI.index("@Override public void onDestroy()")))
 
     def test_embedded_native_engine_is_closed_on_inference_worker(self):
