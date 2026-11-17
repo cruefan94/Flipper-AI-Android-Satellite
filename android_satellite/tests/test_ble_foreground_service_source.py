@@ -22,6 +22,7 @@ class ServiceOwnedBleTests(unittest.TestCase):
         self.assertIn("bleBound=bindService(",main)
         self.assertIn("transports.register(ble);",main)
         self.assertIn("transports.detach(ble);",main)
+        self.assertNotIn("detachCurrentKind",main)
         self.assertNotIn("transports.close();",main)
         self.assertIn("bleService.detach(this);",main)
         self.assertIn("unbindService(bleBinding);",main)
