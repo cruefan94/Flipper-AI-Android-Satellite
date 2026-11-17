@@ -103,6 +103,17 @@ class WriteWatchdogSourceTests(unittest.TestCase):
         self.assertIn("try{old.close();}",BLE)
         self.assertIn("catch(SecurityException | IllegalStateException ignored)",BLE)
 
+    def test_write_failure_recovery_and_stale_callback_guard(self):
+        self.assertIn('events.status("AI GATT write failed to start");',BLE)
+        self.assertIn("recoverTemporaryFailure(-8);",BLE)
+        self.assertIn("recoverTemporaryFailure(-7);",BLE)
+        self.assertIn("recoverTemporaryFailure(code);",BLE)
+        callback=BLE.split("void onCharacteristicWrite(",1)[1].split("    @Override",1)[0]
+        self.assertLess(callback.index("synchronized(BleSatellite.this)"),
+                        callback.index("if(link!=gatt || ch==null)return;"))
+        self.assertLess(callback.index("if(link!=gatt || ch==null)return;"),
+                        callback.index("writeGuard.complete()"))
+
     def test_late_timers_do_not_close_new_connection(self):
         self.assertIn("if(link!=gatt || !writeGuard.isPending(token))return;",BLE)
         self.assertIn("writeGuard.reset();",BLE)
