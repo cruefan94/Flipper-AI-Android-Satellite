@@ -12,6 +12,9 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.SystemClock;
 import java.util.Objects;
+import java.io.File;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Single process-owned GATT owner. Started in the foreground only after an
@@ -33,15 +36,118 @@ public final class BleConnectionService extends Service implements BleSatellite.
   private volatile String lastStatus="Flipper Bluetooth not connected";
   private boolean foreground;
   private final BleLinkHealth linkHealth=new BleLinkHealth();
+  // The Android Service—not MainActivity—owns the entire AI1 handshake and
+  // request worker. This allows Flipper ASK while users view another screen.
+  private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
+  private BleAiRequestProcessor aiRequests;
+  private EmbeddedLlmEngine embedded;
+  private LocalModelEngine loopback;
+  private LocalModelEngine llama;
+  private OfflineProviderSelector offline;
+  private WorkerCloudEngine cloud;
+  private volatile String loadedModelRevision="";
+
 
   @Override public void onCreate(){
     super.onCreate();
     transport=new BleSatellite(this,this);
+    embedded=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
+    loopback=new LocalModelEngine();
+    llama=new LocalModelEngine();
+    cloud=new WorkerCloudEngine();
+    boolean useLlama=LlamaCppSettings.enabled(this);
+    offline=new OfflineProviderSelector(
+      new EmbeddedOrLocalEngine(embedded,loopback),llama,useLlama);
+    InferenceRouter router=new InferenceRouter(
+      new OfflineModelOrDiagnostics(offline,new OfflineDiagnosticEngine()),cloud);
+    aiRequests=new BleAiRequestProcessor(
+      inferenceWorker,new SatelliteRequestHandler(router),
+      new BleAiRequestProcessor.Link(){
+        @Override public boolean isReady(){return transport!=null && transport.isReady();}
+        @Override public int maxFrameBytes(){
+          return transport==null?0:transport.maxFrameBytes();
+        }
+        @Override public boolean sendFrame(String response){
+          return transport!=null && transport.send(response);
+        }
+      },
+      ()->{
+        if(cloud!=null)cloud.revokeActive();
+        if(loopback!=null)loopback.revokeActive();
+        if(llama!=null)llama.revokeActive();
+      });
+    refreshOfflineModels();
     NotificationManager manager=getSystemService(NotificationManager.class);
     if(manager!=null && Build.VERSION.SDK_INT>=26)
       manager.createNotificationChannel(new NotificationChannel(
         CHANNEL,"Flipper AI Bluetooth",NotificationManager.IMPORTANCE_LOW));
   }
+  /**
+   * Refresh a newly imported model without reloading its native inference
+   * engine on the UI thread. Model selection never turns cloud on.
+   */
+  public void refreshOfflineModels(){
+    BleAiRequestProcessor processor=aiRequests;
+    if(processor==null)return;
+    processor.submitModelRefresh(()->{
+      try{
+        File file=EmbeddedModelStore.modelFile(this);
+        String revision=file.isFile() && file.length()>0
+          ?file.length()+":"+file.lastModified():"not-installed";
+        if(!revision.equals(loadedModelRevision)){
+          if(EmbeddedModelStore.installed(this))
+            embedded.configure(file.getAbsolutePath());
+          else embedded.clear();
+          loadedModelRevision=revision;
+        }
+        boolean preferLlama=LlamaCppSettings.enabled(this);
+        if(preferLlama)LlamaCppSettings.configure(llama);
+        else llama.clear();
+        offline.selectLlama(preferLlama);
+      }catch(Exception invalid){
+        status("Flipper offline model unavailable. Check MODELS; local diagnostics remain.");
+      }
+    });
+  }
+
+  /** The normal Bluetooth connection remains alive across screen changes;
+   * cloud authorization does not. Offline stays the safe background default. */
+  public void leaveAiSettingsScreen(){
+    if(aiRequests!=null)aiRequests.setPolicy(InferenceRouter.Mode.OFFLINE,false);
+    if(cloud!=null)cloud.clear();
+  }
+
+  /** Only call from a visible UI that collected explicit per-session consent. */
+  public void setVisibleAiPolicy(InferenceRouter.Mode mode,boolean consent){
+    if(aiRequests==null || mode==null)return;
+    if(!consent || mode==InferenceRouter.Mode.OFFLINE){
+      aiRequests.setPolicy(mode,false);
+      if(cloud!=null)cloud.clear();
+      return;
+    }
+    try{
+      CloudCredentialStore.Credentials credentials=CloudCredentialStore.load(this);
+      if(credentials==null)throw new IllegalStateException("Worker settings missing");
+      cloud.configure(credentials.endpoint,credentials.token);
+      aiRequests.setPolicy(mode,true);
+    }catch(Exception missingOrInvalid){
+      aiRequests.setPolicy(InferenceRouter.Mode.OFFLINE,false);
+      cloud.clear();
+      status("Flipper cloud AI is disabled. Configure and authorize the Worker first.");
+    }
+  }
+
+  /** Explicitly selected localhost alternative; never changes cloud consent. */
+  public void configureLoopback(String endpoint,String modelName){
+    if(aiRequests!=null)aiRequests.submitModelRefresh(()->{
+      try{loopback.configure(endpoint,modelName);}
+      catch(Exception invalid){status("Flipper localhost model configuration rejected.");}
+    });
+  }
+  public void disableLoopback(){
+    if(aiRequests!=null)aiRequests.submitModelRefresh(loopback::clear);
+  }
+
   @Override public IBinder onBind(Intent intent){return binder;}
   public BleSatellite transport(){return transport;}
   /** A redacted report for user-led physical BLE stability testing. */
@@ -109,11 +215,35 @@ public final class BleConnectionService extends Service implements BleSatellite.
     linkHealth.userDisconnect(SystemClock.elapsedRealtime());
     foreground=false;
     currentListener=null;
+    if(aiRequests!=null)aiRequests.close();
     if(transport!=null)transport.close();
+    // Close native LiteRT resources after any cancelled worker jobs return.
+    try{
+      inferenceWorker.execute(()->{
+        if(embedded!=null)embedded.clear();
+        if(cloud!=null)cloud.clear();
+        if(loopback!=null)loopback.clear();
+        if(llama!=null)llama.clear();
+      });
+    }catch(java.util.concurrent.RejectedExecutionException ignored){}
+    inferenceWorker.shutdown();
     super.onDestroy();
   }
   @Override public void status(String message){
     lastStatus=message;
+    // A GATT transition invalidates previous HELLO/request IDs and in-flight
+    // inference even when no Activity has been attached for hours.
+    if(aiRequests!=null){
+      if(message.startsWith("Connecting to selected Flipper") ||
+         message.startsWith("Reconnecting to selected Flipper") ||
+         message.startsWith("Disconnected") ||
+         message.startsWith("BLE disconnected") ||
+         message.startsWith("AI GATT write timed out")){
+        aiRequests.disconnected();
+      }else if(message.startsWith("AI BLE ready")){
+        aiRequests.resetLink();
+      }
+    }
     long now=SystemClock.elapsedRealtime();
     if(message.startsWith("Reconnecting to selected Flipper"))
       linkHealth.recoveryAttempt();
@@ -147,8 +277,11 @@ public final class BleConnectionService extends Service implements BleSatellite.
     if(listener!=null)listener.device(device,advertisedName);
   }
   @Override public void received(String frame){
-    BleSatellite.Events listener=currentListener;
-    if(listener!=null)listener.received(frame);
-    // No listener: do NOT process commands, persist prompts, or replay stale AI1.
+    // Never delegate AI1 inference to a transient Activity. The dedicated
+    // service worker processes frames for the lifetime of the BLE link.
+    // Invalid/outdated GATT sessions cannot dispatch new requests.
+    if(aiRequests==null || transport==null || !transport.isReady())return;
+    if(!aiRequests.receive(frame))
+      status("Flipper AI request dropped: Android AI worker is unavailable.");
   }
 }
