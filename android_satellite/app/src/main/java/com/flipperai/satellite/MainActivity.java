@@ -6,6 +6,11 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothManager;
 import android.bluetooth.BluetoothProfile;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.os.IBinder;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
@@ -18,7 +23,28 @@ import java.util.LinkedHashMap;
 
 /** Native Android AI Satellite control surface. No language model is bundled. */
 public final class MainActivity extends Activity implements BleSatellite.Events {
+  // The connectedDevice foreground service is the sole BluetoothGatt owner.
   private BleSatellite ble;
+  private BleConnectionService bleService;
+  private boolean bleBound=false;
+  private boolean pendingConnectPermission=false;
+  private LinearLayout recentConnections;
+  private final ServiceConnection bleBinding=new ServiceConnection(){
+    @Override public void onServiceConnected(ComponentName name,IBinder binder){
+      if(isFinishing() || isDestroyed())return;
+      bleService=((BleConnectionService.LocalBinder)binder).service();
+      ble=bleService.transport();
+      bleService.attach(MainActivity.this);
+      transports.register(ble);
+      if(recentConnections!=null)renderRecentConnections();
+      showStatus("Bluetooth service attached. Connections survive screen changes.");
+    }
+    @Override public void onServiceDisconnected(ComponentName name){
+      bleService=null;ble=null;
+      transports.detachCurrentKind(SatelliteTransport.Kind.BLE);
+      showStatus("Android disconnected the Bluetooth service.");
+    }
+  };
   private final SatelliteTransportCoordinator transports=new SatelliteTransportCoordinator();
   private TextView status;
   private TextView connectionState;
@@ -89,8 +115,10 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     router=new InferenceRouter(
       new OfflineModelOrDiagnostics(offlineBackend,new OfflineDiagnosticEngine()),cloud);
     requests=new SatelliteRequestHandler(router);
-    ble=new BleSatellite(this,this);
-    transports.register(ble);
+    // Binding does not start a foreground service. Only user-initiated Connect
+    // activates persistent background operation.
+    bleBound=bindService(new Intent(this,BleConnectionService.class),
+      bleBinding,Context.BIND_AUTO_CREATE);
     ScrollView scroller=new ScrollView(this);
     scroller.setBackgroundColor(SatelliteUi.BACKGROUND);
     root=new LinearLayout(this);
@@ -125,6 +153,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     connectionHistory=SatelliteUi.text(this,"",14,SatelliteUi.MUTED,false);
     connectionHistory.setText("Bluetooth device discovery is separate from the AI channel.");
     root.addView(connectionHistory);
+    SatelliteUi.sectionTitle(this,root,"PREVIOUSLY CONNECTED");
+    recentConnections=new LinearLayout(this);
+    recentConnections.setOrientation(LinearLayout.VERTICAL);
+    root.addView(recentConnections);
+    renderRecentConnections();
     SatelliteUi.sectionTitle(this,root,"SELECT DEVICE");
     TextView categoryPrompt=SatelliteUi.text(this,
       "Choose paired or discoverable devices, then select the Flipper you want.",
@@ -196,8 +229,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(!permissions())return;
       BluetoothDevice selected=selectedDevice();
       if(selected==null){showStatus("Scan and select a Flipper first");return;}
-      connectionState.setText("AI CONNECTION: CONNECTING...");
-      ble.connect(selected);
+      connectFromUser(selected);
     });
     button("Pair selected",()->{
       if(!permissions())return;
@@ -205,8 +237,15 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(selected==null){showStatus("Scan and select a Flipper first");return;}
       ble.pair(selected);
     });
-    button("Disconnect",()->{if(permissions())ble.manualDisconnect();});
-    button("TEST MOMENTUM RPC PING",()->ble.sendStockRpcPing());
+    button("Disconnect",()->{
+      // Always allow explicit disconnect even if permissions were revoked.
+      if(bleService!=null)bleService.stopFromUser();
+      else if(ble!=null)ble.manualDisconnect();
+    });
+    button("TEST MOMENTUM RPC PING",()->{
+      if(!permissions() || !connectionServiceReady())return;
+      ble.sendStockRpcPing();
+    });
     SatelliteUi.sectionTitle(this,root,"ADVANCED");
     button("Advanced AI settings and diagnostics",()->{
       advancedVisible=!advancedVisible;
@@ -320,19 +359,21 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     transportNote.setText("AI transport: BLE only. Wi-Fi and USB-C relay adapters are reserved for future builds; no automatic fallback.");
     advancedSection.addView(transportNote);
     advancedButton("Check AI BLE channel",()->{
-      if(!permissions())return;
+      if(!permissions() || !connectionServiceReady())return;
       showStatus(transports.isReady()
           ? "AI GATT transport ready; HELLO/ASK exchange must still be verified on the Flipper"
           : ble.hasStockRpc() ? "Stock Momentum RPC detected. Indications: "+(ble.isStockRpcSubscribed()?"enabled":"not enabled")+". Received: "+ble.stockRpcNotificationCount()+". Android AI service absent in current discovery; firmware registration not independently confirmed."
           : "No authorized AI GATT or stock Momentum RPC session.");
     });
     advancedButton("Explain last BLE discovery",()->{
+      if(!connectionServiceReady())return;
       new android.app.AlertDialog.Builder(this)
         .setTitle("Bluetooth AI1 diagnostic")
         .setMessage(ble.gattDiscoveryReport()+"\n\n"+ble.gattDiscoveryNextStep())
         .setPositiveButton("OK",null).show();
     });
     advancedButton("Copy BLE hardware test report",()->{
+      if(!connectionServiceReady())return;
       // No MAC addresses, tokens, device IDs or user prompts are included.
       String summary="Flipper AI BLE hardware test (phone-side snapshot)\n"
         +"AI GATT transport: "+(transports.isReady()?"READY (HELLO/ASK not confirmed)":"NOT READY")+"\n"
@@ -356,6 +397,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     advancedSection.addView(caveat);
   }
   private void beginScan(){
+    if(!connectionServiceReady())return;
     pickerUi.removeCallbacks(nearbyRefresh);
     nearbyRefreshScheduled=false;
     nearby.clear();nearbyNames.clear();
@@ -497,12 +539,80 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     } else if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED){
       requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION},22);return false;
     }
-    return true;
+    return connectionServiceReady();
   }
-  private void showStatus(String text){runOnUiThread(()->status.setText(text));}
+  private boolean connectionServiceReady(){
+    if(ble!=null && bleService!=null)return true;
+    showStatus("Bluetooth service is initializing. Reopen connection screen if needed.");
+    return false;
+  }
+  /** Foreground launch can occur only after an explicit user tap. */
+  private void connectFromUser(BluetoothDevice device){
+    if(device==null || !connectionServiceReady())return;
+    if(Build.VERSION.SDK_INT>=31 && !permissionsAlreadyGranted()){
+      showStatus("Allow Nearby devices permission first.");return;
+    }
+    try{
+      Intent intent=new Intent(this,BleConnectionService.class)
+        .setAction(BleConnectionService.ACTION_KEEP);
+      if(Build.VERSION.SDK_INT>=26)startForegroundService(intent);
+      else startService(intent);
+      connectionState.setText("AI CONNECTION: CONNECTING...");
+      ble.connect(device);
+    }catch(SecurityException | IllegalStateException rejected){
+      showStatus("Android blocked Bluetooth background service. Open settings and check app permissions.");
+    }
+  }
+  /** Stored records must be matched against CURRENT bonded devices, not trusted as handles. */
+  private void quickConnect(RecentFlipperStore.Record record){
+    if(!permissions() || !connectionServiceReady())return;
+    try{
+      BluetoothManager manager=(BluetoothManager)getSystemService(BLUETOOTH_SERVICE);
+      BluetoothAdapter adapter=manager==null?null:manager.getAdapter();
+      if(adapter==null || !adapter.isEnabled()){
+        showStatus("Enable Bluetooth to reconnect.");return;
+      }
+      for(BluetoothDevice device:adapter.getBondedDevices()){
+        if(device.getBondState()==BluetoothDevice.BOND_BONDED
+          && record.address.equalsIgnoreCase(device.getAddress())){
+          selectedAddress=device.getAddress();
+          discovered.put(selectedAddress,device);
+          connectFromUser(device);
+          return;
+        }
+      }
+      showStatus("Previously connected Flipper is no longer paired. Pair it again.");
+    }catch(SecurityException | IllegalStateException exception){
+      showStatus("Could not verify saved pairing. Check Nearby devices permission.");
+    }
+  }
+  private void renderRecentConnections(){
+    if(recentConnections==null)return;
+    recentConnections.removeAllViews();
+    java.util.List<RecentFlipperStore.Record> recent=RecentFlipperStore.list(this);
+    if(recent.isEmpty()){
+      recentConnections.addView(SatelliteUi.text(this,
+        "After your first verified connection, a quick reconnect button appears here.",
+        13,SatelliteUi.MUTED,false));
+      return;
+    }
+    for(RecentFlipperStore.Record record:recent)
+      SatelliteUi.action(this,recentConnections,
+        "RECONNECT  "+record.name,()->quickConnect(record));
+    SatelliteUi.action(this,recentConnections,"CLEAR RECENT CONNECTIONS",()->{
+      RecentFlipperStore.forgetAll(this);
+      renderRecentConnections();
+      showStatus("Recent-device shortcuts cleared; Bluetooth pairings unchanged.");
+    });
+  }
+  private void showStatus(String text){
+    runOnUiThread(()->{if(status!=null && !isFinishing() && !isDestroyed())status.setText(text);});
+  }
   @Override public void status(String text){
     runOnUiThread(()->{
       if(connectionState==null)return;
+      if(text.startsWith("AI BLE ready") ||
+          text.startsWith("Stock Momentum RPC indications enabled"))renderRecentConnections();
       if(text.startsWith("RPC PING RESPONSE RECEIVED"))connectionState.setText("MOMENTUM RPC PING RESPONSE RECEIVED — AI NOT READY");
       else if(text.startsWith("Stock Momentum RPC indications enabled"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC INDICATIONS ACTIVE (AI NOT READY)");
       else if(text.startsWith("BLUETOOTH CONNECTED: Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — STOCK MOMENTUM RPC DETECTED (AI NOT READY)");
@@ -596,6 +706,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   @Override protected void onResume(){
     super.onResume();
+    renderRecentConnections();
     boolean preferred=LlamaCppSettings.enabled(this);
     if(preferred!=llamaEnabled){
       if(preferred)LlamaCppSettings.configure(llamaModel);
@@ -634,7 +745,11 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     nearbyRefreshScheduled=false;
     connectionEpoch.advance();
     bleSessionJobs.close();
-    ble.stopScan();transports.close();
+    // The started foreground service owns GATT and may outlive this Activity.
+    if(bleService!=null)bleService.detach(this);
+    transports.detachCurrentKind(SatelliteTransport.Kind.BLE);
+    if(bleBound){unbindService(bleBinding);bleBound=false;}
+    ble=null;bleService=null;
     cloud.clear();localModel.clear();llamaModel.clear();
     // Release native model after queued inference completes; never block UI.
     if(!inferenceWorker.isShutdown()){
