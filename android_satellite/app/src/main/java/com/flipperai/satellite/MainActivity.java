@@ -661,10 +661,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     if(text.startsWith("Disconnected") || text.startsWith("Connecting") ||
        text.startsWith("BLE disconnected")){
       transports.invalidateSession();
-      // A new Bluetooth link requires a fresh cloud authorization.
-      if(cloudConsent!=null && cloudConsent.isChecked())
-        cloudConsent.setChecked(false);
+      // BLE callbacks can arrive off the Android UI thread. Revoke I/O
+      // immediately and update the consent checkbox only on the main loop.
       cloud.revokeActive();
+      runOnUiThread(()->{
+        if(cloudConsent!=null && cloudConsent.isChecked())
+          cloudConsent.setChecked(false);
+      });
       localModel.revokeActive();
     }
     showStatus(text);
