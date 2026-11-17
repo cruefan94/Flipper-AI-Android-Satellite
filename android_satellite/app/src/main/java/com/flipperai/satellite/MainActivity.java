@@ -58,6 +58,9 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private Spinner mode;
   private final WorkerCloudEngine cloud=new WorkerCloudEngine();
   private final LocalModelEngine localModel=new LocalModelEngine();
+  private final LocalModelEngine llamaModel=new LocalModelEngine();
+  private OfflineProviderSelector offlineBackend;
+  private boolean llamaEnabled=false;
   private EmbeddedLlmEngine embeddedModel;
   private InferenceRouter router;
   private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
@@ -73,9 +76,12 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     if(EmbeddedModelStore.installed(this))
       embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
     activeModelRevision=modelRevision();
+    llamaEnabled=LlamaCppSettings.enabled(this);
+    if(llamaEnabled)LlamaCppSettings.configure(llamaModel);
+    offlineBackend=new OfflineProviderSelector(
+      new EmbeddedOrLocalEngine(embeddedModel,localModel),llamaModel,llamaEnabled);
     router=new InferenceRouter(
-      new OfflineModelOrDiagnostics(new EmbeddedOrLocalEngine(embeddedModel,localModel),
-        new OfflineDiagnosticEngine()),cloud);
+      new OfflineModelOrDiagnostics(offlineBackend,new OfflineDiagnosticEngine()),cloud);
     requests=new SatelliteRequestHandler(router);
     ble=new BleSatellite(this,this);
     transports.register(ble);
@@ -210,9 +216,9 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     mode.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
     advancedSection.addView(mode);
     TextView builtInLabel=SatelliteUi.text(this,
-      "Manage imported .litertlm/ZIP models in OFFLINE MODELS. " +
-      "Import and live testing are kept on that dedicated screen; Bluetooth " +
-      "will use the installed model when you return.",
+      "Manage LiteRT and optional Termux llama.cpp backends in OFFLINE MODELS. " +
+      "Default remains the installed LiteRT model; choosing llama.cpp " +
+      "also affects Flipper AI questions. Test the server before use.",
       14,SatelliteUi.MUTED,false);
     advancedSection.addView(builtInLabel);
     advancedButton("OPEN OFFLINE MODELS",()->SatelliteUi.open(this,ModelsActivity.class));
@@ -564,6 +570,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   }
   @Override protected void onResume(){
     super.onResume();
+    boolean preferred=LlamaCppSettings.enabled(this);
+    if(preferred!=llamaEnabled){
+      if(preferred)LlamaCppSettings.configure(llamaModel);
+      else llamaModel.clear();
+      offlineBackend.selectLlama(preferred);
+      llamaEnabled=preferred;
+    }
     final String revision=modelRevision();
     if(!revision.equals(activeModelRevision) && !inferenceWorker.isShutdown()){
       activeModelRevision=revision;
@@ -596,7 +609,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     connectionEpoch.advance();
     bleSessionJobs.close();
     ble.stopScan();transports.close();
-    cloud.clear();localModel.clear();
+    cloud.clear();localModel.clear();llamaModel.clear();
     // Release native model after queued inference completes; never block UI.
     if(!inferenceWorker.isShutdown()){
       inferenceWorker.execute(()->embeddedModel.clear());
