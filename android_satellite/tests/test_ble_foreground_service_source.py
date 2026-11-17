@@ -62,6 +62,23 @@ class ServiceOwnedBleTests(unittest.TestCase):
         self.assertIn("if(userDisconnected || token!=recoveryToken",ble)
         self.assertIn("if(userDisconnected || generation!=connectionGeneration",ble)
 
+    def test_reliability_counters_and_redacted_copy(self):
+        health=(SRC/"BleLinkHealth.java").read_text()
+        self.assertIn("new BleLinkHealth()",service)
+        self.assertIn("SystemClock.elapsedRealtime()",service)
+        self.assertIn("linkHealth.recoveryAttempt()",service)
+        self.assertIn("linkHealth.unexpectedDisconnect(now)",service)
+        self.assertIn("linkHealth.userDisconnect(",service)
+        self.assertIn("BleLinkHealth.Channel.CUSTOM_AI1",service)
+        self.assertIn("BleLinkHealth.Channel.STOCK_RPC",service)
+        self.assertIn("COPY BLUETOOTH RELIABILITY REPORT",main)
+        self.assertIn("bleService.linkHealthReport()",main)
+        self.assertIn("bleService.connectFromUser(device);",main)
+        self.assertIn("Verified sessions:",health)
+        self.assertIn("Unexpected verified-link drops:",health)
+        self.assertNotIn("getAddress()",health)
+        self.assertNotIn("getAddress()",service)
+
     def test_manifest_well_formed(self):
         ET.parse(ROOT/"app/src/main/AndroidManifest.xml")
 
