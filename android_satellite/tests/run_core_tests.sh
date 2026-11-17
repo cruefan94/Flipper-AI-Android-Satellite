@@ -62,5 +62,7 @@ javac -cp "$DEST" -d "$DEST" "$SRC/VettedModelCatalog.java" "$SRC/ModelDownloadI
 java -cp "$DEST" ModelDownloadIntegrityTest
 javac -cp "$DEST" -d "$DEST" "$SRC/RecentFlipperPolicy.java" "$ROOT/android_satellite/tests/RecentFlipperPolicyTest.java"
 java -cp "$DEST" RecentFlipperPolicyTest
+javac -cp "$DEST" -d "$DEST" "$SRC/BleLinkHealth.java" "$ROOT/android_satellite/tests/BleLinkHealthTest.java"
+java -cp "$DEST" BleLinkHealthTest
 
 python3 "$ROOT/android_satellite/tests/test_cloud_revocation_source.py"
