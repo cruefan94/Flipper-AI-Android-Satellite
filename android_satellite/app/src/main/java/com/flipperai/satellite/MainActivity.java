@@ -71,7 +71,13 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private final ProtocolSession session=new ProtocolSession();
   private final SessionEpoch connectionEpoch=new SessionEpoch();
   @Override public void onCreate(Bundle b) {
+
     super.onCreate(b);
+    CloudCredentialStore.Credentials savedWorkerAtLaunch=CloudCredentialStore.load(this);
+    if(savedWorkerAtLaunch!=null){
+      try{cloud.configure(savedWorkerAtLaunch.endpoint,savedWorkerAtLaunch.token);}
+      catch(Exception invalid){CloudCredentialStore.clear(this);}
+    }
     embeddedModel=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
     if(EmbeddedModelStore.installed(this))
       embeddedModel.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
@@ -259,13 +265,28 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     note.setText("Optional cloud: ASK prompts go to your configured HTTPS Worker only when consent is enabled. Device tokens stay in memory; offline diagnostics use no internet.");
     advancedSection.addView(note);
     EditText url=new EditText(this);
-    url.setSingleLine(true);url.setHint("https://YOUR-WORKER.workers.dev/ask");advancedSection.addView(url);
+    url.setSingleLine(true);url.setHint("https://YOUR-WORKER.workers.dev/ask");
+    CloudCredentialStore.Credentials savedWorker=CloudCredentialStore.load(this);
+    if(savedWorker!=null)url.setText(savedWorker.endpoint);
+    advancedSection.addView(url);
     EditText token=new EditText(this);
-    token.setSingleLine(true);token.setHint("Worker device token (memory only)");
+    token.setSingleLine(true);token.setHint(savedWorker==null
+      ?"Worker device token":"Saved token available - leave blank to reuse");
     token.setInputType(129);advancedSection.addView(token);
-    advancedButton("Configure cloud endpoint",()->{
-      try {cloud.configure(url.getText().toString(),token.getText().toString());token.setText("");showStatus("Cloud endpoint configured in memory");}
-      catch(Exception e){cloud.clear();showStatus(e.getMessage());}
+    advancedButton("SAVE / USE CLOUD CONNECTION",()->{
+      try{
+        String supplied=token.getText().toString();
+        CloudCredentialStore.Credentials retained=CloudCredentialStore.load(this);
+        String effective=supplied.isEmpty() && retained!=null?retained.token:supplied;
+        String endpoint=url.getText().toString();
+        CloudCredentialStore.save(this,endpoint,effective);
+        cloud.configure(endpoint,effective);
+        token.setText("");
+        showStatus("Worker settings securely saved. Cloud AI still requires consent.");
+      }catch(Exception e){
+        cloudConsent.setChecked(false);cloud.clear();
+        showStatus("Cloud settings rejected; cloud disabled.");
+      }
     });
     cloudConsent=new CheckBox(this);
     cloudConsent.setText("I authorize sending ASK prompts to my cloud Worker and AI provider");
@@ -275,7 +296,12 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(!checked)cloud.revokeActive();
     });
     advancedSection.addView(cloudConsent);
-    advancedButton("Disable and clear cloud",()->{cloudConsent.setChecked(false);cloud.clear();showStatus("Cloud credentials cleared and consent revoked");});
+    advancedButton("Disable and clear cloud",()->{
+      cloudConsent.setChecked(false);
+      cloud.clear();
+      CloudCredentialStore.clear(this);
+      showStatus("Stored Worker settings removed; cloud consent revoked.");
+    });
     EditText input=new EditText(this);
     input.setHint("Protocol test text (no private data)");advancedSection.addView(input);
     advancedButton("Run offline diagnostic",()->{
