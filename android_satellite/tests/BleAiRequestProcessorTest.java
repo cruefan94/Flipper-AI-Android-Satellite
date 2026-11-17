@@ -123,10 +123,29 @@ public final class BleAiRequestProcessorTest {
       require(!f.processor.receive(frame("HELLO",1,"flipper-v1")),"closed service rejects frames");
     }finally{f.finish();}
   }
+  static void testPolicyRevocationCancelsInflightReply()throws Exception{
+    Fixture f=new Fixture();
+    try{
+      f.processor.resetLink();
+      require(f.processor.receive(frame("HELLO",1,"flipper-v1")),"HELLO submitted");
+      require(f.link.take().equals(frame("HELLO_ACK",1,"android-v1")),"HELLO acknowledged");
+      f.slowStarted.set(new CountDownLatch(1));
+      f.slowRelease.set(new CountDownLatch(1));
+      require(f.processor.receive(frame("ASK",2,"slow")),"slow ASK submitted");
+      require(f.slowStarted.get().await(3,TimeUnit.SECONDS),"inference entered");
+      f.processor.setPolicy(InferenceRouter.Mode.OFFLINE,false);
+      f.slowRelease.get().countDown();
+      require(f.link.empty(),"revoked policy cannot send stale inference reply");
+      require(f.processor.receive(frame("ASK",3,"fresh")),"fresh offline ASK submitted");
+      require(f.link.take().equals(frame("ANSWER",3,"LOCAL fresh")),"new offline request succeeds");
+      require(f.cloudCount.get()==0,"no cloud request on policy revocation");
+    }finally{f.finish();}
+  }
   public static void main(String[] args)throws Exception{
     testBackgroundHelloAndAsk();
     testDisconnectedDropsSlowReply();
     testCloudNeedsFreshExplicitConsent();
+    testPolicyRevocationCancelsInflightReply();
     testNoRequestsWithoutAuthorizedLink();
     System.out.println("BleAiRequestProcessorTest PASS");
   }
