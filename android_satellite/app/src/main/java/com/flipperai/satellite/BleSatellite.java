@@ -546,10 +546,17 @@ public final class BleSatellite implements SatelliteTransport {
       if(Build.VERSION.SDK_INT<33){synchronized(BleSatellite.this){if(link==gatt && stockRpcSubscribed && ch!=null && MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(ch.getValue());}}
     }
     @Override public void onCharacteristicWrite(BluetoothGatt link,BluetoothGattCharacteristic ch,int code){
-      if(link==gatt && MOMENTUM_RPC_WRITE.equals(ch.getUuid())){if(code!=BluetoothGatt.GATT_SUCCESS){rpcPingPending=false;events.status("Momentum RPC ping write failed (GATT "+code+").");}return;}
-      if(link!=gatt || !RX.equals(ch.getUuid()))return;
       synchronized(BleSatellite.this){
-        if(!writeGuard.complete())return;
+        // A stale callback must not complete a write pending on a new GATT.
+        if(link!=gatt || ch==null)return;
+        if(MOMENTUM_RPC_WRITE.equals(ch.getUuid())){
+          if(code!=BluetoothGatt.GATT_SUCCESS){
+            rpcPingPending=false;
+            events.status("Momentum RPC ping write failed (GATT "+code+").");
+          }
+          return;
+        }
+        if(!RX.equals(ch.getUuid()) || !writeGuard.complete())return;
         if(code==BluetoothGatt.GATT_SUCCESS){pending.pollFirst();drain();}
         else{
           events.status("AI BLE write failed: "+code);
