@@ -56,8 +56,8 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
           BADGING="$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK")"
-          printf '%s\\n' "$BADGING" | grep -F "name='com.flipperai.satellite' versionCode='${{ github.run_number }}'"
-          printf '%s\\n' "$BADGING" | grep -F "application-label:'Flipper AI Satellite'"
+          printf '%s\n' "$BADGING" | grep -F "name='com.flipperai.satellite' versionCode='${{ github.run_number }}'"
+          printf '%s\n' "$BADGING" | grep -F "application-label:'Flipper AI Satellite'"
           mkdir -p out
           cp "$APK" "out/FlipperAI-Satellite-ALL-FEATURES-DEBUG-UNTESTED.apk"
       - name: Generate fail-closed single APK integrity and provenance
