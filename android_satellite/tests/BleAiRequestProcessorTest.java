@@ -169,7 +169,7 @@ public final class BleAiRequestProcessorTest {
       require(f.link.take().equals(frame("HELLO_ACK",1,"android-v1")),"HELLO acknowledged");
       f.processor.setPolicy(InferenceRouter.Mode.ONLINE,false);
       require(f.processor.receive(frame("ASK",2,"private")),"online without consent ASK");
-      require(f.link.take().equals(frame("ANSWER",2,"LOCAL private")),"online without consent stays local");
+      require(f.link.take().equals(frame("ERROR",2,"ENGINE_UNAVAILABLE")),"ONLINE without consent fails closed");
       require(f.cloudCount.get()==0,"no cloud call without explicit consent");
       f.processor.setPolicy(InferenceRouter.Mode.ONLINE,true);
       require(f.processor.receive(frame("ASK",3,"allowed")),"consented ASK");
@@ -177,7 +177,7 @@ public final class BleAiRequestProcessorTest {
       require(f.cloudCount.get()==1,"exactly one cloud call with consent");
       f.processor.setPolicy(InferenceRouter.Mode.ONLINE,false);
       require(f.processor.receive(frame("ASK",4,"revoked")),"revoked ASK");
-      require(f.link.take().equals(frame("ANSWER",4,"LOCAL revoked")),"revocation restores local routing");
+      require(f.link.take().equals(frame("ERROR",4,"ENGINE_UNAVAILABLE")),"revocation blocks ONLINE requests");
       require(f.cloudCount.get()==1,"revocation prevents additional cloud calls");
     }finally{f.finish();}
   }
