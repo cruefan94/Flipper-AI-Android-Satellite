@@ -137,14 +137,14 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     header.setTextSize(25);root.addView(header);
     SatelliteUi.backHome(this,root);
     TextView sectionIntro=SatelliteUi.text(this,
-      "Pair and connect your Flipper Zero. AI model management and chat are on separate screens.",
+      "Connect your Flipper, then open AI CHAT or MODELS from the dashboard.",
       14,SatelliteUi.MUTED,false);
     root.addView(sectionIntro);
     SatelliteUi.sectionTitle(this,root,"CONNECTION STATUS");
     status=SatelliteUi.text(this,"No AI connection",15,SatelliteUi.ORANGE,false);
     root.addView(status);
     TextView offlineHelp=SatelliteUi.text(this,
-      "Offline AI runs on your Android phone when a compatible model is installed. Bluetooth pairing does not by itself verify the custom AI channel.",
+      "Bluetooth connected means the Flipper is linked. AI ready requires the separate custom AI channel; stock Momentum RPC is not AI chat.",
       14,SatelliteUi.MUTED,false);
     offlineHelp.setPadding(0,SatelliteUi.dp(this,8),0,SatelliteUi.dp(this,10));
     root.addView(offlineHelp);
@@ -220,7 +220,8 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         // Picker switching must never terminate the active service-owned link.
         selectedAddress=null;
         deviceInfo.setText("No device selected. Choose a device from this category.");
-        connectionState.setText("AI CONNECTION: NOT CONNECTED");
+        // Changing the device picker is not a Bluetooth disconnect.
+        // Retain the service-owned link status until an actual link event.
       }
       discoverableMode=newDiscoverable;
       pairedSection.setVisibility(discoverableMode?android.view.View.GONE:android.view.View.VISIBLE);
