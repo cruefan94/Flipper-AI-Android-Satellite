@@ -16,15 +16,25 @@ THEME=(APP/"src/main/res/values/styles.xml").read_text()
 
 class UiRefinementSourceTests(unittest.TestCase):
     def test_existing_dark_orange_theme_preserved_and_accessible(self):
-        self.assertIn("0xff080b10",UI)
-        self.assertIn("0xffff9614",UI)
-        self.assertIn("#ff9614",THEME)
+        self.assertIn("0xff0b1422",UI)
+        self.assertIn("0xff43dfc4",UI)
+        self.assertIn("#43dfc4",THEME)
         self.assertIn('name="android:textColorPrimary"',THEME)
         self.assertIn('name="android:textColorSecondary"',THEME)
         self.assertIn('name="android:textColorHint"',THEME)
         self.assertIn("v.setMinHeight(dp(a,52))",UI)
         self.assertIn("v.setFocusable(true)",UI)
         self.assertIn("v.setContentDescription(title)",UI)
+
+    def test_priority_four_theme_and_collapsible_model_tools(self):
+        self.assertIn("public static final int ACCENT=0xff43dfc4;", UI)
+        self.assertIn("public static final int AMBER=0xffffc06a;", UI)
+        self.assertIn("public static TextView primaryAction(", UI)
+        self.assertIn("android.graphics.drawable.RippleDrawable", UI)
+        self.assertIn('SatelliteUi.primaryAction(this,page,"DOWNLOAD & INSTALL QWEN3-0.6B"', MODELS)
+        self.assertIn('SHOW / HIDE ADVANCED MODEL TOOLS', MODELS)
+        self.assertIn("extraTools.setVisibility(android.view.View.GONE)", MODELS)
+        self.assertIn('if(cancelDownload!=null)cancelDownload.setVisibility(android.view.View.GONE)', MODELS)
 
     def test_dashboard_has_one_route_per_destination_and_remains_multi_screen(self):
         self.assertIn("SatelliteUi.sectionTitle(this,content",DASH)

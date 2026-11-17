@@ -61,6 +61,14 @@ public final class SatelliteTransportCoordinator {
         return generation==token && sendFrame(frame);
     }
 
+    /** Remove a UI reference to a service-owned connection without closing GATT. */
+    public synchronized void detach(SatelliteTransport adapter) {
+        if(adapter==null)return;
+        if(adapters.get(adapter.kind())==adapter){
+            adapters.remove(adapter.kind());
+            generation++;
+        }
+    }
     public synchronized void close() {
         for(SatelliteTransport adapter:adapters.values())adapter.close();
         adapters.clear();

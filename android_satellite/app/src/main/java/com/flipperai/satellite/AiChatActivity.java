@@ -23,6 +23,9 @@ public final class AiChatActivity extends Activity {
   private static final int MICROPHONE_PERMISSION_REQUEST=643;
   private final ExecutorService worker=Executors.newSingleThreadExecutor();
   private EmbeddedLlmEngine embedded;
+  private final LocalModelEngine llamaModel=new LocalModelEngine();
+  private OfflineProviderSelector offlineBackend;
+  private boolean llamaEnabled=false;
   private final WorkerCloudEngine cloud=new WorkerCloudEngine();
   private InferenceRouter router;
   private InferenceRouter.Mode mode=InferenceRouter.Mode.OFFLINE;
@@ -47,8 +50,16 @@ public final class AiChatActivity extends Activity {
   @Override public void onCreate(Bundle state){
     super.onCreate(state);
     embedded=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
+    llamaEnabled=LlamaCppSettings.enabled(this);
+    if(llamaEnabled)LlamaCppSettings.configure(llamaModel);
+    offlineBackend=new OfflineProviderSelector(embedded,llamaModel,llamaEnabled);
+    CloudCredentialStore.Credentials savedCloud=CloudCredentialStore.load(this);
+    if(savedCloud!=null){
+      try {cloud.configure(savedCloud.endpoint,savedCloud.token);}
+      catch(Exception invalid){CloudCredentialStore.clear(this);}
+    }
     router=new InferenceRouter(new OfflineModelOrDiagnostics(
-      embedded,new OfflineDiagnosticEngine()),cloud);
+      offlineBackend,new OfflineDiagnosticEngine()),cloud);
     // On modern Android, we apply IME insets ourselves. ADJUST_RESIZE plus
     // ime.bottom padding can resize the screen twice and cause visible flashes.
     getWindow().setSoftInputMode(Build.VERSION.SDK_INT>=30
@@ -264,13 +275,24 @@ public final class AiChatActivity extends Activity {
   }
   @Override protected void onResume(){
     super.onResume();
+    boolean preferred=LlamaCppSettings.enabled(this);
+    if(preferred!=llamaEnabled){
+      if(preferred)LlamaCppSettings.configure(llamaModel);
+      else llamaModel.clear();
+      offlineBackend.selectLlama(preferred);
+      llamaEnabled=preferred;
+    }
     worker.execute(()->{
       try{
         embedded.clear();
         if(EmbeddedModelStore.installed(this)){
           embedded.configure(EmbeddedModelStore.modelFile(this).getAbsolutePath());
-          setStatus("OFFLINE • Model imported • Ready for AI chat");
-        }else setStatus("OFFLINE • No model file • Basic diagnostics only");
+          setStatus(llamaEnabled
+            ?"OFFLINE • llama.cpp selected • Test server in MODELS"
+            :"OFFLINE • Model imported • Ready for AI chat");
+        }else setStatus(llamaEnabled
+          ?"OFFLINE • llama.cpp selected • Test server in MODELS"
+          :"OFFLINE • No model file • Basic diagnostics only");
       }catch(Exception e){setStatus("Embedded AI unavailable: "+e.getMessage());}
     });
   }
@@ -305,31 +327,43 @@ public final class AiChatActivity extends Activity {
       }).setNegativeButton("CANCEL",null).show();
   }
   private void cloudSettings(){
+    CloudCredentialStore.Credentials saved=CloudCredentialStore.load(this);
     LinearLayout fields=SatelliteUi.column(this);
     int pad=dp(16);fields.setPadding(pad,pad,pad,pad);
     TextView warning=SatelliteUi.text(this,
-      "Online AI sends your chat prompts to an HTTPS Worker and its AI provider only after you opt in. Token stays in memory and is cleared on exit.",
+      "Your Worker URL and device token can be remembered with Android Keystore encryption. "
+      +"Saved settings never authorize cloud processing: you must opt in each session.",
       14,SatelliteUi.WHITE,false);fields.addView(warning);
     EditText endpoint=new EditText(this);endpoint.setSingleLine(true);
-    endpoint.setHint("https://your-worker.workers.dev/ask");fields.addView(endpoint);
+    endpoint.setHint("https://your-worker.workers.dev/ask");
+    if(saved!=null)endpoint.setText(saved.endpoint);
+    fields.addView(endpoint);
     EditText token=new EditText(this);token.setSingleLine(true);
-    token.setInputType(129);token.setHint("Device token (not stored)");fields.addView(token);
+    token.setInputType(129);
+    token.setHint(saved==null?"Enter device token":"Stored token available - leave blank to reuse");
+    fields.addView(token);
     CheckBox allow=new CheckBox(this);
-    allow.setText("I authorize cloud processing of my ASK prompts");
+    allow.setText("Allow sending chat prompts to cloud for this session");
     allow.setChecked(consent);fields.addView(allow);
-    new android.app.AlertDialog.Builder(this).setTitle("Cloud AI permission")
+    new android.app.AlertDialog.Builder(this).setTitle("Cloud AI connection")
       .setView(fields)
-      .setNegativeButton("DISABLE CLOUD",(d,w)->{
-        consent=false;cloud.clear();++requestGeneration;
-        setStatus("Cloud permission revoked and credentials cleared.");
+      .setNegativeButton("CLEAR SAVED",(d,w)->{
+        consent=false;cloud.clear();CloudCredentialStore.clear(this);++requestGeneration;
+        setStatus("Saved cloud settings removed; permission revoked.");
       })
-      .setPositiveButton("SAVE",(d,w)->{
+      .setPositiveButton("SAVE CONNECTION",(d,w)->{
         consent=false;cloud.clear();++requestGeneration;
-        if(!allow.isChecked()){setStatus("Cloud disabled.");return;}
         try{
-          cloud.configure(endpoint.getText().toString(),token.getText().toString());
-          consent=true;setStatus("Cloud configured for this session. Use ONLINE or HYBRID mode.");
-        }catch(Exception e){setStatus("Cloud configuration rejected: "+e.getMessage());}
+          String supplied=token.getText().toString();
+          String effective=supplied.isEmpty() && saved!=null?saved.token:supplied;
+          String url=endpoint.getText().toString();
+          CloudCredentialStore.save(this,url,effective);
+          cloud.configure(url,effective);
+          consent=allow.isChecked();
+          setStatus(consent
+            ?"Cloud connected and authorized for this session. Choose ONLINE or HYBRID."
+            :"Cloud connection saved. Cloud AI remains disabled until you opt in.");
+        }catch(Exception e){setStatus("Cloud settings rejected; cloud is disabled.");}
       }).show();
   }
   /** No microphone access until TALK was explicitly tapped. */
@@ -375,9 +409,9 @@ public final class AiChatActivity extends Activity {
           result=PhoneFacts.answer(question,AndroidPhoneFacts.snapshot(this));
           completionStatus="PHONE • On-device answer (not sent to cloud)";
         } else {
-          if(requestedMode==InferenceRouter.Mode.OFFLINE && !embedded.ready()
+          if(requestedMode==InferenceRouter.Mode.OFFLINE && !offlineBackend.ready()
               && !new OfflineDiagnosticEngine().supports(question))
-            throw new IllegalStateException("Import a compatible model for general questions.");
+            throw new IllegalStateException("Select and configure an offline provider in MODELS.");
           InferenceRouter.Reply reply=router.askWithSource(question,requestedMode,approved);
           result=reply.text;
           if(reply.source==InferenceRouter.Source.OFFLINE_FALLBACK)
@@ -442,6 +476,7 @@ public final class AiChatActivity extends Activity {
     ++requestGeneration;
     consent=false;
     cloud.clear();
+    llamaModel.clear();
     if(!worker.isShutdown()){
       worker.execute(()->embedded.clear());
       worker.shutdown();

@@ -10,6 +10,8 @@
   <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <!-- Prompted only by an explicit TALK button; never recorded in the background. -->
   <uses-permission android:name="android.permission.RECORD_AUDIO"/>
   <!-- Android 11+ discovery of offline TTS and on-device recognition services. -->
@@ -21,6 +23,7 @@
     <uses-native-library android:name="libvndksupport.so" android:required="false"/>
     <uses-native-library android:name="libOpenCL.so" android:required="false"/>
     <service android:name=".RadioPlayerService" android:exported="false" android:foregroundServiceType="mediaPlayback"/>
+    <service android:name=".BleConnectionService" android:exported="false" android:foregroundServiceType="connectedDevice"/>
     <activity android:name=".RadioScannerActivity" android:exported="false"/>
     <activity android:name=".PhoneCompanionActivity" android:exported="false"/>
     <activity android:name=".GitHubActivity" android:exported="false"/>

@@ -40,7 +40,10 @@ public final class BleSatellite implements SatelliteTransport {
   private boolean userDisconnected=true;
   private int recoveryAttempts=0;
   private int recoveryToken=0;
-  private static final long[] RECOVERY_DELAYS_MS={2000L,5000L,10000L,30000L,30000L};
+  // Bounded backoff avoids rapid GATT reconnect loops and battery drain.
+  private static final long[] RECOVERY_DELAYS_MS={
+    2000L,4000L,8000L,12000L,20000L,30000L,45000L,60000L
+  };
   /* Read by UI and written from Android Bluetooth Binder callbacks. */
   private volatile boolean authorized,subscribed,mtuPending;
   private volatile boolean stockRpcDetected,stockRpcSubscribed;
@@ -111,16 +114,21 @@ public final class BleSatellite implements SatelliteTransport {
     disconnect();
   }
   private synchronized void scheduleRecovery(BluetoothDevice failedDevice,int gattStatus){
-    if(userDisconnected || failedDevice==null || failedDevice!=lastDevice ||
-       recoveryAttempts>=RECOVERY_DELAYS_MS.length)return;
+    if(userDisconnected || failedDevice==null || failedDevice!=lastDevice)return;
     final int token=++recoveryToken;
-    final int attempt=++recoveryAttempts;
-    final long delay=RECOVERY_DELAYS_MS[attempt-1];
-    events.status("BLE disconnected (GATT "+gattStatus+"); reconnecting in "+(delay/1000)+"s ("+attempt+"/5)");
+    // Retry indefinitely while the user-selected device remains bonded and the
+    // foreground service is alive. Saturate the backoff at 60 seconds rather
+    // than silently abandoning an out-of-range Flipper after eight attempts.
+    // Manual disconnect and a different selection invalidate the retry token.
+    recoveryAttempts=Math.min(recoveryAttempts+1,RECOVERY_DELAYS_MS.length);
+    final int stage=recoveryAttempts;
+    final long delay=RECOVERY_DELAYS_MS[stage-1];
+    events.status("BLE disconnected (GATT "+gattStatus+"); reconnecting in "
+      +(delay/1000)+"s (backoff "+stage+"/"+RECOVERY_DELAYS_MS.length+")");
     ui.postDelayed(()->{
       synchronized(BleSatellite.this){
         if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice)return;
-        events.status("Reconnecting to selected Flipper ("+attempt+"/5)");
+        events.status("Reconnecting to selected Flipper (backoff "+stage+"/"+RECOVERY_DELAYS_MS.length+")");
         openConnection(failedDevice);
       }
     },delay);
@@ -160,7 +168,13 @@ public final class BleSatellite implements SatelliteTransport {
     disconnect();
     scheduleRecovery(timedOutDevice,-1);
   }
-  public void reconnect(){if(lastDevice!=null)connect(lastDevice);}
+  public synchronized void reconnect(){if(lastDevice!=null)connect(lastDevice);}
+  /** Return a device only after actual authenticated AI or stock-RPC BLE readiness. */
+  public synchronized BluetoothDevice confirmedBondedDevice(){
+    if(gatt==null || !approved() || !(isReady() || isStockRpcSubscribed()))return null;
+    return lastDevice;
+  }
+  public synchronized boolean hasVerifiedLink(){return confirmedBondedDevice()!=null;}
   /** Pair the device explicitly chosen from scan results, without connecting first. */
   public void pair(BluetoothDevice device){
     if(device==null){events.status("Select a scanned Flipper before pairing");return;}
@@ -185,6 +199,11 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   public void pair(){pair(lastDevice);}
+  private synchronized void recoverTemporaryFailure(int status){
+    BluetoothDevice failedDevice=lastDevice;
+    disconnect();
+    scheduleRecovery(failedDevice,status);
+  }
   private boolean approved(){
     if(!authorized || lastDevice==null)return false;
     try{return BondGate.canUseAiChannel(lastDevice.getBondState(),authorized);}
@@ -255,7 +274,7 @@ public final class BleSatellite implements SatelliteTransport {
     BluetoothGattCharacteristic rx=service==null?null:service.getCharacteristic(RX);
     if(rx==null){
       events.status("AI GATT service unavailable");
-      disconnect();
+      recoverTemporaryFailure(-7);
       return false;
     }
     byte[] bytes=pending.peekFirst();
@@ -278,7 +297,7 @@ public final class BleSatellite implements SatelliteTransport {
     if(!sent){
       writeGuard.complete();
       events.status("AI GATT write failed to start");
-      disconnect();
+      recoverTemporaryFailure(-8);
       return false;
     }
     ui.postDelayed(()->expireWrite(link,token),GATT_WRITE_TIMEOUT_MS);
@@ -345,7 +364,7 @@ public final class BleSatellite implements SatelliteTransport {
         catch(SecurityException | IllegalStateException lostAccess){
           events.status("Bluetooth permission or link lost during service discovery");
         }
-        if(!discoveryStarted)disconnect();
+        if(!discoveryStarted)recoverTemporaryFailure(-3);
       }else{
         // Invalidate any request from this connection, including delayed callbacks.
         if(code==147 && !retry147Used && approved()){
@@ -356,7 +375,7 @@ public final class BleSatellite implements SatelliteTransport {
           events.status("GATT 147: connection rejected. Retrying once after a short delay...");
           ui.postDelayed(()->{
             synchronized(BleSatellite.this){
-              if(generation!=connectionGeneration || retryDevice!=lastDevice)return;
+              if(userDisconnected || generation!=connectionGeneration || retryDevice!=lastDevice)return;
               openConnection(retryDevice);
             }
           },1800);
@@ -377,7 +396,8 @@ public final class BleSatellite implements SatelliteTransport {
       if(!approved()){disconnect();return;}
       if(code!=BluetoothGatt.GATT_SUCCESS){
         discoveryEvidence.failed(code);
-        events.status("Bluetooth service discovery failed (GATT "+code+")");disconnect();return;
+        events.status("Bluetooth service discovery failed (GATT "+code+")");
+        recoverTemporaryFailure(code);return;
       }
       BluetoothGattService service=link.getService(SERVICE);
       BluetoothGattService rpc=link.getService(MOMENTUM_RPC_SERVICE);
@@ -429,7 +449,8 @@ public final class BleSatellite implements SatelliteTransport {
         events.status("Bluetooth permission or link lost enabling AI notifications");
       }
       if(!notificationEnabled){
-        events.status("Cannot enable AI notifications");disconnect();return;
+        events.status("Cannot enable AI notifications");
+        recoverTemporaryFailure(-4);return;
       }
       BluetoothGattDescriptor descriptor=tx.getDescriptor(CCCD);
       if(!transitionSubscribing()){
@@ -447,7 +468,7 @@ public final class BleSatellite implements SatelliteTransport {
       } catch(SecurityException | IllegalStateException permissionOrLinkLost){
         events.status("Bluetooth permission or link lost during subscription");
       }
-      if(!started){events.status("Notification subscription failed");disconnect();}
+      if(!started){events.status("Notification subscription failed");recoverTemporaryFailure(-5);}
       }
     }
     @Override public void onDescriptorWrite(BluetoothGatt link,BluetoothGattDescriptor d,int code){
@@ -474,21 +495,21 @@ public final class BleSatellite implements SatelliteTransport {
       }
       if(owner==null || !TX.equals(owner.getUuid()) ||
          state.phase()!=TransportState.Phase.SUBSCRIBING || mtuPending)return;
-      if(code!=BluetoothGatt.GATT_SUCCESS){disconnect();return;}
+      if(code!=BluetoothGatt.GATT_SUCCESS){recoverTemporaryFailure(code);return;}
       mtuPending=true;
       boolean requested=false;
       try{requested=link.requestMtu(185);}
       catch(SecurityException | IllegalStateException permissionOrLinkLost){
         events.status("Bluetooth permission or link lost during MTU request");
       }
-      if(!requested){mtuPending=false;disconnect();}
+      if(!requested){mtuPending=false;recoverTemporaryFailure(-6);}
       }
     }
     @Override public void onMtuChanged(BluetoothGatt link,int mtu,int code){
       synchronized(BleSatellite.this) {
       if(link!=gatt || !mtuPending)return;
       mtuPending=false;
-      if(code!=BluetoothGatt.GATT_SUCCESS){disconnect();return;}
+      if(code!=BluetoothGatt.GATT_SUCCESS){recoverTemporaryFailure(code);return;}
       state.mtu(mtu);
       if(!state.hasHandshakeCapacity()){
         events.status("Insufficient BLE MTU: AI bridge requires at least 32 ATT bytes");
@@ -530,14 +551,21 @@ public final class BleSatellite implements SatelliteTransport {
       if(Build.VERSION.SDK_INT<33){synchronized(BleSatellite.this){if(link==gatt && stockRpcSubscribed && ch!=null && MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(ch.getValue());}}
     }
     @Override public void onCharacteristicWrite(BluetoothGatt link,BluetoothGattCharacteristic ch,int code){
-      if(link==gatt && MOMENTUM_RPC_WRITE.equals(ch.getUuid())){if(code!=BluetoothGatt.GATT_SUCCESS){rpcPingPending=false;events.status("Momentum RPC ping write failed (GATT "+code+").");}return;}
-      if(link!=gatt || !RX.equals(ch.getUuid()))return;
       synchronized(BleSatellite.this){
-        if(!writeGuard.complete())return;
+        // A stale callback must not complete a write pending on a new GATT.
+        if(link!=gatt || ch==null)return;
+        if(MOMENTUM_RPC_WRITE.equals(ch.getUuid())){
+          if(code!=BluetoothGatt.GATT_SUCCESS){
+            rpcPingPending=false;
+            events.status("Momentum RPC ping write failed (GATT "+code+").");
+          }
+          return;
+        }
+        if(!RX.equals(ch.getUuid()) || !writeGuard.complete())return;
         if(code==BluetoothGatt.GATT_SUCCESS){pending.pollFirst();drain();}
         else{
           events.status("AI BLE write failed: "+code);
-          disconnect();
+          recoverTemporaryFailure(code);
         }
       }
     }

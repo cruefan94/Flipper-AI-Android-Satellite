@@ -9,8 +9,12 @@ UI = (SRC / "MainActivity.java").read_text()
 
 class ReconnectSourceTests(unittest.TestCase):
     def test_bounded_retry_and_manual_stop(self):
-        self.assertIn("RECOVERY_DELAYS_MS={2000L,5000L,10000L,30000L,30000L}", BLE)
-        self.assertIn("recoveryAttempts>=RECOVERY_DELAYS_MS.length", BLE)
+        self.assertIn("RECOVERY_DELAYS_MS={", BLE)
+        self.assertIn("60000L", BLE)
+        self.assertIn("recoveryAttempts=Math.min(recoveryAttempts+1,RECOVERY_DELAYS_MS.length)", BLE)
+        self.assertIn("RECOVERY_DELAYS_MS[stage-1]", BLE)
+        self.assertIn("backoff ", BLE)
+        self.assertNotIn("recoveryAttempts>=RECOVERY_DELAYS_MS.length", BLE)
         self.assertIn("if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice)return;", BLE)
         self.assertIn("public synchronized void manualDisconnect()", BLE)
         self.assertIn("userDisconnected=true;", BLE)
@@ -25,8 +29,9 @@ class ReconnectSourceTests(unittest.TestCase):
         self.assertIn("if(link!=gatt)return;", BLE)
 
     def test_manual_actions_cancel_recovery(self):
-        self.assertIn('button("Disconnect",()->{if(permissions())ble.manualDisconnect();});', UI)
-        self.assertGreaterEqual(UI.count("ble.manualDisconnect();"),3)
+        self.assertIn('if(bleService!=null)bleService.stopFromUser();',UI)
+        self.assertIn('public synchronized void manualDisconnect()',BLE)
+        self.assertIn('if(userDisconnected || generation!=connectionGeneration',BLE)
         self.assertIn('BLUETOOTH: RECONNECTING... (AI NOT READY)', UI)
 
     def test_duplicate_connected_event_is_idempotent(self):

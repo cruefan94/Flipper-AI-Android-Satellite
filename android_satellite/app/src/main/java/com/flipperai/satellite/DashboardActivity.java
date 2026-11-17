@@ -8,7 +8,7 @@ import android.view.Gravity;
 import android.widget.*;
 
 /**
- * Dedicated app launcher: restore approved dark/orange dashboard navigation.
+ * Dedicated dashboard using the new midnight/teal palette and concise navigation.
  * Every active card opens a distinct screen, no buttons secretly open the same page.
  * Device and inference states are never invented here.
  */
@@ -23,9 +23,11 @@ public final class DashboardActivity extends Activity {
   private void panelCard(LinearLayout parent,String icon,String title,String description,
                          String action,Class<?> screen){
     LinearLayout box=column();
-    box.setPadding(dp(16),dp(14),dp(16),dp(14));
-    box.setBackground(SatelliteUi.panel(this,false));
-    TextView heading=text(icon+"  "+title,19,SatelliteUi.WHITE,true);
+    box.setPadding(dp(17),dp(15),dp(17),dp(13));
+    box.setBackground(new android.graphics.drawable.RippleDrawable(
+      android.content.res.ColorStateList.valueOf(0x3343dfc4),
+      SatelliteUi.panel(this,false),null));
+    TextView heading=text(icon+"  "+title,18,SatelliteUi.WHITE,true);
     box.addView(heading);
     gap(box,6);
     TextView detail=text(description,14,SatelliteUi.MUTED,false);
@@ -67,10 +69,10 @@ public final class DashboardActivity extends Activity {
     LinearLayout brand=column();
     brand.setPadding(dp(16),dp(15),dp(16),dp(15));
     brand.setBackground(SatelliteUi.panel(this,true));
-    brand.addView(text("◈  FLIPPER AI SATELLITE",27,SatelliteUi.ORANGE,true));
-    brand.addView(text("MOMENTUM • ANDROID AI COMPANION",13,SatelliteUi.WHITE,true));
+    brand.addView(text("◈  FLIPPER AI SATELLITE",24,SatelliteUi.ACCENT,true));
+    brand.addView(text("MOMENTUM • ANDROID AI COMPANION",12,SatelliteUi.AMBER,true));
     root.addView(brand);
-    gap(root,14);
+    gap(root,12);
 
     // A single navigational route per screen, including tablets in landscape.
     // Old landscape sidebar repeated the same destinations as the cards.
@@ -84,30 +86,30 @@ public final class DashboardActivity extends Activity {
       wide?dp(cardWidthDp):-1,-2);
     contentParams.gravity=Gravity.CENTER_HORIZONTAL;
     root.addView(content,contentParams);
-    SatelliteUi.sectionTitle(this,content,"ESSENTIALS");
+    SatelliteUi.sectionTitle(this,content,"START HERE");
     panelCard(content,"ᛒ","FLIPPER CONNECTION",
-      "Pair, connect and check Momentum BLE and the AI channel. Connection state is shown in the dedicated BLE screen.",
+      "Connect or reconnect your Flipper. See whether Bluetooth and the AI channel are ready.",
       "MANAGE CONNECTION",MainActivity.class);
     panelCard(content,"✧","AI CHAT",
-      "Full-screen Android AI conversation. Uses your imported offline model when available; diagnostic responses otherwise.",
+      "Ask your offline AI, or use cloud AI when you choose to enable it.",
       "OPEN AI CHAT",AiChatActivity.class);
     panelCard(content,"↓","OFFLINE AI MODELS",
       EmbeddedModelStore.installed(this)
-        ? "Model file imported on this phone. Run the live test to confirm that inference works."
-        : "No imported .litertlm model detected. Import a compatible LiteRT-LM model to enable full offline responses.",
+        ? "Model installed on this phone. Test it or change your selected AI."
+        : "Install an offline AI once, then choose or test it here.",
       "INSTALL / TEST",ModelsActivity.class);
     SatelliteUi.sectionTitle(this,content,"LISTEN & EXPLORE");
     panelCard(content,"♫","RADIO LISTENING",
-      "Find public internet AM/FM streams, play permitted feeds, and manage favorites. Receive-only; no SDR or Flipper radio attachment yet.",
+      "Listen to permitted public radio streams and manage your favorites.",
       "OPEN RADIO",RadioScannerActivity.class);
     SatelliteUi.sectionTitle(this,content,"UTILITIES");
     panelCard(content,"▥","PHONE COMPANION",
-      "Check battery, network and Bluetooth device status. No hidden permissions or automatic device control.",
+      "View phone battery, network and Bluetooth status.",
       "PHONE STATUS",PhoneCompanionActivity.class);
     panelCard(content,"⌘","GITHUB BUILDS",
-      "Read-only public repository builds, commits and releases. Private account access is not enabled in this app.",
+      "Review available public GitHub builds, commits and releases.",
       "OPEN GITHUB",GitHubActivity.class);
-    TextView future=text("Additional hardware radio reception and audio transcription are future features.",
+    TextView future=text("More device features will appear here as they are verified.",
       13,SatelliteUi.MUTED,false);
     future.setPadding(dp(5),dp(6),dp(5),dp(7));
     content.addView(future);

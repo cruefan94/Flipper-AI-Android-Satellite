@@ -55,4 +55,14 @@ java -cp "$DEST" WifiRelaySecurityTest
 javac -cp "$DEST" -d "$DEST" "$SRC/ConsentEpoch.java" "$ROOT/android_satellite/tests/ConsentEpochTest.java"
 java -cp "$DEST" ConsentEpochTest
 
+# Opt-in offline provider choice, verified local model downloads and safe recent-device labels.
+javac -cp "$DEST" -d "$DEST" "$SRC/OfflineProviderSelector.java" "$ROOT/android_satellite/tests/OfflineProviderSelectorTest.java"
+java -cp "$DEST" OfflineProviderSelectorTest
+javac -cp "$DEST" -d "$DEST" "$SRC/VettedModelCatalog.java" "$SRC/ModelDownloadIntegrity.java" "$ROOT/android_satellite/tests/ModelDownloadIntegrityTest.java"
+java -cp "$DEST" ModelDownloadIntegrityTest
+javac -cp "$DEST" -d "$DEST" "$SRC/RecentFlipperPolicy.java" "$ROOT/android_satellite/tests/RecentFlipperPolicyTest.java"
+java -cp "$DEST" RecentFlipperPolicyTest
+javac -cp "$DEST" -d "$DEST" "$SRC/BleLinkHealth.java" "$ROOT/android_satellite/tests/BleLinkHealthTest.java"
+java -cp "$DEST" BleLinkHealthTest
+
 python3 "$ROOT/android_satellite/tests/test_cloud_revocation_source.py"

@@ -93,13 +93,26 @@ class WriteWatchdogSourceTests(unittest.TestCase):
     def test_permission_revocation_mid_subscription_and_mtu_does_not_crash(self):
         self.assertIn('events.status("Bluetooth permission or link lost during subscription");',BLE)
         self.assertIn('events.status("Bluetooth permission or link lost during MTU request");',BLE)
-        self.assertIn('if(!requested){mtuPending=false;disconnect();}',BLE)
+        self.assertIn('if(!requested){mtuPending=false;recoverTemporaryFailure(-6);}',BLE)
+        self.assertIn('private synchronized void recoverTemporaryFailure(int status)',BLE)
+        self.assertIn('scheduleRecovery(failedDevice,status);',BLE)
 
     def test_revoked_bluetooth_permission_cannot_crash_disconnect_cleanup(self):
         self.assertIn("try{old.disconnect();}",BLE)
         self.assertIn("finally{",BLE)
         self.assertIn("try{old.close();}",BLE)
         self.assertIn("catch(SecurityException | IllegalStateException ignored)",BLE)
+
+    def test_write_failure_recovery_and_stale_callback_guard(self):
+        self.assertIn('events.status("AI GATT write failed to start");',BLE)
+        self.assertIn("recoverTemporaryFailure(-8);",BLE)
+        self.assertIn("recoverTemporaryFailure(-7);",BLE)
+        self.assertIn("recoverTemporaryFailure(code);",BLE)
+        callback=BLE.split("void onCharacteristicWrite(",1)[1].split("    @Override",1)[0]
+        self.assertLess(callback.index("synchronized(BleSatellite.this)"),
+                        callback.index("if(link!=gatt || ch==null)return;"))
+        self.assertLess(callback.index("if(link!=gatt || ch==null)return;"),
+                        callback.index("writeGuard.complete()"))
 
     def test_late_timers_do_not_close_new_connection(self):
         self.assertIn("if(link!=gatt || !writeGuard.isPending(token))return;",BLE)
