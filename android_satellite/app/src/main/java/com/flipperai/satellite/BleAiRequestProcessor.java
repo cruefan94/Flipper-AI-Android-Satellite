@@ -82,12 +82,12 @@ public final class BleAiRequestProcessor {
     final int limit=link.maxFrameBytes();
     return jobs.submit(()->{
       if(closed || !linkEpoch.matches(epoch) || !link.isReady())return;
-      if(consent && (!cloudConsent || !consentEpoch.current(permission)))return;
+      if(!consentEpoch.current(permission))return;
       requests.configure(selected,consent);
       String answer=session.dispatch(frame,limit,requests);
       if(answer==null || Thread.currentThread().isInterrupted())return;
       if(closed || !linkEpoch.matches(epoch) || !link.isReady())return;
-      if(consent && (!cloudConsent || !consentEpoch.current(permission)))return;
+      if(!consentEpoch.current(permission))return;
       // BluetoothGatt.writeCharacteristic is serialized by BleSatellite.
       // A completed AI inference is NOT proof that the GATT write succeeded.
       link.sendFrame(answer);
