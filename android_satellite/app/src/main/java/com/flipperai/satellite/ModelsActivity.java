@@ -73,16 +73,6 @@ public final class ModelsActivity extends Activity {
         finally{finishOperation();}
       });
     });
-    SatelliteUi.sectionTitle(this,page,"MORE MODEL OPTIONS");
-    SatelliteUi.sectionTitle(this,page,"MODEL FILES & COMPATIBILITY");
-    TextView instructions=SatelliteUi.text(this,
-      "Import a .litertlm model directly or a ZIP containing exactly one .litertlm model plus small README/LICENSE files. "+
-      "Import installs the model data—no APK rebuild or code compilation is needed. "+
-      "Compatible example: Qwen3-0.6B.litertlm (~586 MB INT8); other models may need a different runtime. "+
-      "The newer dynamic INT4 version requires a newer runtime.",
-      14,SatelliteUi.MUTED,false);
-    page.addView(instructions);
-
     SatelliteUi.gap(this,page,15);
     SatelliteUi.sectionTitle(this,page,"ONE-TAP MODEL DOWNLOAD");
     page.addView(SatelliteUi.text(this,
@@ -119,6 +109,16 @@ public final class ModelsActivity extends Activity {
       downloadCancelled.set(true);
       setStatus("Cancelling download; previous model remains installed.");
     });
+    SatelliteUi.sectionTitle(this,page,"MORE MODEL OPTIONS");
+    SatelliteUi.sectionTitle(this,page,"MODEL FILES & COMPATIBILITY");
+    TextView instructions=SatelliteUi.text(this,
+      "Import a .litertlm model directly or a ZIP containing exactly one .litertlm model plus small README/LICENSE files. "+
+      "Import installs the model data—no APK rebuild or code compilation is needed. "+
+      "Compatible example: Qwen3-0.6B.litertlm (~586 MB INT8); other models may need a different runtime. "+
+      "The newer dynamic INT4 version requires a newer runtime.",
+      14,SatelliteUi.MUTED,false);
+    page.addView(instructions);
+
     SatelliteUi.gap(this,page,15);
     SatelliteUi.action(this,page,"1  OPEN COMPATIBLE MODEL FILES",()->{
       Intent browser=new Intent(Intent.ACTION_VIEW,
