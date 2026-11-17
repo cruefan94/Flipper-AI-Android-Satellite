@@ -102,7 +102,7 @@ jobs:
               ),
           }
           (output / 'BUILD_EVIDENCE.json').write_text(
-              json.dumps(evidence, sort_keys=True, indent=2) + '\\n')
+              json.dumps(evidence, sort_keys=True, indent=2) + '\n')
           PY
           echo 'Exactly ONE APK generated with ordinary Flipper AI Satellite identity.' >> "$GITHUB_STEP_SUMMARY"
           echo 'Features are together in one app. Host tests and debug APK signature were verified.' >> "$GITHUB_STEP_SUMMARY"
