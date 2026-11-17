@@ -22,9 +22,11 @@ class BleNavigationSessionRetentionTests(unittest.TestCase):
         self.assertIn("SatelliteUi.goHome(this);",BLE)
 
     def test_explicit_disconnect_and_task_exit_still_release_ble(self):
-        self.assertIn('button("Disconnect",()->{if(permissions())ble.manualDisconnect();});',BLE)
+        self.assertIn('if(bleService!=null)bleService.stopFromUser();',BLE)
         self.assertIn("bleSessionJobs.close();",BLE)
-        self.assertIn("ble.stopScan();transports.close();",BLE)
+        self.assertIn("bleService.detach(this);",BLE)
+        self.assertIn("unbindService(bleBinding);",BLE)
+        self.assertNotIn("ble.stopScan();transports.close();",BLE)
         self.assertIn("finishAffinity();",DASH)
         self.assertIn("public void onBackPressed()",DASH)
 
