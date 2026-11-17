@@ -247,6 +247,17 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(bleService!=null)bleService.stopFromUser();
       else if(ble!=null)ble.manualDisconnect();
     });
+    // Visible diagnostic button: a useful signal-drop report without device IDs.
+    button("COPY BLUETOOTH RELIABILITY REPORT",()->{
+      if(!connectionServiceReady())return;
+      String report=bleService.linkHealthReport();
+      android.content.ClipboardManager clipboard=
+        (android.content.ClipboardManager)getSystemService(CLIPBOARD_SERVICE);
+      if(clipboard==null){showStatus("Android clipboard unavailable.");return;}
+      clipboard.setPrimaryClip(android.content.ClipData.newPlainText(
+        "Flipper AI BLE reliability",report));
+      showStatus("BLE reliability report copied; paste it into the project chat.");
+    });
     button("TEST MOMENTUM RPC PING",()->{
       if(!permissions() || !connectionServiceReady())return;
       ble.sendStockRpcPing();
@@ -563,7 +574,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(Build.VERSION.SDK_INT>=26)startForegroundService(intent);
       else startService(intent);
       connectionState.setText("AI CONNECTION: CONNECTING...");
-      ble.connect(device);
+      bleService.connectFromUser(device);
     }catch(SecurityException | IllegalStateException rejected){
       showStatus("Android blocked Bluetooth background service. Open settings and check app permissions.");
     }
