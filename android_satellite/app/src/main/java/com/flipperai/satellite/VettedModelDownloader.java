@@ -41,7 +41,7 @@ public final class VettedModelDownloader {
       URL url=new URL(entry.url);
       for(int redirects=0;;redirects++) {
         if(!"https".equalsIgnoreCase(url.getProtocol())
-            || url.getUserInfo()!=null || url.getHost()==null || url.getHost().isEmpty()
+            || url.toURI().getRawUserInfo()!=null || url.getHost()==null || url.getHost().isEmpty()
             || (url.getPort()!=-1 && url.getPort()!=443))
           throw new IOException("Model downloads require HTTPS");
         connection=(HttpURLConnection)url.openConnection(Proxy.NO_PROXY);
