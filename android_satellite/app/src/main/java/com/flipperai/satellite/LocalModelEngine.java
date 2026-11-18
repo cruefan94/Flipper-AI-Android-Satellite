@@ -59,7 +59,9 @@ public final class LocalModelEngine implements InferenceRouter.OfflineEngine {
     conn.setRequestMethod("POST");conn.setDoOutput(true);conn.setUseCaches(false);
     conn.setRequestProperty("Content-Type","application/json; charset=utf-8");
     conn.setRequestProperty("Accept","application/json");
-    JSONArray messages=new JSONArray().put(new JSONObject().put("role","user").put("content",prompt));
+    JSONArray messages=new JSONArray()
+      .put(new JSONObject().put("role","system").put("content",AppIdentity.SYSTEM_INSTRUCTION))
+      .put(new JSONObject().put("role","user").put("content",prompt));
     byte[] body=new JSONObject().put("model",selectedModel).put("messages",messages)
       .put("stream",false).put("max_tokens",100).toString().getBytes(StandardCharsets.UTF_8);
     // JSON escaping can expand the UTF-8 request substantially beyond prompt length.
