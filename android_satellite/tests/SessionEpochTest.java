@@ -1,6 +1,8 @@
 import com.flipperai.satellite.SessionEpoch;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** JVM-only reconnect/callback invalidation; not proof of a physical AI1 link. */
 public final class SessionEpochTest {
@@ -36,15 +38,20 @@ public final class SessionEpochTest {
 
     // Simulate a delayed callback from an old GATT session after a new link.
     int oldLink = e.current();
+    CountDownLatch releaseCallback = new CountDownLatch(1);
+    AtomicBoolean staleWasAccepted = new AtomicBoolean(false);
     Thread delayedCallback = new Thread(() -> {
-      try { Thread.sleep(10); } catch(InterruptedException ex) {
+      try { releaseCallback.await(); } catch(InterruptedException ex) {
         Thread.currentThread().interrupt();
+        return;
       }
-      check(!e.matches(oldLink), "late old-link callback accepted");
+      staleWasAccepted.set(e.matches(oldLink));
     });
     delayedCallback.start();
     e.advance();
+    releaseCallback.countDown();
     delayedCallback.join();
+    check(!staleWasAccepted.get(), "late old-link callback accepted");
     System.out.println("SessionEpoch tests passed");
   }
 }
