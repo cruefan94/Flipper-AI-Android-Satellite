@@ -51,7 +51,7 @@ class MomentumAi1ContractTest(unittest.TestCase):
         session = read("ProtocolSession.java")
         handler = read("SatelliteRequestHandler.java")
         ai = read("BleAiRequestProcessor.java")
-        self.assertIn(r'AI1|%s|%d|%s\\n', proto)
+        self.assertIn(r'AI1|%s|%d|%s\n', proto)
         self.assertIn('"flipper-v1"', session)
         self.assertIn('"HELLO_ACK"', handler)
         self.assertIn('"android-v1"', handler)
