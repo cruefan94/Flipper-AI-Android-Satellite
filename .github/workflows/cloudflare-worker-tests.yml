@@ -7,10 +7,12 @@ on:
       - feature/cloudflare-gemini-worker-v01
     paths:
       - 'cloudflare_worker/**'
+      - 'test/worker_*.test.mjs'
       - '.github/workflows/cloudflare-worker-tests.yml'
   pull_request:
     paths:
       - 'cloudflare_worker/**'
+      - 'test/worker_*.test.mjs'
       - '.github/workflows/cloudflare-worker-tests.yml'
 
 jobs:
@@ -24,4 +26,4 @@ jobs:
         with:
           node-version: '22'
       - name: Worker protocol and security checks
-        run: node --test cloudflare_worker/test/*.test.mjs
+        run: node --test cloudflare_worker/test/*.test.mjs test/worker_*.test.mjs
