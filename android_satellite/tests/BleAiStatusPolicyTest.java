@@ -16,6 +16,17 @@ public final class BleAiStatusPolicyTest {
     expect("AI GATT write timed out",Transition.INVALIDATE);
     expect("Flipper Bluetooth not connected",Transition.NONE);
     expect("AI NOT READY",Transition.NONE);
+    // Prefix collisions must never create a fake custom AI1 READY session
+    // or revoke a live request based on an unrelated diagnostic label.
+    expect("AI BLE readyish",Transition.NONE);
+    expect("AI BLE ready_not",Transition.NONE);
+    expect("Stock Momentum RPC indications enabledish",Transition.NONE);
+    expect("Disconnectedness",Transition.NONE);
+    expect("Reconnecting to selected Flipperish",Transition.NONE);
+    expect("AI BLE ready: subscribed",Transition.READY);
+    expect("AI BLE ready(custom)",Transition.READY);
+    expect("Stock Momentum RPC indications enabled: fallback",Transition.INVALIDATE);
+    expect("Disconnected (remote)",Transition.INVALIDATE);
     expect(null,Transition.NONE);
     System.out.println("BleAiStatusPolicy tests passed");
   }
