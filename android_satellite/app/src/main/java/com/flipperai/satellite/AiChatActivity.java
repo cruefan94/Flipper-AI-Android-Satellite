@@ -405,7 +405,10 @@ public final class AiChatActivity extends Activity {
       try{
         // Clear, direct phone-info questions are handled locally in every AI mode.
         // No cloud prompt, telemetry, device identifier or extra permission is used.
-        if(PhoneFacts.classify(question)!=PhoneFacts.Query.NONE) {
+        if(AppIdentity.isAppQuestion(question)) {
+          result=AppAwareness.answer(this,requestedMode,approved);
+          completionStatus="APP • Current on-device diagnostics (not sent to cloud)";
+        }else if(PhoneFacts.classify(question)!=PhoneFacts.Query.NONE) {
           result=PhoneFacts.answer(question,AndroidPhoneFacts.snapshot(this));
           completionStatus="PHONE • On-device answer (not sent to cloud)";
         } else {
