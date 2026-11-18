@@ -28,6 +28,8 @@ javac -cp "$DEST" -d "$DEST" "$SRC/GattProfilePolicy.java" "$ROOT/android_satell
 java -cp "$DEST" GattProfilePolicyTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SessionEpochTest.java"
 java -cp "$DEST" SessionEpochTest
+javac -cp "$DEST" -d "$DEST" "$SRC/BleAiStatusPolicy.java" "$ROOT/android_satellite/tests/BleAiStatusPolicyTest.java"
+java -cp "$DEST" BleAiStatusPolicyTest
 javac -cp "$DEST" -d "$DEST" "$SRC/BleSessionJobs.java" "$ROOT/android_satellite/tests/BleSessionJobsTest.java"
 java -cp "$DEST" BleSessionJobsTest
 # Service-owned AI1 protocol: same actual JVM worker and frame parser as Android.
