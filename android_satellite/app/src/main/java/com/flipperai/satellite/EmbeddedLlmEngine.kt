@@ -3,6 +3,8 @@ package com.flipperai.satellite
 import android.os.Looper
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.ConversationConfig
+import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
 import java.io.File
@@ -62,7 +64,9 @@ class EmbeddedLlmEngine(private val cacheDirectory: String) : InferenceRouter.Of
             // Do not close an engine whose initialize() failed (SDK contract).
             candidate.initialize()
             try {
-                val newConversation = candidate.createConversation()
+                val newConversation = candidate.createConversation(
+                    ConversationConfig(systemInstruction = Contents.of(AppIdentity.SYSTEM_INSTRUCTION))
+                )
                 engine = candidate
                 conversation = newConversation
             } catch (t: Throwable) {
