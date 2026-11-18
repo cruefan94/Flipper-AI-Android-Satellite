@@ -5,6 +5,8 @@ import android.content.Intent;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
+import android.view.View;
+import android.provider.Settings;
 import android.widget.*;
 
 /** Shared midnight/teal Flipper AI styling for every native screen. */
@@ -20,6 +22,18 @@ public final class SatelliteUi {
   public static final int MUTED=0xffb5c8da;
   public static final int BORDER=0xff405b73;
   private SatelliteUi(){}
+  /** Small nonblocking motion; system-disabled animator scales are honored. */
+  public static void animateEntrance(Activity a,View view,int index){
+    float scale;
+    try{scale=Settings.Global.getFloat(a.getContentResolver(),
+      Settings.Global.ANIMATOR_DURATION_SCALE,1f);}
+    catch(SecurityException unavailable){scale=0f;}
+    if(scale<=0f)return;
+    view.setAlpha(0f);
+    view.setTranslationY(dp(a,8));
+    view.animate().alpha(1f).translationY(0f).setDuration(150)
+      .setStartDelay(Math.min(Math.max(0,index),8)*25L).start();
+  }
   public static int dp(Activity a,int n){return Math.round(n*a.getResources().getDisplayMetrics().density);}
   public static GradientDrawable panel(Activity a,boolean active){
     GradientDrawable shape=new GradientDrawable();
