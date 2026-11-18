@@ -28,6 +28,24 @@ public final class BleConnectionService extends Service implements BleSatellite.
   public static final String ACTION_KEEP="com.flipperai.satellite.action.BLE_KEEP";
   public static final String ACTION_DISCONNECT="com.flipperai.satellite.action.BLE_DISCONNECT";
   private static final String CHANNEL="flipper_ble_link_v1";
+  /** Only a live Service owns this reference; clear it during onDestroy. */
+  private static volatile BleConnectionService activeInstance;
+  /** Redacted local observation, never proof of a particular firmware image. */
+  public static String readOnlyLinkReport(){
+    BleConnectionService service=activeInstance;
+    if(service==null || service.transport==null)
+      return "No active Android BLE connection service; AI1 and Momentum RPC unverified";
+    try {
+      BleSatellite ble=service.transport;
+      if(ble.isReady())
+        return "AI1 characteristic subscribed on a paired BLE link; app-level HELLO and firmware revision require separate verification";
+      if(ble.isStockRpcSubscribed())
+        return "Stock Momentum RPC subscribed on a paired BLE link; AI1 channel not verified";
+      return "No verified AI1 or stock RPC subscription on the current link";
+    }catch(SecurityException | IllegalStateException unavailable){
+      return "Bluetooth permissions/link state unavailable; no verified channel";
+    }
+  }
   private static final int NOTICE_ID=1203;
   public final class LocalBinder extends Binder {
     public BleConnectionService service(){return BleConnectionService.this;}
@@ -53,6 +71,7 @@ public final class BleConnectionService extends Service implements BleSatellite.
 
   @Override public void onCreate(){
     super.onCreate();
+    activeInstance=this;
     transport=new BleSatellite(this,this);
     embedded=new EmbeddedLlmEngine(getCacheDir().getAbsolutePath());
     loopback=new LocalModelEngine();
@@ -215,6 +234,7 @@ public final class BleConnectionService extends Service implements BleSatellite.
     stopSelf();
   }
   @Override public void onDestroy(){
+    if(activeInstance==this)activeInstance=null;
     linkHealth.userDisconnect(SystemClock.elapsedRealtime());
     foreground=false;
     currentListener=null;
