@@ -23,7 +23,13 @@ class SingleApkProvenanceTest(unittest.TestCase):
         self.assertIn("one full-feature Android APK", source)
         self.assertIn("variant_policy': 'one_combined_apk_only'", source)
         self.assertIn("len(binaries) != 1", source)
-        self.assertIn("FlipperAI-Satellite-ALL-FEATURES-DEBUG-UNTESTED.apk", source)
+        # The APK stays a single verified build, but its download filename
+        # deliberately changes on every run to prevent accidental reuse.
+        self.assertIn('DOWNLOAD_LABEL="FlipperAI-Android_', source)
+        self.assertIn('run${GITHUB_RUN_ID}-a${GITHUB_RUN_ATTEMPT}', source)
+        self.assertIn('sha${SHORT_SHA}_ALLFEATURES-DEBUG-UNTESTED', source)
+        self.assertIn('cp "$APK" "out/${DOWNLOAD_LABEL}.apk"', source)
+        self.assertIn('name: ${{ env.APK_DOWNLOAD_LABEL }}', source)
         self.assertEqual(source.count('apksigner" verify'), 1)
         self.assertEqual(source.count(":app:assembleDebug"), 1)
         self.assertIn("com.flipperai.satellite' versionCode=", source)

@@ -30,6 +30,9 @@ javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SessionEpochTest.jav
 java -cp "$DEST" SessionEpochTest
 javac -cp "$DEST" -d "$DEST" "$SRC/BleSessionJobs.java" "$ROOT/android_satellite/tests/BleSessionJobsTest.java"
 java -cp "$DEST" BleSessionJobsTest
+# Service-owned AI1 protocol: same actual JVM worker and frame parser as Android.
+javac -cp "$DEST" -d "$DEST" "$SRC/ConsentEpoch.java" "$SRC/BleAiRequestProcessor.java" "$ROOT/android_satellite/tests/BleAiRequestProcessorTest.java"
+java -cp "$DEST" BleAiRequestProcessorTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/BleSessionReconnectIsolationTest.java"
 java -cp "$DEST" BleSessionReconnectIsolationTest
 javac -cp "$DEST" -d "$DEST" "$SRC/WorkerEndpointPolicy.java" "$ROOT/android_satellite/tests/WorkerEndpointPolicyTest.java"

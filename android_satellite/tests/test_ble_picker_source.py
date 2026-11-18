@@ -52,7 +52,10 @@ class BlePickerSourceTests(unittest.TestCase):
         self.assertIn("Model installed (",MODELS)
         self.assertIn("EmbeddedModelStore.delete(this)",MODELS)
         self.assertIn("cloud.revokeActive();",BLE)
-        self.assertIn("consentEpoch.current(consentGeneration)",BLE)
+        # Cloud revocation is now enforced by the persistent service processor.
+        self.assertIn("bleService.leaveAiSettingsScreen();",BLE)
+        self.assertIn("if(cloudConsent!=null && cloudConsent.isChecked())",BLE)
+        self.assertIn("consentEpoch.current(permission)",(SRC/"BleAiRequestProcessor.java").read_text())
 
 if __name__=="__main__":
     unittest.main()

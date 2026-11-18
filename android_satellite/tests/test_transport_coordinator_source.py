@@ -21,8 +21,15 @@ class TransportCoordinatorSourceTest(unittest.TestCase):
     def test_async_answers_bound_to_selected_session(self):
         self.assertIn("transports.register(ble);",UI)
         self.assertIn("transports.invalidateSession();",UI)
-        self.assertIn("final long transportGeneration=transports.generation();",UI)
-        self.assertIn("transports.sendFrameIfCurrent(response,transportGeneration)",UI)
+        # The Activity still registers the BLE transport, but the service
+        # is the one authoritative AI1 reply dispatcher across navigation.
+        processor=(JAVA/"BleAiRequestProcessor.java").read_text(encoding="utf-8")
+        service=(JAVA/"BleConnectionService.java").read_text(encoding="utf-8")
+        self.assertIn("final int epoch=linkEpoch.current();",processor)
+        self.assertIn("linkEpoch.matches(epoch)",processor)
+        self.assertIn("link.isReady()",processor)
+        self.assertIn("link.sendFrame(answer);",processor)
+        self.assertIn("return transport!=null && transport.send(response);",service)
         self.assertIn("return generation==token && sendFrame(frame);",COORD)
 
     def test_next_transport_is_not_claimed_ready(self):
