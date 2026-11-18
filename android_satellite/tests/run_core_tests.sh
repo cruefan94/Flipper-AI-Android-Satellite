@@ -58,6 +58,10 @@ java -cp "$DEST" WifiRelaySecurityTest
 javac -cp "$DEST" -d "$DEST" "$SRC/ConsentEpoch.java" "$ROOT/android_satellite/tests/ConsentEpochTest.java"
 java -cp "$DEST" ConsentEpochTest
 
+# App identity is a pure-JVM, lightweight contract shared by offline runtimes.
+javac -cp "$DEST" -d "$DEST" "$SRC/AppIdentity.java" "$ROOT/android_satellite/tests/AppIdentityTest.java"
+java -cp "$DEST" AppIdentityTest
+
 # Opt-in offline provider choice, verified local model downloads and safe recent-device labels.
 javac -cp "$DEST" -d "$DEST" "$SRC/OfflineProviderSelector.java" "$ROOT/android_satellite/tests/OfflineProviderSelectorTest.java"
 java -cp "$DEST" OfflineProviderSelectorTest
