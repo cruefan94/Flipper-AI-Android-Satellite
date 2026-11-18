@@ -240,13 +240,11 @@ public final class BleConnectionService extends Service implements BleSatellite.
     // A GATT transition invalidates previous HELLO/request IDs and in-flight
     // inference even when no Activity has been attached for hours.
     if(aiRequests!=null){
-      if(message.startsWith("Connecting to selected Flipper") ||
-         message.startsWith("Reconnecting to selected Flipper") ||
-         message.startsWith("Disconnected") ||
-         message.startsWith("BLE disconnected") ||
-         message.startsWith("AI GATT write timed out")){
+      BleAiStatusPolicy.Transition transition=BleAiStatusPolicy.classify(message);
+      if(transition==BleAiStatusPolicy.Transition.INVALIDATE){
         aiRequests.disconnected();
-      }else if(message.startsWith("AI BLE ready")){
+      }else if(transition==BleAiStatusPolicy.Transition.READY &&
+               transport!=null && transport.isReady()){
         aiRequests.resetLink();
       }
     }
