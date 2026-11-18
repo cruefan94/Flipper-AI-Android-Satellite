@@ -30,6 +30,9 @@ public final class BleAiRequestProcessor {
   private volatile InferenceRouter.Mode mode=InferenceRouter.Mode.OFFLINE;
   private volatile boolean cloudConsent=false;
   private volatile boolean closed=false;
+  private volatile boolean helloAckSubmitted=false;
+  /** Read-only evidence: an AI1 HELLO was accepted and a response submitted locally. */
+  public boolean helloAckSubmitted(){return helloAckSubmitted;}
 
   public BleAiRequestProcessor(
       ExecutorService worker, SatelliteRequestHandler requests, Link link,
@@ -60,6 +63,7 @@ public final class BleAiRequestProcessor {
   public synchronized void resetLink() {
     if(closed)return;
     linkEpoch.advance();
+    helloAckSubmitted=false;
     jobs.cancelAll();
     revokeActive.run();
     try {worker.execute(session::reset);}
@@ -90,7 +94,9 @@ public final class BleAiRequestProcessor {
       if(consent && (!cloudConsent || !consentEpoch.current(permission)))return;
       // BluetoothGatt.writeCharacteristic is serialized by BleSatellite.
       // A completed AI inference is NOT proof that the GATT write succeeded.
-      link.sendFrame(answer);
+      boolean submitted=link.sendFrame(answer);
+      if(submitted && session.helloSeen() && frame.startsWith("AI1|HELLO|"))
+        helloAckSubmitted=true;
     });
   }
 
