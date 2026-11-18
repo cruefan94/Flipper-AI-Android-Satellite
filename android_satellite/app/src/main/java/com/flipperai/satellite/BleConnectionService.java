@@ -38,7 +38,10 @@ public final class BleConnectionService extends Service implements BleSatellite.
     try {
       BleSatellite ble=service.transport;
       if(ble.isReady())
-        return "AI1 characteristic subscribed on a paired BLE link; app-level HELLO and firmware revision require separate verification";
+        return "AI1 characteristic subscribed on paired BLE; HELLO/ACK: "
+          +(service.aiRequests!=null && service.aiRequests.helloAckSubmitted()
+              ?"accepted and ACK submitted locally":"not observed")
+          +"; firmware build/version not independently verified";
       if(ble.isStockRpcSubscribed())
         return "Stock Momentum RPC subscribed on a paired BLE link; AI1 channel not verified";
       return "No verified AI1 or stock RPC subscription on the current link";
