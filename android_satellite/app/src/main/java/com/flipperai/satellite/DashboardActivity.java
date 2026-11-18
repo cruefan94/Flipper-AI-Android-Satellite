@@ -106,6 +106,9 @@ public final class DashboardActivity extends Activity {
     panelCard(content,"▥","PHONE COMPANION",
       "View phone battery, network and Bluetooth status.",
       "PHONE STATUS",PhoneCompanionActivity.class);
+    panelCard(content,"◈","ABOUT MY FLIPPER AI",
+      "Read real app version, model, BLE/AI1 and cloud status; no made-up device data.",
+      "VIEW SELF-DIAGNOSTICS",AboutFlipperAiActivity.class);
     panelCard(content,"⌘","GITHUB BUILDS",
       "Review available public GitHub builds, commits and releases.",
       "OPEN GITHUB",GitHubActivity.class);
