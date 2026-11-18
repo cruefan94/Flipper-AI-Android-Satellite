@@ -26,4 +26,4 @@ jobs:
         with:
           node-version: '22'
       - name: Worker protocol and security checks
-        run: node --test cloudflare_worker/test/*.test.mjs test/worker_*.test.mjs
+        run: node --test cloudflare_worker/test/*.test.mjs $(find test -maxdepth 1 -name 'worker_*.test.mjs' -print 2>/dev/null)
