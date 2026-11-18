@@ -38,6 +38,7 @@ public final class DashboardActivity extends Activity {
     LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
     lp.bottomMargin=dp(12);
     parent.addView(box,lp);
+    SatelliteUi.animateEntrance(this,box,parent.getChildCount());
     box.setClickable(true);
     box.setFocusable(true);
     box.setContentDescription(title+": "+action);
