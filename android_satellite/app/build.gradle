@@ -1,0 +1,67 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// CI assigns a monotonically increasing versionCode to prevent downgrade
+// errors. Local developers retain the previous value by default.
+def satelliteVersionCode = (findProperty('satelliteVersionCode') ?: '2').toString().toInteger()
+// Opt-in second app for hardware testing; never attempts to replace user's working APK.
+def satelliteSideBySide = (findProperty('satelliteSideBySide') ?: 'false').toString().toBoolean()
+// Dedicated BLE navigation test identity; never upgrades either installed Satellite app.
+def satelliteNavigationTest = (findProperty('satelliteNavigationTest') ?: 'false').toString().toBoolean()
+if (satelliteNavigationTest && !satelliteSideBySide)
+    throw new GradleException('BLE navigation test requires satelliteSideBySide=true')
+
+// A persistent signing key must be provided by protected GitHub Actions secrets.
+// Without it, Gradle uses its normal per-run debug key and the APK should be
+// treated as an isolated testing build, not an in-place update package.
+def stableKeystore = System.getenv('SATELLITE_KEYSTORE_FILE')
+def useStableKeystore = stableKeystore != null && !stableKeystore.trim().isEmpty()
+
+android {
+    namespace 'com.flipperai.satellite'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.flipperai.satellite'
+        minSdk 26
+        targetSdk 35
+        versionCode satelliteVersionCode
+        versionName satelliteNavigationTest ? '0.7.0-ui-restored-ble-nav-test' : (satelliteSideBySide ? '0.7.0-ui-restored-test' : '0.7.0-ui-restored')
+        manifestPlaceholders = [satelliteAppLabel: satelliteNavigationTest ? 'Flipper AI BLE Nav Test' : (satelliteSideBySide ? 'Flipper AI Satellite Test' : 'Flipper AI Satellite')]
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    signingConfigs {
+        if (useStableKeystore) {
+            persistentDebug {
+                storeFile file(stableKeystore)
+                storePassword System.getenv('SATELLITE_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('SATELLITE_KEY_ALIAS')
+                keyPassword System.getenv('SATELLITE_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            if (satelliteSideBySide) {
+                applicationIdSuffix '.test'
+                // Keep the existing side-by-side Test identity untouched.
+                if (satelliteNavigationTest) {
+                    applicationIdSuffix '.navtest'
+                }
+            }
+            if (useStableKeystore) {
+                signingConfig signingConfigs.persistentDebug
+            }
+        }
+    }
+}
+
+// Official on-device LiteRT-LM engine; model weights are selected/imported separately.
+dependencies {
+    implementation 'com.google.ai.edge.litertlm:litertlm-android:0.18.0'
+}

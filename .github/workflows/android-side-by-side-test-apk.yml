@@ -1,0 +1,99 @@
+name: Android Satellite — side-by-side test APK (preserve original)
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/android-side-by-side-test-install-20261116]
+    paths:
+      - 'android_satellite/**'
+      - '.github/workflows/android-side-by-side-test-apk.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Verify mirrored source
+        run: python3 android_satellite/tools/preflight.py
+      - name: JVM protocol and routing tests
+        run: sh android_satellite/tests/run_core_tests.sh
+      - name: Source security regression tests
+        run: python3 -m unittest discover -s android_satellite/tests -p 'test_*.py' -v
+      - name: Print Android build environment
+        run: |
+          java -version
+          gradle --version
+          sdkmanager --list_installed
+      - name: Prepare optional persistent signing key
+        env:
+          SATELLITE_KEYSTORE_B64: ${{ secrets.SATELLITE_KEYSTORE_B64 }}
+          SATELLITE_KEYSTORE_PASSWORD: ${{ secrets.SATELLITE_KEYSTORE_PASSWORD }}
+          SATELLITE_KEY_ALIAS: ${{ secrets.SATELLITE_KEY_ALIAS }}
+          SATELLITE_KEY_PASSWORD: ${{ secrets.SATELLITE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$SATELLITE_KEYSTORE_B64" ]; then
+            echo "::warning::Persistent signing not configured. This APK may not install over previous CI debug builds."
+          else
+            if [ -z "$SATELLITE_KEYSTORE_PASSWORD" ] || [ -z "$SATELLITE_KEY_ALIAS" ] || [ -z "$SATELLITE_KEY_PASSWORD" ]; then
+              echo "::error::Persistent signing requires all four GitHub Actions signing secrets."
+              exit 1
+            fi
+            umask 077
+            printf '%s' "$SATELLITE_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/satellite-signing.jks"
+            echo "SATELLITE_KEYSTORE_FILE=$RUNNER_TEMP/satellite-signing.jks" >> "$GITHUB_ENV"
+            echo "Persistent signing certificate loaded from GitHub Actions secrets."
+          fi
+      - name: Build debug APK
+        env:
+          SATELLITE_KEYSTORE_PASSWORD: ${{ secrets.SATELLITE_KEYSTORE_PASSWORD }}
+          SATELLITE_KEY_ALIAS: ${{ secrets.SATELLITE_KEY_ALIAS }}
+          SATELLITE_KEY_PASSWORD: ${{ secrets.SATELLITE_KEY_PASSWORD }}
+        run: gradle -p android_satellite --no-daemon --stacktrace -PsatelliteVersionCode=${{ github.run_number }} -PsatelliteSideBySide=true :app:assembleDebug
+      - name: Verify APK exists and increasing versionCode
+        run: |
+          APK=android_satellite/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "application-label:'Flipper AI Satellite Test'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep "name='com.flipperai.satellite.test' versionCode='${{ github.run_number }}'"
+      - name: Give APK a unique download filename
+        run: |
+          SHORT_SHA="$(echo "$GITHUB_SHA" | cut -c1-8)"
+          BUILD_NAME="FlipperAI-Satellite-TEST-${{ github.run_number }}-${SHORT_SHA}-debug-UNTESTED.apk"
+          cp android_satellite/app/build/outputs/apk/debug/app-debug.apk "android_satellite/app/build/outputs/apk/debug/$BUILD_NAME"
+          echo "APK_NAME=$BUILD_NAME" >> "$GITHUB_ENV"
+      - name: Upload build diagnostics if unsuccessful
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlipperAI-Android-Build-Diagnostics
+          path: |
+            android_satellite/app/build/reports/**
+            android_satellite/app/build/outputs/logs/**
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Confirm this package cannot replace the user's installed Satellite
+        run: |
+          echo 'Distinct Android applicationId: com.flipperai.satellite.test' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Installs alongside existing com.flipperai.satellite; no data or model migration.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'UNTESTED ON PHONE. Do not uninstall the existing application.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlipperAI-Satellite-TEST-build-${{ github.run_number }}-${{ github.sha }}-UNTESTED
+          path: android_satellite/app/build/outputs/apk/debug/${{ env.APK_NAME }}
+          if-no-files-found: error
+          retention-days: 7

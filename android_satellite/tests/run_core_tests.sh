@@ -1,0 +1,71 @@
+#!/usr/bin/env sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/../../" && pwd)
+SRC="$ROOT/android_satellite/app/src/main/java/com/flipperai/satellite"
+DEST=$(mktemp -d)
+trap 'rm -rf "$DEST"' EXIT
+javac -d "$DEST" "$SRC/SatelliteProtocol.java" "$SRC/FrameCodec.java" "$SRC/TransportState.java" "$SRC/BondGate.java" "$SRC/PromptLimits.java" "$SRC/InferenceRouter.java" "$SRC/OfflineDiagnosticEngine.java" "$SRC/SatelliteRequestHandler.java" "$SRC/ProtocolSession.java" "$SRC/SessionEpoch.java" "$ROOT/android_satellite/tests/SatelliteCoreTest.java"
+java -cp "$DEST" SatelliteCoreTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridCancellationTest.java"
+java -cp "$DEST" HybridCancellationTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridFallbackTest.java"
+java -cp "$DEST" HybridFallbackTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridRoutingSourceTest.java"
+java -cp "$DEST" HybridRoutingSourceTest
+javac -cp "$DEST" -d "$DEST" "$SRC/PhoneFacts.java" "$ROOT/android_satellite/tests/PhoneFactsTest.java"
+java -cp "$DEST" PhoneFactsTest
+javac -cp "$DEST" -d "$DEST" "$SRC/ModelPackageExtractor.java" "$ROOT/android_satellite/tests/ModelPackageExtractorTest.java"
+java -cp "$DEST" ModelPackageExtractorTest
+javac -cp "$DEST" -d "$DEST" "$SRC/RadioStreamPolicy.java" "$ROOT/android_satellite/tests/RadioStreamPolicyTest.java"
+java -cp "$DEST" RadioStreamPolicyTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/DiagnosticReadinessCancellationTest.java"
+java -cp "$DEST" DiagnosticReadinessCancellationTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/OfflineReadinessCancellationTest.java"
+java -cp "$DEST" OfflineReadinessCancellationTest
+javac -cp "$DEST" -d "$DEST" "$SRC/EmbeddedOrLocalEngine.java" "$ROOT/android_satellite/tests/EmbeddedOrLocalEngineTest.java"
+java -cp "$DEST" EmbeddedOrLocalEngineTest
+javac -cp "$DEST" -d "$DEST" "$SRC/GattProfilePolicy.java" "$ROOT/android_satellite/tests/GattProfilePolicyTest.java"
+java -cp "$DEST" GattProfilePolicyTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SessionEpochTest.java"
+java -cp "$DEST" SessionEpochTest
+javac -cp "$DEST" -d "$DEST" "$SRC/BleSessionJobs.java" "$ROOT/android_satellite/tests/BleSessionJobsTest.java"
+java -cp "$DEST" BleSessionJobsTest
+# Service-owned AI1 protocol: same actual JVM worker and frame parser as Android.
+javac -cp "$DEST" -d "$DEST" "$SRC/ConsentEpoch.java" "$SRC/BleAiRequestProcessor.java" "$ROOT/android_satellite/tests/BleAiRequestProcessorTest.java"
+java -cp "$DEST" BleAiRequestProcessorTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/BleSessionReconnectIsolationTest.java"
+java -cp "$DEST" BleSessionReconnectIsolationTest
+javac -cp "$DEST" -d "$DEST" "$SRC/WorkerEndpointPolicy.java" "$ROOT/android_satellite/tests/WorkerEndpointPolicyTest.java"
+java -cp "$DEST" WorkerEndpointPolicyTest
+javac -cp "$DEST" -d "$DEST" "$SRC/WorkerHttpStatus.java" "$ROOT/android_satellite/tests/WorkerHttpStatusTest.java"
+java -cp "$DEST" WorkerHttpStatusTest
+javac -cp "$DEST" -d "$DEST" "$SRC/LocalModelEndpointPolicy.java" "$ROOT/android_satellite/tests/LocalModelEndpointPolicyTest.java"
+java -cp "$DEST" LocalModelEndpointPolicyTest
+javac -cp "$DEST" -d "$DEST" "$SRC/BleWriteGuard.java" "$ROOT/android_satellite/tests/BleWriteGuardTest.java"
+java -cp "$DEST" BleWriteGuardTest
+javac -cp "$DEST" -d "$DEST" "$SRC/BlePickerRows.java" "$ROOT/android_satellite/tests/BlePickerRowsTest.java"
+java -cp "$DEST" BlePickerRowsTest
+javac -cp "$DEST" -d "$DEST" "$SRC/GattDiscoveryEvidence.java" "$ROOT/android_satellite/tests/GattDiscoveryEvidenceTest.java"
+java -cp "$DEST" GattDiscoveryEvidenceTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/TransportStateConcurrencyTest.java"
+java -cp "$DEST" TransportStateConcurrencyTest
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/TransportStateDuplicateConnectedTest.java"
+java -cp "$DEST" TransportStateDuplicateConnectedTest
+javac -cp "$DEST" -d "$DEST" "$SRC/SatelliteTransport.java" "$SRC/SatelliteTransportCoordinator.java" "$ROOT/android_satellite/tests/SatelliteTransportCoordinatorTest.java"
+java -cp "$DEST" SatelliteTransportCoordinatorTest
+javac -cp "$DEST" -d "$DEST" "$SRC/WifiRelayEndpointPolicy.java" "$SRC/WifiRelayEnvelope.java" "$ROOT/android_satellite/tests/WifiRelaySecurityTest.java"
+java -cp "$DEST" WifiRelaySecurityTest
+javac -cp "$DEST" -d "$DEST" "$SRC/ConsentEpoch.java" "$ROOT/android_satellite/tests/ConsentEpochTest.java"
+java -cp "$DEST" ConsentEpochTest
+
+# Opt-in offline provider choice, verified local model downloads and safe recent-device labels.
+javac -cp "$DEST" -d "$DEST" "$SRC/OfflineProviderSelector.java" "$ROOT/android_satellite/tests/OfflineProviderSelectorTest.java"
+java -cp "$DEST" OfflineProviderSelectorTest
+javac -cp "$DEST" -d "$DEST" "$SRC/VettedModelCatalog.java" "$SRC/ModelDownloadIntegrity.java" "$ROOT/android_satellite/tests/ModelDownloadIntegrityTest.java"
+java -cp "$DEST" ModelDownloadIntegrityTest
+javac -cp "$DEST" -d "$DEST" "$SRC/RecentFlipperPolicy.java" "$ROOT/android_satellite/tests/RecentFlipperPolicyTest.java"
+java -cp "$DEST" RecentFlipperPolicyTest
+javac -cp "$DEST" -d "$DEST" "$SRC/BleLinkHealth.java" "$ROOT/android_satellite/tests/BleLinkHealthTest.java"
+java -cp "$DEST" BleLinkHealthTest
+
+python3 "$ROOT/android_satellite/tests/test_cloud_revocation_source.py"
