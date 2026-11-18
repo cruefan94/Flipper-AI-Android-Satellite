@@ -28,6 +28,10 @@ public final class SatelliteRequestHandler {
                 case "HELLO":return fit("HELLO_ACK",id,"android-v1",maxFrameBytes);
                 case "PING":return fit("PONG",id,"ok",maxFrameBytes);
                 case "ASK":
+                    if(AppIdentity.isAppQuestion(fields[3]))
+                        return fit("ANSWER",id,
+                            AppIdentity.NAME+"; Android offline/opt-in cloud AI companion for Momentum. "+
+                            "Use About My Flipper AI for live status; hardware not assumed connected.",maxFrameBytes);
                     if(fields[3].trim().isEmpty())return fit("ERROR",id,"EMPTY_PROMPT",maxFrameBytes);
                     // Never perform inference (especially cloud I/O) if even the
                     // smallest ANSWER frame cannot fit the negotiated ATT value.
