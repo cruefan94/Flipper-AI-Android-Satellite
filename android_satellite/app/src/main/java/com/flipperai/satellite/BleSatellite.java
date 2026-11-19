@@ -151,7 +151,15 @@ public final class BleSatellite implements SatelliteTransport {
     authorized=true;state.begin();
     try {
       BluetoothGatt link=device.connectGatt(context,false,callback,BluetoothDevice.TRANSPORT_LE);
-      if(link==null){events.status("Cannot start Bluetooth GATT connection");disconnect();return;}
+      if(link==null){
+        events.status("Cannot start Bluetooth GATT connection");
+        disconnect();
+        // Android can transiently decline a GATT handle without a callback.
+        // Route this through the same bounded, cancelable recovery policy as
+        // an asynchronous link failure; a manual stop invalidates the token.
+        scheduleRecovery(device,-9);
+        return;
+      }
       gatt=link;
       /* Covers connect, service discovery, CCCD write and MTU negotiation.
        * Old callbacks cannot tear down a later connection. */
