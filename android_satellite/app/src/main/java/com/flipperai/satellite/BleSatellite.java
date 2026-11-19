@@ -184,8 +184,15 @@ public final class BleSatellite implements SatelliteTransport {
   }
   public synchronized boolean hasVerifiedLink(){return confirmedBondedDevice()!=null;}
   /** Pair the device explicitly chosen from scan results, without connecting first. */
-  public void pair(BluetoothDevice device){
+  public synchronized void pair(BluetoothDevice device){
     if(device==null){events.status("Select a scanned Flipper before pairing");return;}
+    // Do not replace the trusted device identity beneath an active GATT session.
+    // A different device must be selected through connect(), which invalidates
+    // old discovery evidence, retries and callbacks before opening its link.
+    if(gatt!=null && device!=lastDevice){
+      events.status("Disconnect before pairing a different Flipper");
+      return;
+    }
     lastDevice=device;
     final int bond;
     try{bond=device.getBondState();}
