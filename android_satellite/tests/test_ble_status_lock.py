@@ -25,13 +25,13 @@ class BleStatusLockTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertRegex(
                     self.source,
-                    r"public\\s+synchronized\\s+[^\\n{]+\\b"
-                    + re.escape(name) + r"\\s*\\(",
+                    r"public\s+synchronized\s+[^\n{]+\b"
+                    + re.escape(name) + r"\s*\(",
                 )
 
     def test_callback_and_disconnect_use_same_monitor(self):
         self.assertIn("synchronized(BleSatellite.this)", self.source)
-        self.assertRegex(self.source, r"public\\s+synchronized\\s+void\\s+disconnect\\s*\\(")
+        self.assertRegex(self.source, r"public\s+synchronized\s+void\s+disconnect\s*\(")
 
     def test_rpc_and_ai_status_remain_distinct(self):
         self.assertIn("return subscribed && approved() && state.phase()==TransportState.Phase.READY;", self.source)
