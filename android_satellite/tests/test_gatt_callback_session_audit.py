@@ -10,7 +10,7 @@ SOURCE = (Path(__file__).resolve().parents[1] / "app/src/main/java/com/flipperai
 
 
 def callback_bodies(source, name):
-    pattern = re.compile(r"@Override\\s+public\\s+void\\s+" + re.escape(name) + r"\\s*\\(")
+    pattern = re.compile(r"@Override\s+public\s+void\s+" + re.escape(name) + r"\s*\(")
     results = []
     for match in pattern.finditer(source):
         start = source.find("{", match.end())
@@ -51,16 +51,16 @@ class GattCallbackSessionAudit(unittest.TestCase):
                      "onCharacteristicChanged"):
             with self.subTest(callback=name):
                 for body in callback_bodies(self.source, name):
-                    self.assertRegex(body, r"link\\s*(?:!=|==)\\s*gatt")
+                    self.assertRegex(body, r"link\s*(?:!=|==)\s*gatt")
 
     def test_both_notification_overloads_reject_null_characteristics(self):
         bodies = callback_bodies(self.source, "onCharacteristicChanged")
         self.assertEqual(2, len(bodies))
         for body in bodies:
-            self.assertRegex(body, r"link\\s*!=\\s*gatt\\s*\\|\\|\\s*ch\\s*==\\s*null")
+            self.assertRegex(body, r"link\s*!=\s*gatt\s*\|\|\s*ch\s*==\s*null")
 
     def test_disconnect_invalidates_handle_before_closing(self):
-        match = re.search(r"public synchronized void disconnect\\s*\\(\\s*\\)", self.source)
+        match = re.search(r"public synchronized void disconnect\s*\(\s*\)", self.source)
         self.assertIsNotNone(match)
         body = self.source[match.end():self.source.find("public String gattDiscoveryReport", match.end())]
         self.assertIn("connectionGeneration++", body)
