@@ -44,11 +44,11 @@ public final class BleAiStatusPolicyTest {
     // stock RPC evidence, or a reconnect invalidation from lookalike labels.
     String[] misleading = {
       "AI BLE readiness", "AI BLE readyish", "AI BLE ready_not",
-      "AI BLE ready\\tcustom", "AI BLE ready\\ncustom", "AI BLE ready\\u00a0custom",
+      "AI BLE ready\tcustom", "AI BLE ready\ncustom", "AI BLE ready\u00a0custom",
       "ai BLE ready", " AI BLE ready", "AI BLE readyish: subscribed",
       "Stock Momentum RPC indications enabledish: fallback",
       "Stock Momentum RPC indications enabled_not",
-      "Stock Momentum RPC indications enabled\\t(fallback)",
+      "Stock Momentum RPC indications enabled\t(fallback)",
       "Disconnectedness: old link", "Reconnecting to selected Flipperish: stale",
       "AI GATT write timed outish"
     };
