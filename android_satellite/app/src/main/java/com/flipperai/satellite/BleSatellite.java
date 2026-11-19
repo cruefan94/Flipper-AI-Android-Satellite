@@ -578,13 +578,20 @@ public final class BleSatellite implements SatelliteTransport {
       }
     }
     @Override public void onCharacteristicChanged(BluetoothGatt link,BluetoothGattCharacteristic ch,byte[] value){
-      if(link==gatt && MOMENTUM_RPC_NOTIFY.equals(ch.getUuid()) && stockRpcSubscribed){
-        rpcNotificationsReceived++;
-        receiveRpcIndication(value);
-      }else if(link==gatt && TX.equals(ch.getUuid()) && isReady())deliver(value);
+      synchronized(BleSatellite.this){
+        // Serialize notification delivery with disconnect/reconnect state changes.
+        // A callback from an obsolete GATT must never update the new session.
+        if(link!=gatt || ch==null)return;
+        if(MOMENTUM_RPC_NOTIFY.equals(ch.getUuid()) && stockRpcSubscribed){
+          rpcNotificationsReceived++;
+          receiveRpcIndication(value);
+        }else if(TX.equals(ch.getUuid()) && isReady())deliver(value);
+      }
     }
     @Override public void onCharacteristicChanged(BluetoothGatt link,BluetoothGattCharacteristic ch){
-      if(Build.VERSION.SDK_INT<33 && link==gatt){
+      if(Build.VERSION.SDK_INT>=33)return;
+      synchronized(BleSatellite.this){
+        if(link!=gatt || ch==null)return;
         if(MOMENTUM_RPC_NOTIFY.equals(ch.getUuid()) && stockRpcSubscribed){
           rpcNotificationsReceived++;
           receiveRpcIndication(ch.getValue());
