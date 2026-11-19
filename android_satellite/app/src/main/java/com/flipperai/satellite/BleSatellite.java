@@ -247,14 +247,14 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   /** Safe to include in support reports: no address, bond ID, token or prompt. */
-  public String gattDiscoveryReport(){return discoveryEvidence.report();}
-  public String gattDiscoveryNextStep(){return discoveryEvidence.nextAction();}
+  public synchronized String gattDiscoveryReport(){return discoveryEvidence.report();}
+  public synchronized String gattDiscoveryNextStep(){return discoveryEvidence.nextAction();}
   public int maxFrameBytes(){return state.payloadLimit();}
   @Override public Kind kind(){return Kind.BLE;}
-  public boolean hasStockRpc(){return stockRpcDetected && gatt!=null && approved();}
-  public boolean isStockRpcSubscribed(){return hasStockRpc() && stockRpcSubscribed;}
-  public int stockRpcNotificationCount(){return rpcNotificationsReceived;}
-  public int stockRpcFlowCredits(){return rpcFlowCredits;}
+  public synchronized boolean hasStockRpc(){return stockRpcDetected && gatt!=null && approved();}
+  public synchronized boolean isStockRpcSubscribed(){return hasStockRpc() && stockRpcSubscribed;}
+  public synchronized int stockRpcNotificationCount(){return rpcNotificationsReceived;}
+  public synchronized int stockRpcFlowCredits(){return rpcFlowCredits;}
   public synchronized boolean sendStockRpcPing(){
     if(!isStockRpcSubscribed() || rpcFlowCredits<5 || rpcPingPending){events.status("RPC ping unavailable: connect and wait for flow-control value.");return false;}
     BluetoothGattService service=gatt.getService(MOMENTUM_RPC_SERVICE);
@@ -271,7 +271,7 @@ public final class BleSatellite implements SatelliteTransport {
     return started;
   }
 
-  @Override public boolean isReady(){return subscribed && approved() && state.phase()==TransportState.Phase.READY;}
+  @Override public synchronized boolean isReady(){return subscribed && approved() && state.phase()==TransportState.Phase.READY;}
   @Override public boolean sendFrame(String data){return send(data);}
   @Override public void close(){stopScan();manualDisconnect();}
   public synchronized boolean send(String frame){
