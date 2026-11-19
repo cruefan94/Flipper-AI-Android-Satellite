@@ -42,7 +42,7 @@ class ReconnectSourceTests(unittest.TestCase):
     def test_stock_rpc_not_ai_ready(self):
         self.assertIn("stockRpcSubscribed", BLE)
         self.assertIn("AI not ready", BLE)
-        self.assertIn("public boolean isStockRpcSubscribed()", BLE)
+        self.assertRegex(BLE, r"public\s+(?:synchronized\s+)?boolean\s+isStockRpcSubscribed\s*\(\s*\)")
         self.assertIn("public synchronized boolean send(String frame)", BLE)
 
 if __name__ == "__main__":
