@@ -40,6 +40,26 @@ public final class BleAiStatusPolicyTest {
     expect("AI BLE ready(custom)",Transition.READY);
     expect("Stock Momentum RPC indications enabled: fallback",Transition.INVALIDATE);
     expect("Disconnected (remote)",Transition.INVALIDATE);
+    // Adversarial channel and lifecycle strings must not manufacture readiness,
+    // stock RPC evidence, or a reconnect invalidation from lookalike labels.
+    String[] misleading = {
+      "AI BLE readiness", "AI BLE readyish", "AI BLE ready_not",
+      "AI BLE ready\\tcustom", "AI BLE ready\\ncustom", "AI BLE ready\\u00a0custom",
+      "ai BLE ready", " AI BLE ready", "AI BLE readyish: subscribed",
+      "Stock Momentum RPC indications enabledish: fallback",
+      "Stock Momentum RPC indications enabled_not",
+      "Stock Momentum RPC indications enabled\\t(fallback)",
+      "Disconnectedness: old link", "Reconnecting to selected Flipperish: stale",
+      "AI GATT write timed outish"
+    };
+    for(String label:misleading) {
+      expect(label,Transition.NONE);
+      channel(label,BleAiStatusPolicy.Channel.NONE);
+    }
+    // Diagnostics after a complete label remain supported.
+    channel("AI BLE ready (subscribed)",BleAiStatusPolicy.Channel.CUSTOM_AI1);
+    channel("Stock Momentum RPC indications enabled: fallback",BleAiStatusPolicy.Channel.STOCK_RPC);
+    expect("AI GATT write timed out (session)",Transition.INVALIDATE);
     expect(null,Transition.NONE);
     System.out.println("BleAiStatusPolicy tests passed");
   }
