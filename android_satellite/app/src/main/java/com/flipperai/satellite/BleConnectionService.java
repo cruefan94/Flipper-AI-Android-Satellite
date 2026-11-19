@@ -253,13 +253,13 @@ public final class BleConnectionService extends Service implements BleSatellite.
       linkHealth.recoveryAttempt();
     if(message.startsWith("Disconnected") || message.startsWith("BLE disconnected"))
       linkHealth.unexpectedDisconnect(now);
-    // Only genuinely bonded subscribed channels become verified sessions.
-    if(message.startsWith("AI BLE ready") ||
-        message.startsWith("Stock Momentum RPC indications enabled")){
+    // Never count lookalike status prefixes as a verified AI1/RPC channel.
+    BleAiStatusPolicy.Channel verifiedChannel=BleAiStatusPolicy.verifiedChannel(message);
+    if(verifiedChannel!=BleAiStatusPolicy.Channel.NONE && transport!=null){
       try {
         BluetoothDevice confirmed=transport.confirmedBondedDevice();
         if(confirmed!=null){
-          linkHealth.verified(now,message.startsWith("AI BLE ready")
+          linkHealth.verified(now,verifiedChannel==BleAiStatusPolicy.Channel.CUSTOM_AI1
             ?BleLinkHealth.Channel.CUSTOM_AI1:BleLinkHealth.Channel.STOCK_RPC);
           RecentFlipperStore.remember(this,confirmed);
         }
@@ -269,8 +269,7 @@ public final class BleConnectionService extends Service implements BleSatellite.
     if(listener!=null)listener.status(message);
     if(foreground){
       NotificationManager manager=getSystemService(NotificationManager.class);
-      if(manager!=null && (message.startsWith("AI BLE ready")
-          || message.startsWith("Stock Momentum RPC indications enabled")
+      if(manager!=null && (verifiedChannel!=BleAiStatusPolicy.Channel.NONE
           || message.startsWith("Disconnected")
           || message.startsWith("Reconnecting")))
         manager.notify(NOTICE_ID,notice());
