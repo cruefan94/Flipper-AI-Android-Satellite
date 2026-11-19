@@ -42,7 +42,14 @@ class BleRequestCancellationWiringTest(unittest.TestCase):
             self.assertIn(expression,reset)
         self.assertIn("aiRequests.disconnected();",SERVICE)
         self.assertIn("aiRequests.resetLink();",SERVICE)
-        self.assertIn('message.startsWith("AI BLE ready")',SERVICE)
+        # AI1 readiness is a bounded policy transition, not a prefix match.
+        # Requiring the old startsWith() expression would regress the fix by
+        # allowing misleading statuses such as "AI BLE readyish".
+        self.assertIn("BleAiStatusPolicy.classify(message)",SERVICE)
+        self.assertIn("transition==BleAiStatusPolicy.Transition.READY",SERVICE)
+        self.assertIn("transport.isReady()",SERVICE)
+        self.assertIn("BleAiStatusPolicy.verifiedChannel(message)",SERVICE)
+        self.assertNotIn('message.startsWith("AI BLE ready")',SERVICE)
 
     def test_service_exit_closes_jobs_and_never_exposes_cloud_background(self):
         self.assertIn("aiRequests.close();",SERVICE)
