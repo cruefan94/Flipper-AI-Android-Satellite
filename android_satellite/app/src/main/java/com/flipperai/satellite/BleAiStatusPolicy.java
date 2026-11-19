@@ -5,6 +5,14 @@ package com.flipperai.satellite;
  */
 public final class BleAiStatusPolicy {
   public enum Transition { NONE, INVALIDATE, READY }
+  public enum Channel { NONE, CUSTOM_AI1, STOCK_RPC }
+  /** Only a complete ready label can mark a verified channel. */
+  public static Channel verifiedChannel(String message) {
+    if(message==null)return Channel.NONE;
+    if(statusIs(message,"AI BLE ready"))return Channel.CUSTOM_AI1;
+    if(statusIs(message,"Stock Momentum RPC indications enabled"))return Channel.STOCK_RPC;
+    return Channel.NONE;
+  }
   private BleAiStatusPolicy() {}
 
   /** Require a complete status label, not an arbitrary startsWith collision.
