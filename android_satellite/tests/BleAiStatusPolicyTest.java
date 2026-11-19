@@ -6,7 +6,20 @@ public final class BleAiStatusPolicyTest {
     if(BleAiStatusPolicy.classify(status)!=expected)
       throw new AssertionError("Wrong AI1 transition for: "+status);
   }
+  static void channel(String status, BleAiStatusPolicy.Channel expected) {
+    if(BleAiStatusPolicy.verifiedChannel(status)!=expected)
+      throw new AssertionError("Wrong verified channel for: "+status);
+  }
   public static void main(String[] args) {
+    channel("AI BLE ready",BleAiStatusPolicy.Channel.CUSTOM_AI1);
+    channel("AI BLE ready: subscribed",BleAiStatusPolicy.Channel.CUSTOM_AI1);
+    channel("Stock Momentum RPC indications enabled",BleAiStatusPolicy.Channel.STOCK_RPC);
+    channel("Stock Momentum RPC indications enabled (fallback)",BleAiStatusPolicy.Channel.STOCK_RPC);
+    channel("AI BLE readyish",BleAiStatusPolicy.Channel.NONE);
+    channel("AI BLE ready_not",BleAiStatusPolicy.Channel.NONE);
+    channel("Stock Momentum RPC indications enabledish",BleAiStatusPolicy.Channel.NONE);
+    channel("Disconnected",BleAiStatusPolicy.Channel.NONE);
+    channel(null,BleAiStatusPolicy.Channel.NONE);
     expect("AI BLE ready (custom)",Transition.READY);
     expect("Stock Momentum RPC indications enabled",Transition.INVALIDATE);
     expect("Connecting to selected Flipper",Transition.INVALIDATE);
