@@ -210,6 +210,9 @@ public final class BleConnectionService extends Service implements BleSatellite.
   }
   public void stopFromUser(){
     linkHealth.userDisconnect(SystemClock.elapsedRealtime());
+    // Revoke AI1 requests and opt-in cloud consent before GATT teardown.
+    // A missing or delayed transport status callback must not retain consent.
+    if(aiRequests!=null)aiRequests.disconnected();
     if(transport!=null)transport.manualDisconnect();
     if(foreground){stopForeground(STOP_FOREGROUND_REMOVE);foreground=false;}
     stopSelf();

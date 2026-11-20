@@ -38,6 +38,12 @@ class BleServiceLifecycleSourceTests(unittest.TestCase):
         self.assertIn("aiRequests.receive(frame)", body)
         self.assertNotIn("currentListener.received(", body)
 
+    def test_manual_stop_revokes_ai_requests_before_gatt_disconnect(self):
+        body = self.source.split("public void stopFromUser(){", 1)[1].split("\n  }", 1)[0]
+        self.assertIn("aiRequests.disconnected()", body)
+        self.assertLess(body.index("aiRequests.disconnected()"), body.index("transport.manualDisconnect()"))
+        self.assertLess(body.index("transport.manualDisconnect()"), body.index("stopSelf()"))
+
     def test_destroy_cancels_worker_and_closes_gatt(self):
         body = self.source.split("public void onDestroy(){", 1)[1].split("super.onDestroy();", 1)[0]
         for required in ("aiRequests.close()", "transport.close()", "inferenceWorker.purge()", "inferenceWorker.shutdown()"):
