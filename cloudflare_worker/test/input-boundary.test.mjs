@@ -27,7 +27,7 @@ test("invalid JSON, oversized body, and invalid message fail before provider cal
       [ask(JSON.stringify({ message: "" })), 400, "invalid_message"],
       [ask(JSON.stringify({ message: " ".repeat(3) })), 400, "invalid_message"],
       [ask(JSON.stringify({ message: "x".repeat(128) })), 400, "invalid_message"],
-      [ask(JSON.stringify({ message: "bad\\u0000value" })), 400, "invalid_message"],
+      [ask(JSON.stringify({ message: "bad" + String.fromCharCode(0) + "value" })), 400, "invalid_message"],
       [ask(JSON.stringify({ message: "valid" }), "text/plain"), 415, "json_required"],
     ];
     for (const [request, status, error] of cases) {
