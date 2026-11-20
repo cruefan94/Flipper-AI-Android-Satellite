@@ -21,7 +21,11 @@ class GattEvidenceSourceTest(unittest.TestCase):
         self.assertIn("if(code!=BluetoothGatt.GATT_SUCCESS){",callback)
 
     def test_manual_new_device_clears_previous_evidence_but_retry_preserves_history(self):
-        self.assertIn("public synchronized void connect(BluetoothDevice device){\n    // A new explicitly selected connection must not reuse another device's evidence.\n    discoveryEvidence.clear();",BLE)
+        connect = BLE.split("public synchronized void connect(BluetoothDevice device){", 1)[1].split("\n  }", 1)[0]
+        guard = connect.index("if(device==null){events.status(")
+        clear = connect.index("discoveryEvidence.clear();")
+        self.assertLess(guard, clear, "empty selection must not clear live GATT evidence")
+        self.assertLess(connect.index("return;}", guard), clear, "empty selection must return before evidence reset")
         self.assertIn("discoveryEvidence.beginAttempt();",BLE)
         self.assertIn("discoveryEvidence.closeLink();",BLE)
         self.assertIn("LAST RESULT (link dropped/reconnecting)",EVIDENCE)
