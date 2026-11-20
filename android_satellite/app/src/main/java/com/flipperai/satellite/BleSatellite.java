@@ -98,6 +98,9 @@ public final class BleSatellite implements SatelliteTransport {
     }
   }
   public synchronized void connect(BluetoothDevice device){
+    // An empty UI selection must never tear down a healthy GATT session or
+    // invalidate its pending callbacks and recovery state.
+    if(device==null){events.status("Select a Flipper before connecting");return;}
     // A new explicitly selected connection must not reuse another device's evidence.
     discoveryEvidence.clear();
     recoveryToken++;
