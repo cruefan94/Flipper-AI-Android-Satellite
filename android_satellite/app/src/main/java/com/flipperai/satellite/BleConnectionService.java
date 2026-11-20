@@ -161,6 +161,9 @@ public final class BleConnectionService extends Service implements BleSatellite.
   public void connectFromUser(BluetoothDevice chosen) {
     if(chosen==null || transport==null)return;
     linkHealth.userDisconnect(SystemClock.elapsedRealtime());
+    // Switching devices is a new AI1 security boundary. Do not allow a
+    // previous device's pending inference or cloud consent to survive it.
+    if(aiRequests!=null)aiRequests.disconnected();
     transport.connect(chosen);
   }
   public void attach(BleSatellite.Events listener){
