@@ -28,7 +28,7 @@ class RpcAi1SeparationTests(unittest.TestCase):
 
     def test_ai_send_fails_closed_without_ai_ready(self):
         body = self.section("boolean send(String frame){", "private synchronized boolean drain()")
-        self.assertRegex(body, r"!isReady\\(\\)")
+        self.assertRegex(body, r"!isReady\(\)")
         self.assertIn("return false;", body)
 
     def test_rpc_discovery_explicitly_reports_ai_not_ready(self):
