@@ -25,6 +25,10 @@ android {
 
     defaultConfig {
         applicationId 'com.flipperai.satellite'
+        // Keep opt-in test identities isolated for every build type, including release.
+        if (satelliteSideBySide) {
+            applicationIdSuffix satelliteNavigationTest ? '.test.navtest' : '.test'
+        }
         minSdk 26
         targetSdk 35
         versionCode satelliteVersionCode
@@ -47,11 +51,6 @@ android {
     }
     buildTypes {
         debug {
-            if (satelliteSideBySide) {
-                // Select one suffix explicitly: repeated assignment replaces rather than appends.
-                // Keep the existing side-by-side Test identity untouched.
-                applicationIdSuffix satelliteNavigationTest ? '.test.navtest' : '.test'
-            }
             if (useStableKeystore) {
                 signingConfig signingConfigs.persistentDebug
             }

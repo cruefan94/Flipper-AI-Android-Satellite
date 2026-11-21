@@ -23,6 +23,9 @@ class MainVoiceMarkdown(unittest.TestCase):
         # A single explicit suffix preserves side-by-side identity for both variants.
         self.assertIn("applicationIdSuffix satelliteNavigationTest ? '.test.navtest' : '.test'",GRADLE)
         self.assertEqual(GRADLE.count("applicationIdSuffix "),1)
+        # The suffix must be in defaultConfig, not debug only: release test APKs
+        # must never acquire the installed production application ID.
+        self.assertLess(GRADLE.index("applicationIdSuffix "), GRADLE.index("buildTypes {"))
         self.assertIn("if (satelliteNavigationTest && !satelliteSideBySide)",GRADLE)
         self.assertIn("?: 'false'",GRADLE)
         self.assertIn("'Flipper AI Satellite Test' : 'Flipper AI Satellite'",GRADLE)
