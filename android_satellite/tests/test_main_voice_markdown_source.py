@@ -20,7 +20,10 @@ class MainVoiceMarkdown(unittest.TestCase):
         self.assertIn("applicationId 'com.flipperai.satellite'",GRADLE)
         # Separate test package is permitted only behind explicit opt-in.
         self.assertIn("if (satelliteSideBySide)",GRADLE)
-        self.assertIn("applicationIdSuffix '.test'",GRADLE)
+        # A single explicit suffix preserves side-by-side identity for both variants.
+        self.assertIn("applicationIdSuffix satelliteNavigationTest ? '.test.navtest' : '.test'",GRADLE)
+        self.assertEqual(GRADLE.count("applicationIdSuffix "),1)
+        self.assertIn("if (satelliteNavigationTest && !satelliteSideBySide)",GRADLE)
         self.assertIn("?: 'false'",GRADLE)
         self.assertIn("'Flipper AI Satellite Test' : 'Flipper AI Satellite'",GRADLE)
         self.assertIn('android:label="${satelliteAppLabel}"',MANIFEST)
