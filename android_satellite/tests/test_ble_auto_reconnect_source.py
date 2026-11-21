@@ -15,7 +15,7 @@ class ReconnectSourceTests(unittest.TestCase):
         self.assertIn("RECOVERY_DELAYS_MS[stage-1]", BLE)
         self.assertIn("backoff ", BLE)
         self.assertNotIn("recoveryAttempts>=RECOVERY_DELAYS_MS.length", BLE)
-        self.assertIn("if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice)return;", BLE)
+        self.assertIn("if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice || gatt!=null)return;", BLE)
         self.assertIn("public synchronized void manualDisconnect()", BLE)
         self.assertIn("userDisconnected=true;", BLE)
         self.assertIn("recoveryToken++;", BLE)
