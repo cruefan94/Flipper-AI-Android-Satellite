@@ -390,10 +390,11 @@ public final class BleSatellite implements SatelliteTransport {
           final BluetoothDevice retryDevice=lastDevice;
           disconnect();
           final int generation=connectionGeneration;
+          final int retryToken=recoveryToken;
           events.status("GATT 147: connection rejected. Retrying once after a short delay...");
           ui.postDelayed(()->{
             synchronized(BleSatellite.this){
-              if(userDisconnected || generation!=connectionGeneration || retryDevice!=lastDevice)return;
+              if(userDisconnected || generation!=connectionGeneration || retryToken!=recoveryToken || retryDevice!=lastDevice)return;
               openConnection(retryDevice);
             }
           },1800);
