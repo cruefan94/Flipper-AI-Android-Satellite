@@ -44,7 +44,7 @@ class ManualDisconnectRecoveryTests(unittest.TestCase):
         body = method_body(self.source, "private synchronized void scheduleRecovery(")
         self.assertIn("if(userDisconnected || failedDevice==null || failedDevice!=lastDevice)return;", body)
         self.assertRegex(body, r"final int token=\+\+recoveryToken;")
-        self.assertIn("if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice)return;", body)
+        self.assertIn("if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice || gatt!=null)return;", body)
 
     def test_manual_stop_does_not_trigger_automatic_reconnect(self):
         body = method_body(self.source, "public synchronized void manualDisconnect()")
