@@ -73,3 +73,45 @@ test("invalid model configuration blocks upstream call", async () => {
     assert.deepEqual(await response.json(), { error: "invalid_model_configuration" });
   } finally { globalThis.fetch = original; }
 });
+
+
+test("oversized UTF-8 request body fails closed before contacting Gemini", async () => {
+  const original = globalThis.fetch;
+  let upstreamCalls = 0;
+  globalThis.fetch = async () => {
+    upstreamCalls++;
+    throw new Error("upstream must not be contacted for oversized input");
+  };
+  try {
+    // The message is short in characters but exceeds the 1024-byte request cap.
+    // Exercise byte counting rather than JavaScript string length.
+    const body = JSON.stringify({ message: "🙂".repeat(300) });
+    assert.ok(new TextEncoder().encode(body).byteLength > 1024);
+    const response = await worker.fetch(request("/ask", { body }), env);
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.deepEqual(await response.json(), { error: "invalid_json_or_oversized_body" });
+    assert.equal(upstreamCalls, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("missing or wrong device token cannot reach upstream, even with malformed input", async () => {
+  const original = globalThis.fetch;
+  let upstreamCalls = 0;
+  globalThis.fetch = async () => {
+    upstreamCalls++;
+    throw new Error("unauthorized upstream call");
+  };
+  try {
+    for (const token of ["", "incorrect-device-token"]) {
+      const response = await worker.fetch(request("/ask", { token, body: "{" }), env);
+      assert.equal(response.status, 401);
+      assert.deepEqual(await response.json(), { error: "unauthorized" });
+    }
+    assert.equal(upstreamCalls, 0);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
