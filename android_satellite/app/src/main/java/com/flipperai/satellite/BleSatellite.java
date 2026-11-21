@@ -130,7 +130,8 @@ public final class BleSatellite implements SatelliteTransport {
       +(delay/1000)+"s (backoff "+stage+"/"+RECOVERY_DELAYS_MS.length+")");
     ui.postDelayed(()->{
       synchronized(BleSatellite.this){
-        if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice)return;
+        // A delayed retry must never replace a newer live GATT handle.
+        if(userDisconnected || token!=recoveryToken || failedDevice!=lastDevice || gatt!=null)return;
         events.status("Reconnecting to selected Flipper (backoff "+stage+"/"+RECOVERY_DELAYS_MS.length+")");
         openConnection(failedDevice);
       }
