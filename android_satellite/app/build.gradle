@@ -48,11 +48,9 @@ android {
     buildTypes {
         debug {
             if (satelliteSideBySide) {
-                applicationIdSuffix '.test'
+                // Select one suffix explicitly: repeated assignment replaces rather than appends.
                 // Keep the existing side-by-side Test identity untouched.
-                if (satelliteNavigationTest) {
-                    applicationIdSuffix '.navtest'
-                }
+                applicationIdSuffix satelliteNavigationTest ? '.test.navtest' : '.test'
             }
             if (useStableKeystore) {
                 signingConfig signingConfigs.persistentDebug
