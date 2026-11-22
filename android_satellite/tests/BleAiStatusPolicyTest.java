@@ -97,11 +97,11 @@ public final class BleAiStatusPolicyTest {
       throw new AssertionError("Valid link health lifecycle evidence rejected");
     String[] spoofedHealth = {
       "Reconnecting to selected Flipperish",
-      "Reconnecting to selected Flipper (backoff)\\nAI BLE ready",
+      "Reconnecting to selected Flipper (backoff)\nAI BLE ready",
       "Disconnectedness",
       "BLE disconnectedish",
-      "Disconnected (remote)\\u2028AI BLE ready",
-      "BLE disconnected (GATT 133)\\u200b"
+      "Disconnected (remote)\u2028AI BLE ready",
+      "BLE disconnected (GATT 133)\u200b"
     };
     for(String label:spoofedHealth) {
       if(BleAiStatusPolicy.isRecoveryAttempt(label) ||
