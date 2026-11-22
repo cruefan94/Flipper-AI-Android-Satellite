@@ -28,7 +28,7 @@ public final class CloudConnectionDiagnosis {
       return "Worker HTTP 502: the online AI model or gateway did not return a valid answer.";
     if(detail.startsWith("Worker HTTP 503:") || detail.startsWith("Worker HTTP 504:"))
       return "Worker HTTP 503/504: cloud model unavailable or not configured. Check AI binding, quota and Worker deployment.";
-    if(detail.startsWith("Worker returned HTTP "))
+    if(detail.startsWith("Worker HTTP ") || detail.startsWith("Worker returned HTTP "))
       return "Worker returned an HTTP error. Confirm the Worker is deployed and /ask is enabled.";
     if(detail.startsWith("Cloud network or TLS request failed."))
       return "Cannot reach the HTTPS Worker. Check internet, correct workers.dev address and TLS.";
