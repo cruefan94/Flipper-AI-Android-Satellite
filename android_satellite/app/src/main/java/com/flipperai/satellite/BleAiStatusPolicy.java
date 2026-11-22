@@ -32,6 +32,15 @@ public final class BleAiStatusPolicy {
     return next==' ' || next==':' || next=='(';
   }
 
+  /** Only validated lifecycle labels may affect link-health counters. */
+  public static boolean isRecoveryAttempt(String message) {
+    return message!=null && statusIs(message,"Reconnecting to selected Flipper");
+  }
+  public static boolean isUnexpectedDisconnect(String message) {
+    return message!=null && (statusIs(message,"Disconnected") ||
+      statusIs(message,"BLE disconnected"));
+  }
+
   public static Transition classify(String message) {
     if(message==null)return Transition.NONE;
     if(statusIs(message,"Connecting to selected Flipper") ||
