@@ -56,6 +56,21 @@ public final class BleAiStatusPolicyTest {
       expect(label,Transition.NONE);
       channel(label,BleAiStatusPolicy.Channel.NONE);
     }
+    // A complete prefix with a control-bearing suffix is not verified evidence.
+    String[] controlBearing = {
+      "AI BLE ready: subscribed\nDisconnected",
+      "AI BLE ready (custom)\r",
+      "AI BLE ready: subscribed\t",
+      "AI BLE ready: subscribed\u0000",
+      "Stock Momentum RPC indications enabled: fallback\nAI BLE ready",
+      "Stock Momentum RPC indications enabled (fallback)\u007f",
+      "Disconnected (remote)\nAI BLE ready",
+      "Reconnecting to selected Flipper: retry\r"
+    };
+    for(String label:controlBearing) {
+      expect(label,Transition.NONE);
+      channel(label,BleAiStatusPolicy.Channel.NONE);
+    }
     // Diagnostics after a complete label remain supported.
     channel("AI BLE ready (subscribed)",BleAiStatusPolicy.Channel.CUSTOM_AI1);
     channel("Stock Momentum RPC indications enabled: fallback",BleAiStatusPolicy.Channel.STOCK_RPC);
