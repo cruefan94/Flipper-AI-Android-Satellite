@@ -1,0 +1,36 @@
+name: Stock Momentum RPC AppStart and AI1 AppData codec (offline)
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feature/stock-momentum-rpc-codec-*'
+    paths:
+      - 'android_satellite/app/src/main/java/com/flipperai/satellite/StockMomentumRpcCodec.java'
+      - 'android_satellite/tests/native/StockMomentumRpcCodecSmoke.java'
+      - '.github/workflows/stock-momentum-rpc-codec.yml'
+  pull_request:
+    paths:
+      - 'android_satellite/app/src/main/java/com/flipperai/satellite/StockMomentumRpcCodec.java'
+      - 'android_satellite/tests/native/StockMomentumRpcCodecSmoke.java'
+      - '.github/workflows/stock-momentum-rpc-codec.yml'
+permissions:
+  contents: read
+jobs:
+  codec:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile exact Java files (no Android runtime needed)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/flipper-rpc-codec
+          javac -Xlint:all -d /tmp/flipper-rpc-codec \
+            android_satellite/app/src/main/java/com/flipperai/satellite/StockMomentumRpcCodec.java \
+            android_satellite/tests/native/StockMomentumRpcCodecSmoke.java
+      - name: Execute strict protobuf and AI1 fragmented framing tests
+        run: java -cp /tmp/flipper-rpc-codec com.flipperai.satellite.StockMomentumRpcCodecSmoke
