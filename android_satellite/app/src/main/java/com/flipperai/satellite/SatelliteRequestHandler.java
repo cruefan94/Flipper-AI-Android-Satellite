@@ -32,7 +32,16 @@ public final class SatelliteRequestHandler {
                     // Never perform inference (especially cloud I/O) if even the
                     // smallest ANSWER frame cannot fit the negotiated ATT value.
                     if(fit("ANSWER",id,"",maxFrameBytes)==null)return null;
-                    return fit("ANSWER",id,router.ask(fields[3],mode,cloudConsent),maxFrameBytes);
+                    // Label the actual engine, not the selected mode. HYBRID
+                    // can complete locally or fall back locally after a cloud
+                    // error, and must never masquerade as a cloud answer.
+                    InferenceRouter.Reply outcome=
+                        router.askWithSource(fields[3],mode,cloudConsent);
+                    String origin=outcome.source==InferenceRouter.Source.ONLINE
+                        ?"CLOUD: ":
+                        outcome.source==InferenceRouter.Source.OFFLINE_FALLBACK
+                        ?"OFFLINE FALLBACK: ":"OFFLINE: ";
+                    return fit("ANSWER",id,origin+outcome.text,maxFrameBytes);
                 default:return fit("ERROR",id,"UNKNOWN_TYPE",maxFrameBytes);
             }
         }catch(InterruptedException cancelled){

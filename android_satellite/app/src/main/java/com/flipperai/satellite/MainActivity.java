@@ -93,6 +93,7 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
   private InferenceRouter router;
   private final ExecutorService inferenceWorker=Executors.newSingleThreadExecutor();
   private CheckBox cloudConsent;
+  private TextView aiModeStatus;
   @Override public void onCreate(Bundle b) {
 
     super.onCreate(b);
@@ -273,6 +274,36 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(!permissions() || !connectionServiceReady())return;
       ble.sendStockRpcPing();
     });
+    SatelliteUi.sectionTitle(this,root,"FLIPPER AI MODE");
+    mode=new Spinner(this);
+    mode.setContentDescription("Flipper AI inference mode");
+    mode.setAdapter(new ArrayAdapter<String>(this,
+      android.R.layout.simple_spinner_dropdown_item,labels));
+    root.addView(mode);
+    mode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
+      @Override public void onItemSelected(AdapterView<?> parent,android.view.View view,
+          int position,long id){syncBleAiPolicy();}
+      @Override public void onNothingSelected(AdapterView<?> parent){}
+    });
+    cloudConsent=new CheckBox(this);
+    cloudConsent.setText("Allow prompts from Flipper to use my configured cloud Worker this session");
+    cloudConsent.setChecked(false);
+    cloudConsent.setOnCheckedChangeListener((button,checked)->{
+      if(!checked)cloud.revokeActive();
+      syncBleAiPolicy();
+    });
+    root.addView(cloudConsent);
+    aiModeStatus=SatelliteUi.text(this,
+      "OFFLINE — runs on this Android phone; no cloud request.",
+      14,SatelliteUi.MUTED,false);
+    root.addView(aiModeStatus);
+    button("CONFIGURE ONLINE AI WORKER",()->{
+      advancedVisible=true;
+      if(advancedSection!=null)advancedSection.setVisibility(android.view.View.VISIBLE);
+      showStatus("Online setup is under Advanced AI settings. Save your Worker URL/token, "
+        +"choose ONLINE or HYBRID and explicitly allow cloud use.");
+    });
+    syncBleAiPolicy();
     SatelliteUi.sectionTitle(this,root,"ADVANCED");
     button("Advanced AI settings and diagnostics",()->{
       advancedVisible=!advancedVisible;
@@ -284,14 +315,6 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     advancedSection.setBackground(SatelliteUi.panel(this,false));
     advancedSection.setVisibility(android.view.View.GONE);
     root.addView(advancedSection);
-    mode=new Spinner(this);
-    mode.setAdapter(new ArrayAdapter<String>(this,android.R.layout.simple_spinner_dropdown_item,labels));
-    advancedSection.addView(mode);
-    mode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener(){
-      @Override public void onItemSelected(AdapterView<?> parent,android.view.View view,
-          int position,long id){syncBleAiPolicy();}
-      @Override public void onNothingSelected(AdapterView<?> parent){}
-    });
     TextView builtInLabel=SatelliteUi.text(this,
       "Manage LiteRT and optional Termux llama.cpp backends in OFFLINE MODELS. " +
       "Default remains the installed LiteRT model; choosing llama.cpp " +
@@ -364,14 +387,36 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         showStatus("Cloud settings rejected; cloud disabled.");
       }
     });
-    cloudConsent=new CheckBox(this);
-    cloudConsent.setText("I authorize sending ASK prompts to my cloud Worker and AI provider");
-    cloudConsent.setChecked(false);
-    cloudConsent.setOnCheckedChangeListener((button,checked)->{
-      if(!checked)cloud.revokeActive();
-      syncBleAiPolicy();
+    advancedButton("TEST ONLINE AI (SENDS ONE TEST PROMPT)",()->{
+      if(mode==null || cloudConsent==null ||
+         InferenceRouter.Mode.valueOf(labels[mode.getSelectedItemPosition()])==
+           InferenceRouter.Mode.OFFLINE || !cloudConsent.isChecked()){
+        showStatus("Select ONLINE or HYBRID and approve cloud use before this test.");
+        return;
+      }
+      CloudCredentialStore.Credentials saved=CloudCredentialStore.load(this);
+      if(saved==null){
+        showStatus("Configure and save the HTTPS Worker URL and device token first.");
+        return;
+      }
+      try{cloud.configure(saved.endpoint,saved.token);}
+      catch(Exception invalid){
+        showStatus("Saved cloud configuration is invalid; no request sent.");
+        return;
+      }
+      showStatus("Sending one harmless test prompt through your configured Worker...");
+      // No Flipper message or personal data is transmitted by this explicit
+      // diagnostic. It can use provider quota, so user action is mandatory.
+      inferenceWorker.execute(()->{
+        try{
+          String answer=cloud.answer("Reply with OK to confirm your online AI works.");
+          showStatus("Online AI test answered: "+answer);
+        }catch(Exception e){
+          // Network and credential details must not appear in the UI.
+          showStatus("Online AI test unavailable. Check Worker, model quota, and connection.");
+        }
+      });
     });
-    advancedSection.addView(cloudConsent);
     advancedButton("Disable and clear cloud",()->{
       cloudConsent.setChecked(false);
       cloud.clear();
@@ -643,10 +688,28 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
     });
   }
   private void syncBleAiPolicy(){
-    if(bleService==null || mode==null || cloudConsent==null)return;
-    bleService.setVisibleAiPolicy(
-      InferenceRouter.Mode.valueOf(labels[mode.getSelectedItemPosition()]),
-      cloudConsent.isChecked());
+    if(mode==null || cloudConsent==null)return;
+    InferenceRouter.Mode selected=
+      InferenceRouter.Mode.valueOf(labels[mode.getSelectedItemPosition()]);
+    boolean consent=cloudConsent.isChecked();
+    boolean configured=CloudCredentialStore.load(this)!=null;
+    // Configuration, user consent, actual HTTPS reachability, and model
+    // readiness are DIFFERENT states. Never print 'online connected' just
+    // because a token was saved, a Flipper bonded, or a spinner was changed.
+    if(aiModeStatus!=null){
+      String detail;
+      if(selected==InferenceRouter.Mode.OFFLINE)
+        detail="OFFLINE — Android model only. No prompts sent to cloud.";
+      else if(!configured)
+        detail=selected+" — Set up an HTTPS Worker and token. Cloud is unavailable.";
+      else if(!consent)
+        detail=selected+" — Worker saved but cloud consent OFF. No online requests.";
+      else
+        detail=selected+" — Cloud authorized while this screen is visible. "
+          +"Worker/model availability is not yet verified.";
+      aiModeStatus.setText(detail);
+    }
+    if(bleService!=null)bleService.setVisibleAiPolicy(selected,consent);
   }
   private void showStatus(String text){
     runOnUiThread(()->{if(status!=null && !isFinishing() && !isDestroyed())status.setText(text);});

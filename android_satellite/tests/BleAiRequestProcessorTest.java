@@ -64,7 +64,7 @@ public final class BleAiRequestProcessorTest {
       require(f.processor.receive(frame("HELLO",1,"flipper-v1")),"HELLO submitted");
       require(f.link.take().equals(frame("HELLO_ACK",1,"android-v1")),"HELLO acknowledged");
       require(f.processor.receive(frame("ASK",2,"battery")),"ASK submitted");
-      require(f.link.take().equals(frame("ANSWER",2,"LOCAL battery")),"offline answer");
+      require(f.link.take().equals(frame("ANSWER",2,"OFFLINE: LOCAL battery")),"offline answer");
       require(f.cloudCount.get()==0,"no background cloud");
       f.processor.receive(frame("ASK",2,"battery"));
       require(f.link.take().equals(frame("ERROR",2,"REPLAY_ID")),"replay rejected");
@@ -97,7 +97,7 @@ public final class BleAiRequestProcessorTest {
       f.processor.receive(frame("HELLO",1,"flipper-v1"));f.link.take();
       f.processor.setPolicy(InferenceRouter.Mode.ONLINE,true);
       f.processor.receive(frame("ASK",2,"hello"));
-      require(f.link.take().equals(frame("ANSWER",2,"CLOUD hello")),"explicit cloud");
+      require(f.link.take().equals(frame("ANSWER",2,"CLOUD: CLOUD hello")),"explicit cloud");
       require(f.cloudCount.get()==1,"cloud invoked once");
       f.processor.disconnected();
       f.link.ready=false;
@@ -105,11 +105,11 @@ public final class BleAiRequestProcessorTest {
       f.processor.resetLink();
       f.processor.receive(frame("HELLO",1,"flipper-v1"));f.link.take();
       f.processor.receive(frame("ASK",2,"hello"));
-      require(f.link.take().equals(frame("ANSWER",2,"LOCAL hello")),"cloud revoked on reconnect");
+      require(f.link.take().equals(frame("ANSWER",2,"OFFLINE: LOCAL hello")),"cloud revoked on reconnect");
       require(f.cloudCount.get()==1,"no additional cloud inference");
       f.processor.setPolicy(InferenceRouter.Mode.OFFLINE,true);
       f.processor.receive(frame("ASK",3,"next"));
-      require(f.link.take().equals(frame("ANSWER",3,"LOCAL next")),"offline forbids cloud even if checkbox true");
+      require(f.link.take().equals(frame("ANSWER",3,"OFFLINE: LOCAL next")),"offline forbids cloud even if checkbox true");
     }finally{f.finish();}
   }
   static void testNoRequestsWithoutAuthorizedLink()throws Exception{
