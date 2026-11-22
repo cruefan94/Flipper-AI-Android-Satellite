@@ -27,6 +27,9 @@ public final class StockMomentumRpcAi1Session {
   private static final long LAUNCH_ID=2L;
   private long nextCommandId=3L;
   private long pendingReplyAck=0;
+  // A successful AppStart is NOT proof of a completed AI1 protocol handshake.
+  private boolean ai1HelloAckConfirmed=false;
+  private long helloAckResponseCommand=0;
   private boolean launchAck=false,appStarted=false;
   private String bufferedHello;
 
@@ -37,6 +40,8 @@ public final class StockMomentumRpcAi1Session {
     state=State.IDLE;
     nextCommandId=3;
     pendingReplyAck=0;
+    ai1HelloAckConfirmed=false;
+    helloAckResponseCommand=0;
     launchAck=false;
     appStarted=false;
     bufferedHello=null;
@@ -55,6 +60,8 @@ public final class StockMomentumRpcAi1Session {
     state=State.FAILED;
     decoder.reset();
     pendingReplyAck=0;
+    ai1HelloAckConfirmed=false;
+    helloAckResponseCommand=0;
     bufferedHello=null;
     events.closed(reason);
   }
@@ -101,6 +108,10 @@ public final class StockMomentumRpcAi1Session {
         } else if(state==State.READY &&
                   pendingReplyAck!=0 && msg.commandId==pendingReplyAck) {
           if(msg.status!=0) {fail("Flipper rejected AI response",events);break;}
+          if(msg.commandId==helloAckResponseCommand) {
+            ai1HelloAckConfirmed=true;
+            helloAckResponseCommand=0;
+          }
           pendingReplyAck=0;
         }
         continue;
@@ -138,11 +149,16 @@ public final class StockMomentumRpcAi1Session {
       throw new IllegalStateException("RPC command counter exhausted");
     long id=nextCommandId;
     byte[] data=StockMomentumRpcCodec.appData(id,ai1);
+    // Only the actual protocol HELLO_ACK may establish a confirmed handshake.
+    // Its matching Momentum RPC ACK proves GATT delivery, not model readiness.
+    boolean handshake=ai1.equals("AI1|HELLO_ACK|1|android-v1\n");
     nextCommandId++;
     pendingReplyAck=id;
+    if(handshake)helloAckResponseCommand=id;
     return data;
   }
 
+  public synchronized boolean ai1HelloAckConfirmed(){return ai1HelloAckConfirmed;}
   public synchronized boolean responseAcknowledged(){return pendingReplyAck==0;}
   public synchronized long pendingResponseId(){return pendingReplyAck;}
 }

@@ -42,3 +42,10 @@ FlipperHTTP remains an optional read-only board diagnostics channel until the up
 Pi and ESP32-S3 are not required for the first direct Bluetooth AI interaction.
 
 Do not overwrite Android stable APK or declare v0.8 end-to-end ready solely based on host tests.
+## Phase 2 reliability follow-up — 2026-11-22
+
+- A successful GATT write is not a verified Momentum AppDataExchange acceptance. Android now requires a matching protobuf response ACK within 12 seconds, otherwise it discards queued replies and resets/reconnects Bluetooth.
+- Failed or partial AppStart writes now also reset the link instead of leaving stale bytes queued for the next session.
+- The phone reports a distinct AI1 HELLO_ACK delivered milestone only after the exact matching RPC command ACK; it does not confuse BLE pairing, APP_STARTED, or model presence with AI readiness.
+- Flipper APP_CLOSED and invalid AI1 packets reset the link and cancel the pending model work. The actual offline ASK/ANSWER handshake still requires owner hardware testing.
+- Host native regression adds negative handshake/stray ACK/disconnect vectors; full Android APK regression remains a release gate.

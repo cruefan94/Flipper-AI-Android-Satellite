@@ -69,6 +69,9 @@ public final class BleSatellite implements SatelliteTransport {
   private static final int RPC_MAX_QUEUE=8;
   private static final long RPC_WRITE_TIMEOUT_MS=6000L;
   private static final long RPC_LAUNCH_TIMEOUT_MS=12000L;
+  // A BLE write callback proves only that GATT accepted the bytes. Require
+  // Momentum's matching AppDataExchange RPC ACK or fail this AI session.
+  private static final long RPC_REPLY_ACK_TIMEOUT_MS=12000L;
   private final StockMomentumRpcAi1Session.Events rpcEvents=
       new StockMomentumRpcAi1Session.Events() {
         @Override public void ready() {
@@ -332,8 +335,10 @@ public final class BleSatellite implements SatelliteTransport {
     final byte[] start=rpcAiSession.begin();
     final BluetoothGatt link=gatt;
     if(!queueStockRpc(start)){
-      rpcAiSession.reset();
-      events.status("Cannot send Flipper AI AppStart. Retry after reconnecting.");
+      // A partial AppStart may already have reached the radio. Never leave
+      // its remaining queued bytes available to a later RPC session.
+      events.status("Cannot send Flipper AI AppStart; resetting Bluetooth link.");
+      recoverTemporaryFailure(-20);
       return false;
     }
     final int generation=connectionGeneration;
@@ -360,6 +365,21 @@ public final class BleSatellite implements SatelliteTransport {
       recoverTemporaryFailure(-12);
       return false;
     }
+    // A characteristic write callback is not an end-to-end RPC confirmation.
+    // Keep the pending reply bounded even if all fragments were sent but the
+    // Flipper never acknowledges processing them.
+    final BluetoothGatt link=gatt;
+    final int generation=connectionGeneration;
+    final long commandId=rpcAiSession.pendingResponseId();
+    ui.postDelayed(()->{
+      synchronized(BleSatellite.this){
+        if(link!=gatt || generation!=connectionGeneration ||
+           !isStockRpcAiReady() || commandId==0 ||
+           rpcAiSession.pendingResponseId()!=commandId)return;
+        events.status("Flipper AI reply RPC ACK timed out; reconnecting safely.");
+        recoverTemporaryFailure(-17);
+      }
+    },RPC_REPLY_ACK_TIMEOUT_MS);
     return true;
   }
 
@@ -703,8 +723,17 @@ public final class BleSatellite implements SatelliteTransport {
     private void receiveRpcIndication(byte[] data){
       if(data==null || data.length==0)return;
       if(rpcAiSession.state()!=StockMomentumRpcAi1Session.State.IDLE){
-        try{rpcAiSession.feed(data,rpcEvents);}
-        catch(IllegalArgumentException invalid){
+        try{
+          boolean wasConfirmed=rpcAiSession.ai1HelloAckConfirmed();
+          rpcAiSession.feed(data,rpcEvents);
+          if(!wasConfirmed && rpcAiSession.ai1HelloAckConfirmed())
+            events.status("Flipper AI1 HELLO_ACK delivered over Momentum RPC; ready to test PING.");
+          if(rpcAiSession.state()==StockMomentumRpcAi1Session.State.FAILED){
+            // Failure/AppExit must discard any queued or in-flight replies.
+            events.status("Stock RPC AI session stopped; reconnect before restarting.");
+            recoverTemporaryFailure(-19);
+          }
+        }catch(IllegalArgumentException invalid){
           events.status("Stock RPC AI1 frame rejected; reconnect required.");
           recoverTemporaryFailure(-14);
         }

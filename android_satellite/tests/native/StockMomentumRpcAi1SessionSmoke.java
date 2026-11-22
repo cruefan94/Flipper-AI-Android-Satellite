@@ -57,6 +57,7 @@ public final class StockMomentumRpcAi1SessionSmoke {
     final StockMomentumRpcAi1Session session=new StockMomentumRpcAi1Session();
     Monitor events=new Monitor();
     ok(session.state()==StockMomentumRpcAi1Session.State.IDLE,"starts idle");
+    ok(!session.ai1HelloAckConfirmed(),"no protocol handshake before launch");
     reject(()->session.sendAiResponse("AI1|PONG|1|ok\n"));
     byte[] start=session.begin();
     ok(start.length>30,"app start packet generated");
@@ -76,11 +77,14 @@ public final class StockMomentumRpcAi1SessionSmoke {
        "preserved Flipper HELLO");
     byte[] answer=session.sendAiResponse("AI1|HELLO_ACK|1|android-v1\n");
     ok(answer.length>20 && session.pendingResponseId()==3,"HELLO_ACK queued as AppData");
+    ok(!session.ai1HelloAckConfirmed(),"HELLO_ACK GATT write alone is not confirmed");
     reject(()->session.sendAiResponse("AI1|PONG|2|ok\n"));
     session.feed(ack(100,0),events);
     ok(session.pendingResponseId()==3,"stray ACK cannot confirm response");
+    ok(!session.ai1HelloAckConfirmed(),"stray ACK cannot confirm HELLO_ACK");
     session.feed(ack(3,0),events);
     ok(session.responseAcknowledged(),"matching response ACK");
+    ok(session.ai1HelloAckConfirmed(),"matching HELLO_ACK RPC receipt sets handshake milestone");
     session.feed(ai1("AI1|PING|2|status\n"),events);
     ok(events.lastFrame.equals("AI1|PING|2|status\n"),"PING dispatched");
     session.sendAiResponse("AI1|PONG|2|ok\n");
@@ -92,6 +96,7 @@ public final class StockMomentumRpcAi1SessionSmoke {
     ok(!session.isReady() && events.closed==1,"Flipper stop kills session");
     reject(()->session.sendAiResponse("AI1|ANSWER|3|yes\n"));
     session.reset();
+    ok(!session.ai1HelloAckConfirmed(),"disconnect clears protocol milestone");
     events=new Monitor();
     byte[] next=session.begin();
     ok(Arrays.equals(start,next),"new connection regenerates app start");
@@ -101,6 +106,7 @@ public final class StockMomentumRpcAi1SessionSmoke {
     ok(events.ready==1 && session.isReady(),"ACK-before-state works");
     session.feed(ai1("AI1|HELLO|1|flipper-v1\n"),events);
     ok(events.frames==1,"live HELLO passed through");
+    ok(!session.ai1HelloAckConfirmed(),"reconnect does not inherit old handshake");
     byte[] invalid=packet(65,0,0,field(1,"AI1|HELLO|1|bad\nX".getBytes(StandardCharsets.UTF_8)));
     session.feed(invalid,events);
     ok(!session.isReady() && events.closed==1,"malformed frame fails closed");
