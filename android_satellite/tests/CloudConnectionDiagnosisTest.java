@@ -30,6 +30,13 @@ public final class CloudConnectionDiagnosisTest {
     check("Worker returned HTTP 418: sensitive-secret https://private.example.com","HTTP error");
     check("Worker HTTP 401: sensitive-secret https://private.example.com","token was rejected");
     check("Worker HTTP 502: sensitive-secret https://private.example.com","model or gateway");
+    check("Worker HTTP 403: sensitive-secret https://private.example.com","denied access");
+    check("Worker HTTP 404: sensitive-secret https://private.example.com","/ask route");
+    check("Worker HTTP 429: sensitive-secret https://private.example.com","request limit");
+    check("Worker HTTP 503: sensitive-secret https://private.example.com","AI binding");
+    check("Worker HTTP 504: sensitive-secret https://private.example.com","AI binding");
+    check("Worker HTTP 599: sensitive-secret https://private.example.com","HTTP error");
+    check("Worker HTTP 401: sensitive-secret\\nAuthorization: Bearer hidden","token was rejected");
     check("Cloud network or TLS request failed. sensitive-secret https://private.example.com","Cannot reach");
     checks++;
     String missing=CloudConnectionDiagnosis.explain(null);
