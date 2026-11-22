@@ -7,9 +7,9 @@ public final class CloudConnectionDiagnosisTest {
     checks++;
     String text=CloudConnectionDiagnosis.explain(new IllegalStateException(source));
     if(!text.contains(contains))
-      throw new AssertionError(source+" -> "+text+" did not contain "+contains);
+      throw new AssertionError("Cloud diagnostic expected sanitized category missing (case "+checks+")");
     if(text.contains("sensitive-secret") || text.contains("https://private.example.com"))
-      throw new AssertionError("Secret leaked");
+      throw new AssertionError("Cloud diagnostic included forbidden private data (case "+checks+")");
   }
   public static void main(String[] args){
     check("Cloud Worker not configured","not configured");
@@ -36,7 +36,7 @@ public final class CloudConnectionDiagnosisTest {
     check("Worker HTTP 503: sensitive-secret https://private.example.com","AI binding");
     check("Worker HTTP 504: sensitive-secret https://private.example.com","AI binding");
     check("Worker HTTP 599: sensitive-secret https://private.example.com","HTTP error");
-    check("Worker HTTP 401: sensitive-secret\\nAuthorization: Bearer hidden","token was rejected");
+    check("Worker HTTP 401: sensitive-secret\nAuthorization: Bearer hidden","token was rejected");
     check("Cloud network or TLS request failed. sensitive-secret https://private.example.com","Cannot reach");
     checks++;
     String missing=CloudConnectionDiagnosis.explain(null);
