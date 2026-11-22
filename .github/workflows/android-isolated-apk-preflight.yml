@@ -1,8 +1,14 @@
 name: Android isolated test APK metadata gate
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'android_satellite/**'
+      - '.github/workflows/android-isolated-apk-preflight.yml'
   push:
-    branches: [ci/android-isolated-apk-preflight-20261121]
+    branches:
+      - ci/android-isolated-apk-preflight-20261121
+      - ci/android-isolated-apk-pr-trigger-20261121
     paths:
       - 'android_satellite/**'
       - '.github/workflows/android-isolated-apk-preflight.yml'
