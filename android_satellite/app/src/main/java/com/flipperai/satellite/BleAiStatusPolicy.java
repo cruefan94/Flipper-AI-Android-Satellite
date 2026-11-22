@@ -18,6 +18,12 @@ public final class BleAiStatusPolicy {
   /** Require a complete status label, not an arbitrary startsWith collision.
    * Parenthesized details and colon-separated diagnostics remain supported. */
   private static boolean statusIs(String message,String label) {
+    // Reject embedded control characters even after a valid label. A multiline
+    // diagnostic must never manufacture AI1 readiness or RPC verification.
+    for(int i=0;i<message.length();i++) {
+      char ch=message.charAt(i);
+      if(ch<0x20 || ch==0x7f)return false;
+    }
     if(message.equals(label))return true;
     if(!message.startsWith(label) || message.length()<=label.length())return false;
     char next=message.charAt(label.length());
