@@ -71,6 +71,21 @@ public final class BleAiStatusPolicyTest {
       expect(label,Transition.NONE);
       channel(label,BleAiStatusPolicy.Channel.NONE);
     }
+    // Unicode separators and invisible format marks cannot provide readiness,
+    // stock RPC proof, or lifecycle invalidation despite a complete prefix.
+    String[] unicodeAmbiguous = {
+      "AI BLE ready: subscribed\u2028Disconnected",
+      "AI BLE ready (custom)\u2029",
+      "AI BLE ready: subscribed\u200b",
+      "Stock Momentum RPC indications enabled: fallback\u2028AI BLE ready",
+      "Stock Momentum RPC indications enabled (fallback)\u200e",
+      "Disconnected (remote)\u2029AI BLE ready",
+      "Reconnecting to selected Flipper: retry\u2060"
+    };
+    for(String label:unicodeAmbiguous) {
+      expect(label,Transition.NONE);
+      channel(label,BleAiStatusPolicy.Channel.NONE);
+    }
     // Diagnostics after a complete label remain supported.
     channel("AI BLE ready (subscribed)",BleAiStatusPolicy.Channel.CUSTOM_AI1);
     channel("Stock Momentum RPC indications enabled: fallback",BleAiStatusPolicy.Channel.STOCK_RPC);
