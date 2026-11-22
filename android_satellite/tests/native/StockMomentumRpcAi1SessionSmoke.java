@@ -121,6 +121,39 @@ public final class StockMomentumRpcAi1SessionSmoke {
     session.sendAiResponse("AI1|HELLO_ACK|1|android-v1\n");
     session.feed(ack(3,4),events);
     ok(!session.isReady() && events.closed==1,"remote rejected response fails closed");
+    // Reconnect safety: never promote early non-HELLO data to an AI session.
+    session.reset();
+    events=new Monitor();
+    session.begin();
+    session.feed(ai1("AI1|PING|9|status\n"),events);
+    ok(!session.isReady() && events.closed==1,
+       "early PING rejected before verified launch");
+
+    // An unsolicited HELLO may be buffered once, but duplicate HELLO is invalid.
+    session.reset();
+    events=new Monitor();
+    session.begin();
+    session.feed(ai1("AI1|HELLO|1|flipper-v1\n"),events);
+    ok(events.frames==0 && events.closed==0,"one early HELLO buffered");
+    session.feed(ai1("AI1|HELLO|1|flipper-v1\n"),events);
+    ok(!session.isReady() && events.closed==1,"duplicate early HELLO fails closed");
+
+    // A disconnect must discard buffered messages and old AppStart ACKs.
+    session.reset();
+    events=new Monitor();
+    session.begin();
+    session.feed(ai1("AI1|HELLO|1|flipper-v1\n"),events);
+    session.reset();
+    events=new Monitor();
+    session.begin();
+    session.feed(ack(3,0),events);
+    session.feed(startState(),events);
+    ok(!session.isReady() && events.frames==0,
+       "stale response ACK cannot validate new launch or replay HELLO");
+    session.feed(ack(2,0),events);
+    ok(session.isReady() && events.frames==0,
+       "new launch needs fresh HELLO after disconnect");
+
     System.out.println("Phase 2 stock Momentum AI1 session: "+checks+" checks passed");
   }
 }
