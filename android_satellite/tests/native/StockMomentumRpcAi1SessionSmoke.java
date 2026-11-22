@@ -125,7 +125,7 @@ public final class StockMomentumRpcAi1SessionSmoke {
     session.reset();
     events=new Monitor();
     session.begin();
-    session.feed(ai1("AI1|PING|9|status\\n"),events);
+    session.feed(ai1("AI1|PING|9|status\n"),events);
     ok(!session.isReady() && events.closed==1,
        "early PING rejected before verified launch");
 
@@ -133,16 +133,16 @@ public final class StockMomentumRpcAi1SessionSmoke {
     session.reset();
     events=new Monitor();
     session.begin();
-    session.feed(ai1("AI1|HELLO|1|flipper-v1\\n"),events);
+    session.feed(ai1("AI1|HELLO|1|flipper-v1\n"),events);
     ok(events.frames==0 && events.closed==0,"one early HELLO buffered");
-    session.feed(ai1("AI1|HELLO|1|flipper-v1\\n"),events);
+    session.feed(ai1("AI1|HELLO|1|flipper-v1\n"),events);
     ok(!session.isReady() && events.closed==1,"duplicate early HELLO fails closed");
 
     // A disconnect must discard buffered messages and old AppStart ACKs.
     session.reset();
     events=new Monitor();
     session.begin();
-    session.feed(ai1("AI1|HELLO|1|flipper-v1\\n"),events);
+    session.feed(ai1("AI1|HELLO|1|flipper-v1\n"),events);
     session.reset();
     events=new Monitor();
     session.begin();
