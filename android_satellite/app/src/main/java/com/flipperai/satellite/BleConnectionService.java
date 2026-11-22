@@ -285,9 +285,9 @@ public final class BleConnectionService extends Service implements BleSatellite.
       }
     }
     long now=SystemClock.elapsedRealtime();
-    if(message.startsWith("Reconnecting to selected Flipper"))
+    if(BleAiStatusPolicy.isRecoveryAttempt(message))
       linkHealth.recoveryAttempt();
-    if(message.startsWith("Disconnected") || message.startsWith("BLE disconnected"))
+    if(BleAiStatusPolicy.isUnexpectedDisconnect(message))
       linkHealth.unexpectedDisconnect(now);
     // Never count lookalike status prefixes as a verified AI1/RPC channel.
     BleAiStatusPolicy.Channel verifiedChannel=BleAiStatusPolicy.verifiedChannel(message);
