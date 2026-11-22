@@ -56,7 +56,14 @@ class BleRequestCancellationWiringTest(unittest.TestCase):
         self.assertIn("inferenceWorker.shutdown();",SERVICE)
         self.assertIn("new ArrayBlockingQueue<Runnable>(8)",SERVICE)
         self.assertIn("inferenceWorker.purge();",SERVICE)
-        self.assertIn("setPolicy(InferenceRouter.Mode.OFFLINE,false)",SERVICE)
+        # Phase 2 keeps both custom-AI and stock-RPC AI1 workers under the
+        # same explicit phone-side offline/cloud policy and consent revocation.
+        self.assertIn("setBothAiPolicies(InferenceRouter.Mode.OFFLINE,false)",SERVICE)
+        self.assertIn("if(aiRequests!=null)aiRequests.setPolicy(mode,consent);",SERVICE)
+        self.assertIn("if(rpcAiRequests!=null)rpcAiRequests.setPolicy(mode,consent);",SERVICE)
+        self.assertIn("if(rpcAiRequests!=null)rpcAiRequests.disconnected();",SERVICE)
+        self.assertIn("if(rpcAiRequests!=null)rpcAiRequests.close();",SERVICE)
+        self.assertIn("rpcAiRequests.receive(frame)",SERVICE)
         self.assertIn("cloud.clear();",SERVICE)
         self.assertIn("if(cloudConsent!=null && cloudConsent.isChecked())",MAIN)
         self.assertIn("pending.remove(this);",JOBS)

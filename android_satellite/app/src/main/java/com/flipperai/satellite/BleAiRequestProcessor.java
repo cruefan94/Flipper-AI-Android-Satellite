@@ -5,8 +5,10 @@ import java.util.concurrent.RejectedExecutionException;
 
 /**
  * Connection-scoped AI1 request owner independent of Android Activities.
- * Only a bonded, subscribed AI GATT link is eligible. Stock Momentum RPC
- * must never be treated as an AI request channel.
+ * Link implementations must prove an authorized, subscribed AI session.
+ * Generic Momentum RPC ping/pairing is NOT an AI channel; Phase 2 stock RPC
+ * is eligible only after an explicit FAP AppStart ACK + APP_STARTED and AI1
+ * HELLO handshake, gated by the separate StockMomentumRpcAi1Session.
  *
  * The same serialized worker owns ProtocolSession and the offline inference
  * engine. Disconnect cancels outstanding tasks and prevents late replies

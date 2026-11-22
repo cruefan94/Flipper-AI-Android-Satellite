@@ -43,6 +43,7 @@ public final class BleConnectionService extends Service implements BleSatellite.
   private final ThreadPoolExecutor inferenceWorker=new ThreadPoolExecutor(
     1,1,0L,TimeUnit.MILLISECONDS,new ArrayBlockingQueue<Runnable>(8));
   private BleAiRequestProcessor aiRequests;
+  private BleAiRequestProcessor rpcAiRequests; // Stock Momentum RPC Phase 2 path
   private EmbeddedLlmEngine embedded;
   private LocalModelEngine loopback;
   private LocalModelEngine llama;
@@ -72,6 +73,26 @@ public final class BleConnectionService extends Service implements BleSatellite.
         }
         @Override public boolean sendFrame(String response){
           return transport!=null && transport.send(response);
+        }
+      },
+      ()->{
+        if(cloud!=null)cloud.revokeActive();
+        if(loopback!=null)loopback.revokeActive();
+        if(llama!=null)llama.revokeActive();
+      });
+    // The existing Android inference router is shared by both transports.
+    // This worker remains Service-owned when MainActivity is no longer visible.
+    // Stock Momentum RPC only becomes eligible after explicit AppStart,
+    // successful ACK, APP_STARTED and the AI1 HELLO handshake.
+    rpcAiRequests=new BleAiRequestProcessor(
+      inferenceWorker,new SatelliteRequestHandler(router),
+      new BleAiRequestProcessor.Link(){
+        @Override public boolean isReady(){
+          return transport!=null && transport.isStockRpcAiReady();
+        }
+        @Override public int maxFrameBytes(){return SatelliteProtocol.MAX_BYTES;}
+        @Override public boolean sendFrame(String response){
+          return transport!=null && transport.sendStockRpcAiFrame(response);
         }
       },
       ()->{
@@ -115,16 +136,21 @@ public final class BleConnectionService extends Service implements BleSatellite.
 
   /** The normal Bluetooth connection remains alive across screen changes;
    * cloud authorization does not. Offline stays the safe background default. */
+  private void setBothAiPolicies(InferenceRouter.Mode mode,boolean consent){
+    if(aiRequests!=null)aiRequests.setPolicy(mode,consent);
+    if(rpcAiRequests!=null)rpcAiRequests.setPolicy(mode,consent);
+  }
+
   public void leaveAiSettingsScreen(){
-    if(aiRequests!=null)aiRequests.setPolicy(InferenceRouter.Mode.OFFLINE,false);
+    setBothAiPolicies(InferenceRouter.Mode.OFFLINE,false);
     if(cloud!=null)cloud.clear();
   }
 
   /** Only call from a visible UI that collected explicit per-session consent. */
   public void setVisibleAiPolicy(InferenceRouter.Mode mode,boolean consent){
-    if(aiRequests==null || mode==null)return;
+    if(aiRequests==null || rpcAiRequests==null || mode==null)return;
     if(!consent || mode==InferenceRouter.Mode.OFFLINE){
-      aiRequests.setPolicy(mode,false);
+      setBothAiPolicies(mode,false);
       if(cloud!=null)cloud.clear();
       return;
     }
@@ -132,9 +158,9 @@ public final class BleConnectionService extends Service implements BleSatellite.
       CloudCredentialStore.Credentials credentials=CloudCredentialStore.load(this);
       if(credentials==null)throw new IllegalStateException("Worker settings missing");
       cloud.configure(credentials.endpoint,credentials.token);
-      aiRequests.setPolicy(mode,true);
+      setBothAiPolicies(mode,true);
     }catch(Exception missingOrInvalid){
-      aiRequests.setPolicy(InferenceRouter.Mode.OFFLINE,false);
+      setBothAiPolicies(InferenceRouter.Mode.OFFLINE,false);
       cloud.clear();
       status("Flipper cloud AI is disabled. Configure and authorize the Worker first.");
     }
@@ -164,6 +190,7 @@ public final class BleConnectionService extends Service implements BleSatellite.
     // Switching devices is a new AI1 security boundary. Do not allow a
     // previous device's pending inference or cloud consent to survive it.
     if(aiRequests!=null)aiRequests.disconnected();
+    if(rpcAiRequests!=null)rpcAiRequests.disconnected();
     transport.connect(chosen);
   }
   public void attach(BleSatellite.Events listener){
@@ -216,6 +243,7 @@ public final class BleConnectionService extends Service implements BleSatellite.
     // Revoke AI1 requests and opt-in cloud consent before GATT teardown.
     // A missing or delayed transport status callback must not retain consent.
     if(aiRequests!=null)aiRequests.disconnected();
+    if(rpcAiRequests!=null)rpcAiRequests.disconnected();
     if(transport!=null)transport.manualDisconnect();
     if(foreground){stopForeground(STOP_FOREGROUND_REMOVE);foreground=false;}
     stopSelf();
@@ -225,6 +253,7 @@ public final class BleConnectionService extends Service implements BleSatellite.
     foreground=false;
     currentListener=null;
     if(aiRequests!=null)aiRequests.close();
+    if(rpcAiRequests!=null)rpcAiRequests.close();
     if(transport!=null)transport.close();
     // FutureTask cancellation does not immediately remove queued tasks.
     // Purge them before scheduling native model cleanup on the same worker.
@@ -249,6 +278,7 @@ public final class BleConnectionService extends Service implements BleSatellite.
       BleAiStatusPolicy.Transition transition=BleAiStatusPolicy.classify(message);
       if(transition==BleAiStatusPolicy.Transition.INVALIDATE){
         aiRequests.disconnected();
+        if(rpcAiRequests!=null)rpcAiRequests.disconnected();
       }else if(transition==BleAiStatusPolicy.Transition.READY &&
                transport!=null && transport.isReady()){
         aiRequests.resetLink();
@@ -286,11 +316,27 @@ public final class BleConnectionService extends Service implements BleSatellite.
     if(listener!=null)listener.device(device,advertisedName);
   }
   @Override public void received(String frame){
-    // Never delegate AI1 inference to a transient Activity. The dedicated
-    // service worker processes frames for the lifetime of the BLE link.
-    // Invalid/outdated GATT sessions cannot dispatch new requests.
+    // Dedicated custom GATT channel, if present on an experimental firmware.
     if(aiRequests==null || transport==null || !transport.isReady())return;
     if(!aiRequests.receive(frame))
-      status("Flipper AI request dropped: Android AI worker is unavailable.");
+      status("Custom AI BLE request dropped: AI worker unavailable.");
+  }
+
+  @Override public void stockRpcAiStarted(){
+    // Launch was explicitly requested from Android and confirmed by Momentum
+    // AppStart ACK + APP_STARTED. The Flipper's own HELLO is processed next.
+    if(rpcAiRequests!=null)rpcAiRequests.resetLink();
+  }
+
+  @Override public void stockRpcAiFrame(String frame){
+    if(rpcAiRequests==null || transport==null ||
+       !transport.isStockRpcAiReady())return;
+    if(!rpcAiRequests.receive(frame))
+      status("Stock RPC AI1 request dropped: Android worker unavailable.");
+  }
+
+  @Override public void stockRpcAiClosed(String reason){
+    // Cancel stale work, revoke cloud consent and refuse cross-device answers.
+    if(rpcAiRequests!=null)rpcAiRequests.disconnected();
   }
 }
