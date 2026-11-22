@@ -258,6 +258,17 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
         "Flipper AI BLE reliability",report));
       showStatus("BLE reliability report copied; paste it into the project chat.");
     });
+    button("START FLIPPER AI — BLUETOOTH (PHASE 2)",()->{
+      // This is intentionally a visible, explicit action. A normal bond or
+      // generic RPC ping does not open an AI session.
+      if(!permissions() || !connectionServiceReady())return;
+      if(!ble.isStockRpcSubscribed()){
+        showStatus("Pair and connect the Flipper via stock Momentum RPC first.");
+        return;
+      }
+      if(ble.startStockRpcAi())
+        showStatus("Requested Flipper AI launch. Checking AppStart ACK, app state and AI1 HELLO.");
+    });
     button("TEST MOMENTUM RPC PING",()->{
       if(!permissions() || !connectionServiceReady())return;
       ble.sendStockRpcPing();
@@ -645,7 +656,12 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
       if(connectionState==null)return;
       if(text.startsWith("AI BLE ready") ||
           text.startsWith("Stock Momentum RPC indications enabled"))renderRecentConnections();
-      if(text.startsWith("RPC PING RESPONSE RECEIVED"))connectionState.setText("MOMENTUM RPC PING RESPONSE RECEIVED — AI NOT READY");
+      if(text.startsWith("Flipper AI app launched over stock RPC"))
+        connectionState.setText("FLIPPER AI OPEN — WAITING FOR AI1 HELLO");
+      else if(text.startsWith("Starting Flipper AI v0.8"))
+        connectionState.setText("FLIPPER AI: START REQUESTED");
+      else if(text.startsWith("RPC PING RESPONSE RECEIVED"))
+        connectionState.setText("MOMENTUM RPC PING RESPONSE RECEIVED — AI NOT READY");
       else if(text.startsWith("Stock Momentum RPC indications enabled"))connectionState.setText("BLUETOOTH CONNECTED — MOMENTUM RPC INDICATIONS ACTIVE (AI NOT READY)");
       else if(text.startsWith("BLUETOOTH CONNECTED: Stock Momentum RPC"))connectionState.setText("BLUETOOTH CONNECTED — STOCK MOMENTUM RPC DETECTED (AI NOT READY)");
       else if(text.startsWith("AI BLE ready"))connectionState.setText("AI CONNECTION: CONNECTED / READY");

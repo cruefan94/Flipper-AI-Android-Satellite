@@ -24,7 +24,16 @@ public final class BleSatellite implements SatelliteTransport {
   public static final UUID RX=UUID.fromString("c8c7ab10-6355-4ea8-a76a-0a4a64de0002");
   public static final UUID TX=UUID.fromString("c8c7ab10-6355-4ea8-a76a-0a4a64de0003");
   private static final UUID CCCD=UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
-  public interface Events { void status(String text);void device(BluetoothDevice device,String advertisedName);void received(String frame); }
+  public interface Events {
+    void status(String text);
+    void device(BluetoothDevice device,String advertisedName);
+    void received(String frame);
+    // Separate from the future custom AI GATT channel. The stock RPC app must
+    // have been explicitly launched and acknowledged before AI1 is eligible.
+    default void stockRpcAiStarted(){}
+    default void stockRpcAiFrame(String frame){}
+    default void stockRpcAiClosed(String reason){}
+  }
   private final Context context;
   private final Events events;
   private final Handler ui=new Handler(Looper.getMainLooper());
@@ -50,6 +59,30 @@ public final class BleSatellite implements SatelliteTransport {
   private volatile int rpcNotificationsReceived;
   private volatile int rpcFlowCredits=-1;
   private volatile boolean rpcPingPending=false;
+  private volatile boolean stockRpcFlowSubscribed=false;
+  private final StockMomentumRpcAi1Session rpcAiSession=new StockMomentumRpcAi1Session();
+  private final ArrayDeque<byte[]> rpcQueue=new ArrayDeque<>();
+  private int rpcOffset=0;
+  private boolean rpcWritePending=false;
+  private int rpcWriteToken=0;
+  private static final int RPC_SAFE_ATT_CHUNK=20;
+  private static final int RPC_MAX_QUEUE=8;
+  private static final long RPC_WRITE_TIMEOUT_MS=6000L;
+  private static final long RPC_LAUNCH_TIMEOUT_MS=12000L;
+  private final StockMomentumRpcAi1Session.Events rpcEvents=
+      new StockMomentumRpcAi1Session.Events() {
+        @Override public void ready() {
+          events.status("Flipper AI app launched over stock RPC; AI1 HELLO pending.");
+          events.stockRpcAiStarted();
+        }
+        @Override public void received(String frame) {
+          events.stockRpcAiFrame(frame);
+        }
+        @Override public void closed(String cause) {
+          events.stockRpcAiClosed(cause);
+          events.status("Flipper AI stock RPC session closed: "+cause);
+        }
+      };
   private final BleWriteGuard writeGuard=new BleWriteGuard();
   private static final int MAX_QUEUED=8;
   private static final long GATT_WRITE_TIMEOUT_MS=6000L;
@@ -233,8 +266,12 @@ public final class BleSatellite implements SatelliteTransport {
   public synchronized void disconnect(){
     discoveryEvidence.closeLink();
     connectionGeneration++;
-    state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;stockRpcSubscribed=false;rpcNotificationsReceived=0;rpcFlowCredits=-1;rpcPingPending=false;writeGuard.reset();
+    state.disconnected();authorized=false;subscribed=false;mtuPending=false;stockRpcDetected=false;stockRpcSubscribed=false;stockRpcFlowSubscribed=false;rpcNotificationsReceived=0;rpcFlowCredits=-1;rpcPingPending=false;writeGuard.reset();
+    boolean hadRpcAi=rpcAiSession.state()!=StockMomentumRpcAi1Session.State.IDLE;
+    rpcAiSession.reset();
+    rpcQueue.clear();rpcOffset=0;rpcWritePending=false;rpcWriteToken++;
     pending.clear();BluetoothGatt old=gatt;gatt=null;
+    if(hadRpcAi)events.stockRpcAiClosed("Bluetooth link reset");
     events.status("Disconnected (local)");
     if(old!=null){
       /* Permission may have been revoked while the connection was active.
@@ -260,6 +297,8 @@ public final class BleSatellite implements SatelliteTransport {
   public synchronized int stockRpcNotificationCount(){return rpcNotificationsReceived;}
   public synchronized int stockRpcFlowCredits(){return rpcFlowCredits;}
   public synchronized boolean sendStockRpcPing(){
+    if(rpcAiSession.state()!=StockMomentumRpcAi1Session.State.IDLE || rpcWritePending ||
+       !rpcQueue.isEmpty()){events.status("RPC diagnostic ping is unavailable during a Phase 2 AI session.");return false;}
     if(!isStockRpcSubscribed() || rpcFlowCredits<5 || rpcPingPending){events.status("RPC ping unavailable: connect and wait for flow-control value.");return false;}
     BluetoothGattService service=gatt.getService(MOMENTUM_RPC_SERVICE);
     BluetoothGattCharacteristic ch=service==null?null:service.getCharacteristic(MOMENTUM_RPC_WRITE);
@@ -273,6 +312,114 @@ public final class BleSatellite implements SatelliteTransport {
     if(started){rpcPingPending=true;rpcFlowCredits-=payload.length;events.status("Momentum RPC ping sent; awaiting validated response.");}
     else events.status("Momentum RPC ping write could not start.");
     return started;
+  }
+
+
+  /** Transport readiness is not AI1 HELLO_ACK and is not a model readiness claim. */
+  public synchronized boolean isStockRpcAiReady(){
+    return isStockRpcSubscribed() && stockRpcFlowSubscribed &&
+      rpcAiSession.isReady() && approved();
+  }
+
+  /** Called only by an explicit Android button; does not alter Momentum OS. */
+  public synchronized boolean startStockRpcAi(){
+    if(!isStockRpcSubscribed() || !stockRpcFlowSubscribed || gatt==null ||
+       rpcFlowCredits<=0 || rpcPingPending ||
+       rpcAiSession.state()!=StockMomentumRpcAi1Session.State.IDLE){
+      events.status("Connect a bonded Flipper and wait for stock RPC flow control before launching AI.");
+      return false;
+    }
+    final byte[] start=rpcAiSession.begin();
+    final BluetoothGatt link=gatt;
+    if(!queueStockRpc(start)){
+      rpcAiSession.reset();
+      events.status("Cannot send Flipper AI AppStart. Retry after reconnecting.");
+      return false;
+    }
+    final int generation=connectionGeneration;
+    ui.postDelayed(()->{
+      synchronized(BleSatellite.this){
+        if(link!=gatt || generation!=connectionGeneration ||
+           rpcAiSession.state()!=StockMomentumRpcAi1Session.State.STARTING)return;
+        events.status("Flipper AI AppStart timed out without ACK and APP_STARTED; reconnecting.");
+        recoverTemporaryFailure(-11);
+      }
+    },RPC_LAUNCH_TIMEOUT_MS);
+    events.status("Starting Flipper AI v0.8 via stock Momentum RPC (explicit request).");
+    return true;
+  }
+
+  /** Called only by the persistent Android Service's AI1 inference worker. */
+  public synchronized boolean sendStockRpcAiFrame(String frame){
+    if(!isStockRpcAiReady() || rpcQueue.size()>=RPC_MAX_QUEUE)return false;
+    final byte[] packet;
+    try{packet=rpcAiSession.sendAiResponse(frame);}
+    catch(IllegalArgumentException | IllegalStateException rejected){return false;}
+    if(!queueStockRpc(packet)){
+      events.status("RPC AI response could not be queued; reset this BLE link.");
+      recoverTemporaryFailure(-12);
+      return false;
+    }
+    return true;
+  }
+
+  private synchronized boolean queueStockRpc(byte[] packet){
+    if(!isStockRpcSubscribed() || gatt==null || packet==null ||
+       packet.length==0 || packet.length>StockMomentumRpcCodec.MAX_RPC_MESSAGE+5 ||
+       rpcQueue.size()>=RPC_MAX_QUEUE)return false;
+    rpcQueue.addLast(packet);
+    return drainStockRpc();
+  }
+
+  /** One write-with-response at a time. Use 20-byte fragments even at MTU 23.
+   * Credits track the pinned Momentum GATT RX stream's free-byte allowance.
+   */
+  private synchronized boolean drainStockRpc(){
+    if(rpcWritePending)return true;
+    if(rpcQueue.isEmpty())return true;
+    if(!isStockRpcSubscribed() || !stockRpcFlowSubscribed || gatt==null)return false;
+    if(rpcFlowCredits<=0)return true; // Wait for authenticated flow notification.
+    BluetoothGattService service=gatt.getService(MOMENTUM_RPC_SERVICE);
+    BluetoothGattCharacteristic rx=service==null?null:service.getCharacteristic(MOMENTUM_RPC_WRITE);
+    if(rx==null)return false;
+    final byte[] frame=rpcQueue.peekFirst();
+    if(frame==null || rpcOffset>=frame.length)return false;
+    int count=Math.min(RPC_SAFE_ATT_CHUNK,Math.min(rpcFlowCredits,frame.length-rpcOffset));
+    if(count<=0)return true;
+    byte[] bytes=java.util.Arrays.copyOfRange(frame,rpcOffset,rpcOffset+count);
+    final BluetoothGatt link=gatt;
+    final int generation=connectionGeneration;
+    final int token=++rpcWriteToken;
+    rpcWritePending=true; // Reserve before submitting to handle immediate callbacks.
+    boolean started=false;
+    try{
+      if(Build.VERSION.SDK_INT>=33)started=
+        link.writeCharacteristic(rx,bytes,BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)==
+        BluetoothStatusCodes.SUCCESS;
+      else{
+        rx.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+        rx.setValue(bytes);
+        started=link.writeCharacteristic(rx);
+      }
+    }catch(SecurityException | IllegalStateException gone){
+      started=false;
+    }
+    if(!started){
+      rpcWritePending=false;
+      events.status("Stock RPC Bluetooth write failed to start.");
+      return false;
+    }
+    rpcOffset+=count;
+    rpcFlowCredits-=count;
+    ui.postDelayed(()->{
+      synchronized(BleSatellite.this){
+        if(link!=gatt || generation!=connectionGeneration ||
+           !rpcWritePending || token!=rpcWriteToken)return;
+        events.status("Stock RPC write timed out; reconnecting.");
+        recoverTemporaryFailure(-13);
+      }
+    },RPC_WRITE_TIMEOUT_MS);
+    return true;
   }
 
   @Override public synchronized boolean isReady(){return subscribed && approved() && state.phase()==TransportState.Phase.READY;}
@@ -497,6 +644,14 @@ public final class BleSatellite implements SatelliteTransport {
        * connection setup; callbacks from other descriptors are ignored. */
       if(link!=gatt || d==null || !CCCD.equals(d.getUuid()))return;
       BluetoothGattCharacteristic owner=d.getCharacteristic();
+      if(owner!=null && MOMENTUM_RPC_FLOW.equals(owner.getUuid()) && stockRpcDetected){
+        stockRpcFlowSubscribed=code==BluetoothGatt.GATT_SUCCESS;
+        events.status(stockRpcFlowSubscribed
+          ? "Stock Momentum RPC flow notifications enabled; Phase 2 launch can be requested."
+          : "Stock Momentum RPC flow subscription failed (GATT "+code+").");
+        if(stockRpcFlowSubscribed && !drainStockRpc())recoverTemporaryFailure(-16);
+        return;
+      }
       if(owner!=null && MOMENTUM_RPC_NOTIFY.equals(owner.getUuid()) && stockRpcDetected){
         stockRpcSubscribed=code==BluetoothGatt.GATT_SUCCESS;
         if(stockRpcSubscribed)recoveryAttempts=0;
@@ -547,37 +702,121 @@ public final class BleSatellite implements SatelliteTransport {
     }
     private void receiveRpcIndication(byte[] data){
       if(data==null || data.length==0)return;
-      // This initial parser only accepts a complete, single-frame ping response.
+      if(rpcAiSession.state()!=StockMomentumRpcAi1Session.State.IDLE){
+        try{rpcAiSession.feed(data,rpcEvents);}
+        catch(IllegalArgumentException invalid){
+          events.status("Stock RPC AI1 frame rejected; reconnect required.");
+          recoverTemporaryFailure(-14);
+        }
+        return;
+      }
+      // Diagnostic ping is independent of the Phase 2 AI1 app session. The
+      // older debug parser never marks the AI channel ready.
       int len=data[0]&255;
-      if(len!=data.length-1){events.status("RPC indication received; fragmented/extended protobuf response requires framing.");return;}
+      if(len!=data.length-1){events.status("RPC diagnostic indication requires framing.");return;}
       boolean id=false,ping=false;
       for(int i=1;i<data.length-1;i++){
         if((data[i]&255)==8 && (data[i+1]&255)==1)id=true;
         if((data[i]&255)==50 && (data[i+1]&255)==0)ping=true;
       }
-      if(rpcPingPending && id && ping){rpcPingPending=false;events.status("RPC PING RESPONSE RECEIVED (command 1); basic envelope matched.");}
-      else events.status("Momentum RPC indication received; response not yet validated.");
+      if(rpcPingPending && id && ping){
+        rpcPingPending=false;
+        events.status("RPC PING RESPONSE RECEIVED (command 1); AI1 app not launched.");
+      }else{
+        events.status("Stock RPC diagnostic response; AI1 app not launched.");
+      }
     }
+
+    /** Momentum stores REVERSE_BYTES_U32(buffer_size) on the F7: big-endian. */
     private void readRpcFlow(byte[] data){
-      if(data==null || data.length!=4){events.status("RPC flow-control value length unexpected.");return;}
-      long n=((long)data[0]&255L)|(((long)data[1]&255L)<<8)|(((long)data[2]&255L)<<16)|(((long)data[3]&255L)<<24);
-      if(n<=1048576L){rpcFlowCredits=(int)n;events.status("Momentum RPC flow-control value: "+rpcFlowCredits+" (unsigned little-endian). No command sent.");}
-      else {rpcFlowCredits=-1;events.status("Momentum RPC raw flow-control value: "+n+" (unsigned little-endian); unusually large. No command sent.");}
+      if(data==null || data.length!=4){
+        rpcFlowCredits=-1;
+        events.status("RPC flow-control value length unexpected.");return;
+      }
+      long n=(((long)data[0]&255L)<<24)|(((long)data[1]&255L)<<16)|
+             (((long)data[2]&255L)<<8)|((long)data[3]&255L);
+      if(n>0 && n<=65536L){
+        rpcFlowCredits=(int)n;
+        if(stockRpcFlowSubscribed && !drainStockRpc())
+          recoverTemporaryFailure(-15);
+      }else{
+        rpcFlowCredits=-1;
+        events.status("Unexpected stock RPC flow-control capacity; link not ready.");
+      }
     }
-    @Override public void onCharacteristicRead(BluetoothGatt link,BluetoothGattCharacteristic ch,byte[] value,int code){
-      synchronized(BleSatellite.this){if(link==gatt && stockRpcSubscribed && ch!=null && MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(value);}
+
+    private void subscribeRpcFlow(BluetoothGatt link){
+      if(link!=gatt || !stockRpcSubscribed || !approved())return;
+      BluetoothGattService service=link.getService(MOMENTUM_RPC_SERVICE);
+      BluetoothGattCharacteristic flow=service==null?null:
+        service.getCharacteristic(MOMENTUM_RPC_FLOW);
+      if(flow==null || (flow.getProperties() & BluetoothGattCharacteristic.PROPERTY_NOTIFY)==0){
+        events.status("Momentum RPC flow notifications are not available.");
+        return;
+      }
+      BluetoothGattDescriptor descriptor=flow.getDescriptor(CCCD);
+      if(descriptor==null){
+        events.status("Momentum RPC flow CCCD is missing.");return;
+      }
+      boolean started=false;
+      try{
+        if(link.setCharacteristicNotification(flow,true)){
+          if(Build.VERSION.SDK_INT>=33)
+            started=link.writeDescriptor(descriptor,
+              BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)==BluetoothStatusCodes.SUCCESS;
+          else{
+            descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+            started=link.writeDescriptor(descriptor);
+          }
+        }
+      }catch(SecurityException | IllegalStateException gone){
+        started=false;
+      }
+      if(!started)events.status("Momentum RPC flow subscription could not start.");
     }
-    @Override public void onCharacteristicRead(BluetoothGatt link,BluetoothGattCharacteristic ch,int code){
-      if(Build.VERSION.SDK_INT<33){synchronized(BleSatellite.this){if(link==gatt && stockRpcSubscribed && ch!=null && MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(ch.getValue());}}
+    @Override public void onCharacteristicRead(
+        BluetoothGatt link,BluetoothGattCharacteristic ch,byte[] value,int code){
+      synchronized(BleSatellite.this){
+        if(link!=gatt || !stockRpcSubscribed || ch==null ||
+           !MOMENTUM_RPC_FLOW.equals(ch.getUuid()))return;
+        if(code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(value);
+        else events.status("RPC flow-control read failed (GATT "+code+").");
+        subscribeRpcFlow(link);
+      }
+    }
+    @Override public void onCharacteristicRead(
+        BluetoothGatt link,BluetoothGattCharacteristic ch,int code){
+      if(Build.VERSION.SDK_INT<33){
+        synchronized(BleSatellite.this){
+          if(link!=gatt || !stockRpcSubscribed || ch==null ||
+             !MOMENTUM_RPC_FLOW.equals(ch.getUuid()))return;
+          if(code==BluetoothGatt.GATT_SUCCESS)readRpcFlow(ch.getValue());
+          else events.status("RPC flow-control read failed (GATT "+code+").");
+          subscribeRpcFlow(link);
+        }
+      }
     }
     @Override public void onCharacteristicWrite(BluetoothGatt link,BluetoothGattCharacteristic ch,int code){
       synchronized(BleSatellite.this){
         // A stale callback must not complete a write pending on a new GATT.
         if(link!=gatt || ch==null)return;
         if(MOMENTUM_RPC_WRITE.equals(ch.getUuid())){
-          if(code!=BluetoothGatt.GATT_SUCCESS){
+          if(rpcWritePending){
+            rpcWritePending=false;
+            if(code!=BluetoothGatt.GATT_SUCCESS){
+              events.status("Phase 2 stock RPC write failed (GATT "+code+").");
+              recoverTemporaryFailure(code);
+              return;
+            }
+            byte[] first=rpcQueue.peekFirst();
+            if(first!=null && rpcOffset>=first.length){
+              rpcQueue.removeFirst();
+              rpcOffset=0;
+            }
+            if(!drainStockRpc())recoverTemporaryFailure(-18);
+          }else if(code!=BluetoothGatt.GATT_SUCCESS){
             rpcPingPending=false;
-            events.status("Momentum RPC ping write failed (GATT "+code+").");
+            events.status("Momentum RPC diagnostic ping write failed (GATT "+code+").");
           }
           return;
         }
@@ -597,6 +836,8 @@ public final class BleSatellite implements SatelliteTransport {
         if(MOMENTUM_RPC_NOTIFY.equals(ch.getUuid()) && stockRpcSubscribed){
           rpcNotificationsReceived++;
           receiveRpcIndication(value);
+        }else if(MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && stockRpcFlowSubscribed){
+          readRpcFlow(value);
         }else if(TX.equals(ch.getUuid()) && isReady())deliver(value);
       }
     }
@@ -607,6 +848,8 @@ public final class BleSatellite implements SatelliteTransport {
         if(MOMENTUM_RPC_NOTIFY.equals(ch.getUuid()) && stockRpcSubscribed){
           rpcNotificationsReceived++;
           receiveRpcIndication(ch.getValue());
+        }else if(MOMENTUM_RPC_FLOW.equals(ch.getUuid()) && stockRpcFlowSubscribed){
+          readRpcFlow(ch.getValue());
         }else if(TX.equals(ch.getUuid()) && isReady())deliver(ch.getValue());
       }
     }

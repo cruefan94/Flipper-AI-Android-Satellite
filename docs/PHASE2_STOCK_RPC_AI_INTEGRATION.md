@@ -13,6 +13,18 @@ Existing user-built standalone Flipper AI v0.8 FAP is left unchanged, along with
 5. Satellite's existing serialized foreground Service AI1 worker handles OFFLINE inference using the embedded/local model runtime; HYBRID/ONLINE are accessible only under explicit phone-side cloud consent. No Flipper-side AI model download is needed.
 6. Android returns response using protobuf AppDataExchange over same stock Bluetooth RPC session; commands require matching ACK, timeout, credit and MTU-safe fragmentation.
 
+## Phase 2 Android implementation candidate
+
+The current draft now also includes:
+- An explicit Start Flipper AI Bluetooth button in the Android UI (not automatic).
+- Bonded stock-Momentum RPC GATT flow subscription; big-endian flow-credit parsing checked against pinned Momentum serial_service.c REVERSE_BYTES_U32 output.
+- A separate bounded 20-byte GATT AppStart/AppData write queue and matching write callbacks, with fail-closed timeouts and link reset.
+- RPC AppState and AppData indication decoding through the strict streaming codec.
+- Service-owned AI1 request processor for the stock RPC channel, reusing the existing embedded offline model and opt-in consent policy. MainActivity does not run inference.
+- No changes to the v0.8 Flipper executable. The already compiled FAP contains the needed stock-RPC HELLO/PING/ASK client.
+
+**These are newly added SOURCE paths, pending Android CI and real paired-device testing.** Compilation and on-device success cannot be assumed.
+
 ## Implemented as Phase 2 foundation
 
 - StockMomentumRpcCodec: strict 512-byte bounded protobuf envelope and stream decoder (PR #118).
@@ -21,7 +33,7 @@ Existing user-built standalone Flipper AI v0.8 FAP is left unchanged, along with
 
 ## Release gates
 
-- Wire the new session into existing bonded BleSatellite GATT service, subscribe to RPC RX notifications and flow-control, send AppStart and AppDataExchange via serialized MTU-safe writes.
+- Verify the new bonded BleSatellite RPC flow subscription, AppStart, AppDataExchange and MTU-safe writes with the real Flipper; resolve runtime failures before release.
 - Route verified AI1 inbound frames to the existing BleConnectionService inference worker and back through the RPC session, keeping cloud consent scoped to the phone UI.
 - Build a side-by-side Android debug APK and test the matching v0.8 FAP from the user's private Codespaces output on an actual Flipper.
 - Perform HELLO, PING, offline ASK/ANSWER, disconnect/reconnect, duplicate IDs, long replies and cross-link cancellation tests before marking Phase 2 complete.
