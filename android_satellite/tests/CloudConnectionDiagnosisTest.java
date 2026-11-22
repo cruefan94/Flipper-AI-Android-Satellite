@@ -24,6 +24,21 @@ public final class CloudConnectionDiagnosisTest {
     check("Cloud network or TLS request failed.","Cannot reach");
     check("Cloud response has no reply","no AI reply");
     check("sensitive-secret https://private.example.com","Online AI request failed");
+    // Adversarial provider diagnostics must never reach the UI, even for known HTTP statuses.
+    check("Cloud request already in progress","already in progress");
+    check("Cloud response exceeds limit","too large");
+    check("Worker returned HTTP 418: sensitive-secret https://private.example.com","HTTP error");
+    check("Worker HTTP 401: sensitive-secret https://private.example.com","token was rejected");
+    check("Worker HTTP 502: sensitive-secret https://private.example.com","model or gateway");
+    check("Cloud network or TLS request failed. sensitive-secret https://private.example.com","Cannot reach");
+    checks++;
+    String missing=CloudConnectionDiagnosis.explain(null);
+    if(missing.contains("sensitive-secret") || !missing.contains("Online AI failed"))
+      throw new AssertionError("Null diagnostic must be sanitized");
+    checks++;
+    String noMessage=CloudConnectionDiagnosis.explain(new IllegalStateException());
+    if(noMessage.contains("sensitive-secret") || !noMessage.contains("Online AI failed"))
+      throw new AssertionError("Missing exception message must be sanitized");
     System.out.println("CloudConnectionDiagnosisTest: "+checks+" checks passed");
   }
 }
