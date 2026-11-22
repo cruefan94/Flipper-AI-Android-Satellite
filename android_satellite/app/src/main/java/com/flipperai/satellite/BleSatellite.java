@@ -540,8 +540,11 @@ public final class BleSatellite implements SatelliteTransport {
            return;
          }
          if(!transitionConnected()){
-          events.status("Unexpected BLE connection state; reset required");
-          disconnect();
+          events.status("Unexpected BLE connection state; recovering Bluetooth link");
+          // A stale/invalid connected transition is a transient GATT failure.
+          // Close this handle and use the same cancelable, bounded backoff as
+          // other link failures. Manual disconnect still cancels the retry.
+          recoverTemporaryFailure(-10);
           return;
         }
         events.status("Connected; discovering AI service");
