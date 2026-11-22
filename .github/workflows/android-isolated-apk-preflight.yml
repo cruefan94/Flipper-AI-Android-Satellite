@@ -1,0 +1,57 @@
+name: Android isolated test APK metadata gate
+on:
+  workflow_dispatch:
+  push:
+    branches: [ci/android-isolated-apk-preflight-20261121]
+    paths:
+      - 'android_satellite/**'
+      - '.github/workflows/android-isolated-apk-preflight.yml'
+permissions:
+  contents: read
+jobs:
+  isolated-test-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Source and preflight regressions
+        run: |
+          python3 android_satellite/tools/preflight.py
+          python3 -m unittest discover -s android_satellite/tests -p 'test_*.py' -v
+      - name: Build explicitly isolated debug test APK
+        run: |
+          gradle -p android_satellite --no-daemon -PsatelliteSideBySide=true -PsatelliteVersionCode=87 :app:assembleDebug
+      - name: Check actual APK package and signing metadata without exposing digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=android_satellite/app/build/outputs/apk/debug/app-debug.apk
+          test -s "$APK"
+          TOOLS="$ANDROID_HOME/build-tools/35.0.0"
+          "$TOOLS/apksigner" verify "$APK"
+          "$TOOLS/aapt" dump badging "$APK" > "$RUNNER_TEMP/apk-badging.txt"
+          "$TOOLS/apksigner" verify --print-certs "$APK" > "$RUNNER_TEMP/apk-certs.txt"
+          python3 android_satellite/tests/test_apk_identity_preflight.py \
+            --badging "$RUNNER_TEMP/apk-badging.txt" \
+            --certs "$RUNNER_TEMP/apk-certs.txt" \
+            --variant test --min-version-code 87
+          echo "METADATA_PASS_ONLY; isolated package and signer present. No upgrade/install approval."
+      - name: Upload isolated APK only after metadata gate passes
+        uses: actions/upload-artifact@v4
+        with:
+          name: Android-Satellite-ISOLATED-test-UNTESTED-${{ github.sha }}
+          path: android_satellite/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
