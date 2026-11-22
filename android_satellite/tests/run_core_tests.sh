@@ -6,6 +6,9 @@ DEST=$(mktemp -d)
 trap 'rm -rf "$DEST"' EXIT
 javac -d "$DEST" "$SRC/SatelliteProtocol.java" "$SRC/FrameCodec.java" "$SRC/TransportState.java" "$SRC/BondGate.java" "$SRC/PromptLimits.java" "$SRC/InferenceRouter.java" "$SRC/OfflineDiagnosticEngine.java" "$SRC/SatelliteRequestHandler.java" "$SRC/ProtocolSession.java" "$SRC/SessionEpoch.java" "$ROOT/android_satellite/tests/SatelliteCoreTest.java"
 java -cp "$DEST" SatelliteCoreTest
+# Every Flipper ANSWER must label actual online/offline origin, not chosen mode.
+javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/SatelliteSourceLabelTest.java"
+java -cp "$DEST" SatelliteSourceLabelTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridCancellationTest.java"
 java -cp "$DEST" HybridCancellationTest
 javac -cp "$DEST" -d "$DEST" "$ROOT/android_satellite/tests/HybridFallbackTest.java"
