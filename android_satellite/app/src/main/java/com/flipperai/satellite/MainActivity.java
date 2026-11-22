@@ -412,8 +412,9 @@ public final class MainActivity extends Activity implements BleSatellite.Events 
           String answer=cloud.answer("Reply with OK to confirm your online AI works.");
           showStatus("Online AI test answered: "+answer);
         }catch(Exception e){
-          // Network and credential details must not appear in the UI.
-          showStatus("Online AI test unavailable. Check Worker, model quota, and connection.");
+          // Render only fixed, allowlisted diagnostics. Never expose the
+          // actual exception/URL/token or untrusted Worker response body.
+          showStatus(CloudConnectionDiagnosis.explain(e));
         }
       });
     });
