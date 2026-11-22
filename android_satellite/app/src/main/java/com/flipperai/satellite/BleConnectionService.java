@@ -306,8 +306,9 @@ public final class BleConnectionService extends Service implements BleSatellite.
     if(foreground){
       NotificationManager manager=getSystemService(NotificationManager.class);
       if(manager!=null && (verifiedChannel!=BleAiStatusPolicy.Channel.NONE
-          || message.startsWith("Disconnected")
-          || message.startsWith("Reconnecting")))
+          || BleAiStatusPolicy.isUnexpectedDisconnect(message)
+          || BleAiStatusPolicy.isRecoveryAttempt(message)
+          || BleAiStatusPolicy.classify(message)==BleAiStatusPolicy.Transition.INVALIDATE))
         manager.notify(NOTICE_ID,notice());
     }
   }
