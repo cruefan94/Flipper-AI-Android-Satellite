@@ -91,6 +91,23 @@ public final class BleAiStatusPolicyTest {
     channel("Stock Momentum RPC indications enabled: fallback",BleAiStatusPolicy.Channel.STOCK_RPC);
     expect("AI GATT write timed out (session)",Transition.INVALIDATE);
     expect(null,Transition.NONE);
+    if(!BleAiStatusPolicy.isRecoveryAttempt("Reconnecting to selected Flipper (backoff 2/8)") ||
+       !BleAiStatusPolicy.isUnexpectedDisconnect("BLE disconnected (GATT 133)") ||
+       !BleAiStatusPolicy.isUnexpectedDisconnect("Disconnected (remote)"))
+      throw new AssertionError("Valid link health lifecycle evidence rejected");
+    String[] spoofedHealth = {
+      "Reconnecting to selected Flipperish",
+      "Reconnecting to selected Flipper (backoff)\\nAI BLE ready",
+      "Disconnectedness",
+      "BLE disconnectedish",
+      "Disconnected (remote)\\u2028AI BLE ready",
+      "BLE disconnected (GATT 133)\\u200b"
+    };
+    for(String label:spoofedHealth) {
+      if(BleAiStatusPolicy.isRecoveryAttempt(label) ||
+         BleAiStatusPolicy.isUnexpectedDisconnect(label))
+        throw new AssertionError("Invalid link health lifecycle evidence accepted");
+    }
     System.out.println("BleAiStatusPolicy tests passed");
   }
 }
