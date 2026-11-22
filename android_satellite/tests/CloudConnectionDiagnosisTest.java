@@ -25,7 +25,7 @@ public final class CloudConnectionDiagnosisTest {
     check("Cloud response has no reply","no AI reply");
     check("sensitive-secret https://private.example.com","Online AI request failed");
     // Adversarial provider diagnostics must never reach the UI, even for known HTTP statuses.
-    check("Cloud request already in progress","already in progress");
+    check("Cloud request already in progress","another cloud request is still running");
     check("Cloud response exceeds limit","too large");
     check("Worker returned HTTP 418: sensitive-secret https://private.example.com","HTTP error");
     check("Worker HTTP 401: sensitive-secret https://private.example.com","token was rejected");
