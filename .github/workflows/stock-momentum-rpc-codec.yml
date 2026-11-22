@@ -4,14 +4,19 @@ on:
   push:
     branches:
       - 'feature/stock-momentum-rpc-codec-*'
+      - 'feature/phase2-stock-rpc-ai1-*'
     paths:
       - 'android_satellite/app/src/main/java/com/flipperai/satellite/StockMomentumRpcCodec.java'
       - 'android_satellite/tests/native/StockMomentumRpcCodecSmoke.java'
+      - 'android_satellite/app/src/main/java/com/flipperai/satellite/StockMomentumRpcAi1Session.java'
+      - 'android_satellite/tests/native/StockMomentumRpcAi1SessionSmoke.java'
       - '.github/workflows/stock-momentum-rpc-codec.yml'
   pull_request:
     paths:
       - 'android_satellite/app/src/main/java/com/flipperai/satellite/StockMomentumRpcCodec.java'
       - 'android_satellite/tests/native/StockMomentumRpcCodecSmoke.java'
+      - 'android_satellite/app/src/main/java/com/flipperai/satellite/StockMomentumRpcAi1Session.java'
+      - 'android_satellite/tests/native/StockMomentumRpcAi1SessionSmoke.java'
       - '.github/workflows/stock-momentum-rpc-codec.yml'
 permissions:
   contents: read
@@ -31,6 +36,11 @@ jobs:
           mkdir -p /tmp/flipper-rpc-codec
           javac -Xlint:all -d /tmp/flipper-rpc-codec \
             android_satellite/app/src/main/java/com/flipperai/satellite/StockMomentumRpcCodec.java \
-            android_satellite/tests/native/StockMomentumRpcCodecSmoke.java
+            android_satellite/tests/native/StockMomentumRpcCodecSmoke.java \
+            android_satellite/app/src/main/java/com/flipperai/satellite/StockMomentumRpcAi1Session.java \
+            android_satellite/app/src/main/java/com/flipperai/satellite/SatelliteProtocol.java \
+            android_satellite/tests/native/StockMomentumRpcAi1SessionSmoke.java
       - name: Execute strict protobuf and AI1 fragmented framing tests
-        run: java -cp /tmp/flipper-rpc-codec com.flipperai.satellite.StockMomentumRpcCodecSmoke
+        run: |
+          java -cp /tmp/flipper-rpc-codec com.flipperai.satellite.StockMomentumRpcCodecSmoke
+          java -cp /tmp/flipper-rpc-codec com.flipperai.satellite.StockMomentumRpcAi1SessionSmoke
