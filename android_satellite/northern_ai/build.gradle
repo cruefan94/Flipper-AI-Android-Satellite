@@ -13,7 +13,7 @@ android {
         minSdk 26
         targetSdk 35
         versionCode northernVersionCode
-        versionName '0.3.0-voicetest'
+        versionName '0.4.0-modelhub'
         manifestPlaceholders = [northernAiAppLabel: 'Northern Circuit AI']
     }
     compileOptions {
@@ -22,8 +22,8 @@ android {
     }
     buildTypes {
         debug {
-            applicationIdSuffix '.voicetest'
-            manifestPlaceholders = [northernAiAppLabel: 'Northern AI Voice Test']
+            applicationIdSuffix '.modelhub'
+            manifestPlaceholders = [northernAiAppLabel: 'Northern AI Model Hub']
             minifyEnabled false
         }
     }

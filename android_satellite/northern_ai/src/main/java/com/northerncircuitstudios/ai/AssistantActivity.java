@@ -60,6 +60,7 @@ public final class AssistantActivity extends Activity {
     private Button modeButton;
     private Button voiceAutoButton;
     private Button voicePlayButton;
+    private TextView modeSummary;
     private VoiceSpeaker voiceSpeaker;
     private VoiceSettings voiceSettings = new VoiceSettings(false, "", 1.0f, 1.0f);
     private final ArrayList<AssistantPolicy.Entry> history = new ArrayList<>();
@@ -141,54 +142,29 @@ public final class AssistantActivity extends Activity {
         status.setBackground(background(PANEL, 9));
         screen.addView(status);
 
-        LinearLayout tools = new LinearLayout(this);
-        tools.setOrientation(LinearLayout.HORIZONTAL);
-        tools.setPadding(0, dp(9), 0, dp(7));
-        screen.addView(tools);
-        Button check = button("CHECK LOCAL", PANEL);
-        Button setup = button("LOCAL SETUP", PANEL);
-        Button clear = button("CLEAR CHAT", PANEL);
-        for (Button control : new Button[]{check, setup, clear}) {
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(48), 1);
-            p.setMargins(dp(2), 0, dp(2), 0);
-            tools.addView(control, p);
-        }
-        check.setOnClickListener(v -> checkServer());
-        setup.setOnClickListener(v -> showSetup());
-        clear.setOnClickListener(v -> confirmClear());
+        // A single compact navigation row replaces three large control rows.
+        modeSummary = label("MODE: OFFLINE", 12, ACCENT, true);
+        modeSummary.setPadding(dp(7), dp(8), dp(7), dp(8));
+        screen.addView(modeSummary);
 
-        // Cloud controls are always visible, even when the token is not configured.
-        LinearLayout cloudTools = new LinearLayout(this);
-        cloudTools.setOrientation(LinearLayout.HORIZONTAL);
-        cloudTools.setPadding(0, 0, 0, dp(9));
-        screen.addView(cloudTools);
-        modeButton = button("MODE: OFFLINE", PANEL);
-        Button cloudSetup = button("CLOUD SETUP", PANEL);
-        Button cloudTest = button("TEST CLOUD", PANEL);
-        for (Button control : new Button[]{modeButton, cloudSetup, cloudTest}) {
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(48), 1);
+        LinearLayout nav = new LinearLayout(this);
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setPadding(0, dp(5), 0, dp(9));
+        screen.addView(nav);
+        Button modelsButton = button("MODELS", PANEL);
+        Button modeControl = button("AI MODE", PANEL);
+        Button voiceControl = button("VOICE", PANEL);
+        Button settingsControl = button("SETTINGS", PANEL);
+        for (Button control : new Button[]{modelsButton, modeControl, voiceControl, settingsControl}) {
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(50), 1);
             p.setMargins(dp(2), 0, dp(2), 0);
-            cloudTools.addView(control, p);
+            nav.addView(control, p);
         }
-        modeButton.setOnClickListener(v -> chooseMode());
-        cloudSetup.setOnClickListener(v -> showCloudSetup());
-        cloudTest.setOnClickListener(v -> testCloud());
-
-        LinearLayout voiceTools = new LinearLayout(this);
-        voiceTools.setOrientation(LinearLayout.HORIZONTAL);
-        voiceTools.setPadding(0, 0, 0, dp(9));
-        screen.addView(voiceTools);
-        voiceAutoButton = button("AUTO VOICE: OFF", PANEL);
-        Button voiceOptions = button("CHOOSE VOICE", PANEL);
-        voicePlayButton = button("READ LAST", PANEL);
-        for (Button control : new Button[]{voiceAutoButton, voiceOptions, voicePlayButton}) {
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(48), 1);
-            p.setMargins(dp(2), 0, dp(2), 0);
-            voiceTools.addView(control, p);
-        }
-        voiceAutoButton.setOnClickListener(v -> toggleAutoVoice());
-        voiceOptions.setOnClickListener(v -> showVoiceOptions());
-        voicePlayButton.setOnClickListener(v -> readLastOrStop());
+        modelsButton.setOnClickListener(v ->
+            startActivity(new Intent(this, ModelsActivity.class)));
+        modeControl.setOnClickListener(v -> chooseMode());
+        voiceControl.setOnClickListener(v -> showVoiceCenter());
+        settingsControl.setOnClickListener(v -> showSettingsCenter());
 
         conversationScroll = new ScrollView(this);
         conversationScroll.setFillViewport(true);
@@ -355,6 +331,7 @@ public final class AssistantActivity extends Activity {
         }
         final CloudModePolicy.Mode mode = cloudSettings.mode;
         final String token = cloudSettings.token;
+        final String chosenLocalModel = LocalModelPreferences.load(this);
         if (mode != CloudModePolicy.Mode.OFFLINE &&
             !CloudModePolicy.maySendToCloud(mode, token)) {
             setStatus("Cloud token missing. Tap CLOUD SETUP or switch to OFFLINE.");
@@ -390,7 +367,7 @@ public final class AssistantActivity extends Activity {
                     source = "CLOUD";
                 } else if (mode == CloudModePolicy.Mode.HYBRID) {
                     try {
-                        reply = client.reply(snapshot);
+                        reply = client.reply(snapshot, chosenLocalModel);
                         source = "LOCAL";
                     } catch (Exception localFailure) {
                         // Selected HYBRID explicitly authorizes the current prompt
@@ -399,7 +376,7 @@ public final class AssistantActivity extends Activity {
                         source = "CLOUD FALLBACK";
                     }
                 } else {
-                    reply = client.reply(snapshot);
+                    reply = client.reply(snapshot, chosenLocalModel);
                     source = "OFFLINE";
                 }
                 snapshot.add(new AssistantPolicy.Entry("assistant", reply));
@@ -442,6 +419,12 @@ public final class AssistantActivity extends Activity {
     private void updateModeButton() {
         if (modeButton != null)
             modeButton.setText("MODE: " + cloudSettings.mode.name());
+        if (modeSummary != null) {
+            String selected = LocalModelPreferences.load(this);
+            modeSummary.setText("MODE: " + cloudSettings.mode.name() +
+                (cloudSettings.mode == CloudModePolicy.Mode.CLOUD ? "  •  Gemini online"
+                    : "  •  Local: " + (selected.isEmpty() ? "server default" : selected)));
+        }
         if (tagline != null) {
             String message = cloudSettings.mode == CloudModePolicy.Mode.OFFLINE
                 ? "PRIVATE ON-DEVICE AI  •  GALAXY S25"
@@ -788,6 +771,42 @@ public final class AssistantActivity extends Activity {
             0.7f + pitch.getProgress() / 20f));
     }
 
+    private void showVoiceCenter() {
+        if (closing) return;
+        String[] actions = {
+            voiceSettings.autoRead ? "AUTO VOICE: ON" : "AUTO VOICE: OFF",
+            "CHOOSE VOICE",
+            "READ LAST",
+            "STOP VOICE"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Voice controls")
+            .setItems(actions, (dialog, index) -> {
+                if (index == 0) toggleAutoVoice();
+                else if (index == 1) showVoiceOptions();
+                else if (index == 2) readLastOrStop();
+                else if (voiceSpeaker != null) voiceSpeaker.stop();
+            })
+            .setNegativeButton("CLOSE", null).show();
+    }
+
+    private void showSettingsCenter() {
+        if (closing) return;
+        String[] actions = {
+            "CHECK LOCAL", "LOCAL SETUP", "CLOUD SETUP", "TEST CLOUD", "CLEAR CHAT"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Assistant settings")
+            .setItems(actions, (dialog, index) -> {
+                if (index == 0) checkServer();
+                else if (index == 1) showSetup();
+                else if (index == 2) showCloudSetup();
+                else if (index == 3) testCloud();
+                else confirmClear();
+            })
+            .setNegativeButton("CLOSE", null).show();
+    }
+
     private void confirmClear() {
         if (busy || closing) return;
         new AlertDialog.Builder(this)
@@ -842,6 +861,11 @@ public final class AssistantActivity extends Activity {
                     manager.setPrimaryClip(ClipData.newPlainText("Qwen3.5 local launch", SETUP_COMMAND));
                 setStatus("Launch command copied. Paste it into Termux.");
             }).show();
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        updateModeButton();
     }
 
     @Override protected void onDestroy() {
