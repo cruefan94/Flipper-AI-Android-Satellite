@@ -1,0 +1,27 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Dedicated APK identity: never overwrites the Flipper AI Satellite installation.
+def northernVersionCode = (findProperty('northernAiVersionCode') ?: '1').toString().toInteger()
+
+android {
+    namespace 'com.northerncircuitstudios.ai'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.northerncircuitstudios.ai'
+        minSdk 26
+        targetSdk 35
+        versionCode northernVersionCode
+        versionName '0.1.0-dev'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildTypes {
+        debug {
+            minifyEnabled false
+        }
+    }
+}
