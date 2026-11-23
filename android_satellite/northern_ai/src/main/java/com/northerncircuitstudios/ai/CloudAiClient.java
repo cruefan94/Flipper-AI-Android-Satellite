@@ -49,9 +49,10 @@ public final class CloudAiClient {
         CloudModePolicy.validateToken(token);
         JSONObject request = new JSONObject().put("message", prompt);
         byte[] body = request.toString().getBytes(StandardCharsets.UTF_8);
-        if (body.length > 1024) throw new IllegalArgumentException("Cloud request too large");
+        if (body.length > 8192) throw new IllegalArgumentException("Cloud request too large");
 
-        HttpsURLConnection connection = open("/ask");
+        final boolean extended = prompt.length() > CloudModePolicy.LEGACY_MAX_CLOUD_CHARS;
+        HttpsURLConnection connection = open(extended ? "/ask-v2" : "/ask");
         connection.setRequestMethod("POST");
         connection.setDoOutput(true);
         connection.setRequestProperty("Content-Type", "application/json");
@@ -64,6 +65,11 @@ public final class CloudAiClient {
             int status = connection.getResponseCode();
             if (status != 200) {
                 // Return fixed classifications; do not expose provider response bodies.
+                if (status == 404 && extended) throw new IllegalStateException(
+                    "Long cloud messages require the updated Cloudflare Worker. " +
+                    "The new /ask-v2 endpoint is not deployed yet; shorter requests still work.");
+                if (status == 400 && extended) throw new IllegalStateException(
+                    "Cloud Worker rejected this long message. Check /ask-v2 deployment.");
                 if (status == 401) throw new IllegalStateException(
                     "Cloud unauthorized (401). Check Worker DEVICE_TOKEN.");
                 if (status == 503) throw new IllegalStateException(
