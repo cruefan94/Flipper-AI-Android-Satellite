@@ -142,7 +142,7 @@ test("v2 rejects unauthorized users and excessive prompts before upstream", asyn
     assert.equal(res.status, 400);
     res = await call("/ask-v2", env.DEVICE_TOKEN, "😀".repeat(2000));
     assert.equal(res.status, 400);
-    res = await call("/ask-v2", env.DEVICE_TOKEN, "line\ninvalid");
+    res = await call("/ask-v2", env.DEVICE_TOKEN, "line" + String.fromCharCode(0) + "invalid");
     assert.equal(res.status, 400);
     res = await worker.fetch(new Request(base + "/ask-v2", {
       method: "POST",
