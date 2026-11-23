@@ -47,7 +47,7 @@ public final class AssistantActivity extends Activity {
     private static final int ACCENT = Color.rgb(65, 199, 186);
     private static final String SETUP_COMMAND =
         "llama-server -hf ggml-org/Qwen3.5-4B-GGUF:Q4_K_M " +
-        "--alias flipper-local --host 127.0.0.1 --port 9931 -c 2048 -t 4";
+        "--alias flipper-local --host 127.0.0.1 --port 9931 -c 2048 -t 4 --reasoning off";
     private static final String GUIDE_URL =
         "https://github.com/cruefan94/Flipper-AI-Android-Satellite/blob/" +
         "feature/northern-circuit-ai-profile-v01-20261122/" +
