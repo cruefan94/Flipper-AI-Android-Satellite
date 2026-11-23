@@ -58,7 +58,8 @@ public final class ConversationMemoryStore extends SQLiteOpenHelper {
 
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE turns (_id INTEGER PRIMARY KEY AUTOINCREMENT," +
-            " ts INTEGER NOT NULL, role TEXT NOT NULL, nonce BLOB NOT NULL, body BLOB NOT NULL)");
+            " ts INTEGER NOT NULL, session INTEGER NOT NULL DEFAULT 1," +
+            " role TEXT NOT NULL, nonce BLOB NOT NULL, body BLOB NOT NULL)");
         db.execSQL("CREATE TABLE facts (_id INTEGER PRIMARY KEY AUTOINCREMENT," +
             " ts INTEGER NOT NULL, nonce BLOB NOT NULL, body BLOB NOT NULL)");
         db.execSQL("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
@@ -112,12 +113,43 @@ public final class ConversationMemoryStore extends SQLiteOpenHelper {
             throw new IllegalStateException("Memory database must run on a background thread");
     }
 
+    private long activeSession(SQLiteDatabase db) {
+        try (Cursor c = db.rawQuery(
+            "SELECT value FROM meta WHERE key='active_session' LIMIT 1", null)) {
+            if (!c.moveToFirst()) return 1L;
+            try { return Math.max(1L, Long.parseLong(c.getString(0))); }
+            catch (NumberFormatException error) { return 1L; }
+        }
+    }
+
+    private void putSession(SQLiteDatabase db, long id) {
+        ContentValues values = new ContentValues();
+        values.put("key", "active_session");
+        values.put("value", Long.toString(id));
+        db.insertWithOnConflict("meta", null, values, SQLiteDatabase.CONFLICT_REPLACE);
+    }
+
+    /** Blank current chat, permanently preserve previous sessions for recall. */
+    public synchronized void startNewConversation() {
+        requireThread();
+        SQLiteDatabase db = getWritableDatabase();
+        db.beginTransaction();
+        try {
+            long current = activeSession(db);
+            if (current == Long.MAX_VALUE)
+                throw new IllegalStateException("Conversation ID limit reached.");
+            putSession(db, current + 1L);
+            db.setTransactionSuccessful();
+        } finally { db.endTransaction(); }
+    }
+
     private void insertTurn(SQLiteDatabase db, AssistantPolicy.Entry entry) throws Exception {
         if (!"user".equals(entry.role) && !"assistant".equals(entry.role))
             throw new IllegalArgumentException("Unsupported conversation role");
         ContentValues values = sealed(entry.text);
         values.put("ts", System.currentTimeMillis());
         values.put("role", entry.role);
+        values.put("session", activeSession(db));
         if (db.insertOrThrow("turns", null, values) < 1)
             throw new IllegalStateException("Failed to save conversation");
     }
@@ -152,7 +184,9 @@ public final class ConversationMemoryStore extends SQLiteOpenHelper {
         int count = Math.max(1, Math.min(30, maxCount));
         ArrayList<AssistantPolicy.Entry> out = new ArrayList<>();
         try (Cursor cursor = getReadableDatabase().rawQuery(
-                "SELECT role,nonce,body FROM turns ORDER BY _id DESC LIMIT " + count, null)) {
+                "SELECT role,nonce,body FROM turns WHERE session=" +
+                activeSession(getReadableDatabase()) +
+                " ORDER BY _id DESC LIMIT " + count, null)) {
             while (cursor.moveToNext())
                 out.add(new AssistantPolicy.Entry(cursor.getString(0), unseal(cursor,1,2)));
         }
@@ -210,6 +244,7 @@ public final class ConversationMemoryStore extends SQLiteOpenHelper {
         // Legacy source must also be erased or the database would reimport on reset.
         SQLiteDatabase db = getWritableDatabase();
         db.delete("turns",null,null);
+        putSession(db, 1L);
     }
 
     public synchronized void clearFacts() {
