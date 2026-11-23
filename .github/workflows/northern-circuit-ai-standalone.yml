@@ -1,0 +1,88 @@
+name: Northern Circuit AI — standalone Android S25 test APK
+
+on:
+  pull_request:
+    paths:
+      - 'android_satellite/northern_ai/**'
+      - 'android_satellite/settings.gradle'
+      - '.github/workflows/northern-circuit-ai-standalone.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: northern-ai-standalone-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-northern-ai:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Ensure Android SDK 35 installed
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Northern Circuit AI standalone JVM/source safety tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh android_satellite/northern_ai/tests/run_policy_tests.sh
+      - name: Assemble standalone Android APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle -p android_satellite --no-daemon --stacktrace \
+            -PnorthernAiVersionCode=${{ github.run_number }} :northern_ai:assembleDebug
+          APK="android_satellite/northern_ai/build/outputs/apk/debug/northern_ai-debug.apk"
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "name='com.northerncircuitstudios.ai'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-label:'Northern Circuit AI'"
+          SHORT_SHA="$(git rev-parse --short=8 HEAD)"
+          mkdir -p out
+          cp "$APK" "out/NorthernCircuitAI-S25-M1-run${{ github.run_number }}-${SHORT_SHA}-UNTESTED.apk"
+      - name: Record immutable source and APK integrity
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          (cd out && sha256sum *.apk > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+          python3 - <<'PY'
+          import json, os, pathlib, hashlib
+          apk = next(pathlib.Path('out').glob('*.apk'))
+          report = {
+              'source_sha': os.environ['EXPECTED_SHA'],
+              'apk_sha256': hashlib.sha256(apk.read_bytes()).hexdigest(),
+              'package_id': 'com.northerncircuitstudios.ai',
+              'model_weights_bundled': False,
+              'hardware_inference_verified': False,
+              'scope': 'source tests and independently-installable debug APK only',
+              'warning': 'Debug signing can change between CI runs; do not uninstall an existing app to force replacement.'
+          }
+          (pathlib.Path('out')/'BUILD_EVIDENCE.json').write_text(json.dumps(report, indent=2)+'\n')
+          PY
+      - name: Upload standalone AI APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NorthernCircuitAI-S25-M1-${{ github.run_number }}-${{ github.sha }}-UNTESTED
+          path: out/
+          if-no-files-found: error
+          retention-days: 14
