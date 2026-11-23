@@ -1,0 +1,42 @@
+name: Northern AI M6 S25 pinned native llama.cpp build probe
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/northern-ai-native-inference-m6-20261122
+    paths:
+      - 'devtools/northern_ai_m6/**'
+      - '.github/workflows/northern-ai-m6-native-s25.yml'
+      - 'docs/NORTHERN_CIRCUIT_AI_M6_NATIVE_INFERENCE_IMPLEMENTATION.md'
+permissions:
+  contents: read
+jobs:
+  s25-arm64-native-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: android-actions/setup-android@v4
+      - name: Install pinned Android NDK and Python CMake tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;29.0.13113456"
+          python3 -m venv "$RUNNER_TEMP/m6cmake"
+          "$RUNNER_TEMP/m6cmake/bin/pip" install --disable-pip-version-check cmake==3.31.6 ninja
+      - name: Compile pinned arm64 library (NOT an APK)
+        shell: bash
+        env:
+          ANDROID_NDK: ${{ env.ANDROID_SDK_ROOT }}/ndk/29.0.13113456
+        run: |
+          set -euo pipefail
+          export PATH="$RUNNER_TEMP/m6cmake/bin:$PATH"
+          export OUT_DIR="$GITHUB_WORKSPACE/out/native-s25"
+          bash devtools/northern_ai_m6/build_s25_llama.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NorthernAI-M6-S25-ARM64-PinnedNativeProbe-${{ github.sha }}-NOT-APP
+          path: out/native-s25/
+          if-no-files-found: error
+          retention-days: 14
