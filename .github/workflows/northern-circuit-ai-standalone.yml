@@ -1,4 +1,4 @@
-name: Northern Circuit AI — isolated S25 chat preview APK
+name: Northern Circuit AI — isolated S25 voice preview APK
 
 on:
   pull_request:
@@ -52,11 +52,11 @@ jobs:
           APK="android_satellite/northern_ai/build/outputs/apk/debug/northern_ai-debug.apk"
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "name='com.northerncircuitstudios.ai.chatpreview'"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-label:'Northern AI Chat Preview'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "name='com.northerncircuitstudios.ai.voicetest'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-label:'Northern AI Voice Test'"
           SHORT_SHA="$(git rev-parse --short=8 HEAD)"
           mkdir -p out
-          cp "$APK" "out/NorthernCircuitAI-S25-M3-ChatPreview-run${{ github.run_number }}-${SHORT_SHA}-UNTESTED.apk"
+          cp "$APK" "out/NorthernCircuitAI-S25-M4-VoiceTest-run${{ github.run_number }}-${SHORT_SHA}-UNTESTED.apk"
       - name: Record immutable source and APK integrity
         shell: bash
         env:
@@ -71,7 +71,7 @@ jobs:
           report = {
               'source_sha': os.environ['EXPECTED_SHA'],
               'apk_sha256': hashlib.sha256(apk.read_bytes()).hexdigest(),
-              'package_id': 'com.northerncircuitstudios.ai.cloudtest',
+              'package_id': 'com.northerncircuitstudios.ai.voicetest',
               'model_weights_bundled': False,
               'hardware_inference_verified': False,
               'scope': 'source tests and independently-installable debug APK only',
@@ -82,7 +82,7 @@ jobs:
       - name: Upload standalone AI APK
         uses: actions/upload-artifact@v4
         with:
-          name: NorthernCircuitAI-S25-M2-CloudTest-${{ github.run_number }}-${{ github.sha }}-UNTESTED
+          name: NorthernCircuitAI-S25-M4-VoiceTest-${{ github.run_number }}-${{ github.sha }}-UNTESTED
           path: out/
           if-no-files-found: error
           retention-days: 14

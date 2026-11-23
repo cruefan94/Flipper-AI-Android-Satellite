@@ -11,6 +11,11 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Build;
+import android.speech.tts.Voice;
+import android.widget.ArrayAdapter;
+import android.widget.SeekBar;
+import android.widget.Spinner;
+import java.util.Locale;
 import android.view.WindowInsets;
 import android.text.InputFilter;
 import android.text.TextUtils;
@@ -53,6 +58,10 @@ public final class AssistantActivity extends Activity {
     private CloudSettingsStore.Settings cloudSettings =
         new CloudSettingsStore.Settings(CloudModePolicy.Mode.OFFLINE, "");
     private Button modeButton;
+    private Button voiceAutoButton;
+    private Button voicePlayButton;
+    private VoiceSpeaker voiceSpeaker;
+    private VoiceSettings voiceSettings = new VoiceSettings(false, "", 1.0f, 1.0f);
     private final ArrayList<AssistantPolicy.Entry> history = new ArrayList<>();
     private TextView status;
     private LinearLayout chatMessages;
@@ -165,6 +174,22 @@ public final class AssistantActivity extends Activity {
         cloudSetup.setOnClickListener(v -> showCloudSetup());
         cloudTest.setOnClickListener(v -> testCloud());
 
+        LinearLayout voiceTools = new LinearLayout(this);
+        voiceTools.setOrientation(LinearLayout.HORIZONTAL);
+        voiceTools.setPadding(0, 0, 0, dp(9));
+        screen.addView(voiceTools);
+        voiceAutoButton = button("AUTO VOICE: OFF", PANEL);
+        Button voiceOptions = button("CHOOSE VOICE", PANEL);
+        voicePlayButton = button("READ LAST", PANEL);
+        for (Button control : new Button[]{voiceAutoButton, voiceOptions, voicePlayButton}) {
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(48), 1);
+            p.setMargins(dp(2), 0, dp(2), 0);
+            voiceTools.addView(control, p);
+        }
+        voiceAutoButton.setOnClickListener(v -> toggleAutoVoice());
+        voiceOptions.setOnClickListener(v -> showVoiceOptions());
+        voicePlayButton.setOnClickListener(v -> readLastOrStop());
+
         conversationScroll = new ScrollView(this);
         conversationScroll.setFillViewport(true);
         conversationScroll.setBackground(background(PANEL, 14));
@@ -205,6 +230,19 @@ public final class AssistantActivity extends Activity {
         sendParams.setMargins(dp(7), 0, 0, 0);
         composer.addView(send, sendParams);
         send.setOnClickListener(v -> ask());
+        voiceSettings = VoiceSettings.load(this);
+        updateVoiceButtons();
+        voiceSpeaker = new VoiceSpeaker(this, new VoiceSpeaker.Listener() {
+            @Override public void onAvailabilityChanged(boolean available) {
+                if (closing) return;
+                if (!available && voiceSettings.autoRead)
+                    setStatus("Install an on-device English voice in Android text-to-speech settings.");
+                updateVoiceButtons();
+            }
+            @Override public void onPlaybackChanged(boolean playing) {
+                if (!closing) updateVoiceButtons();
+            }
+        });
         worker.execute(() -> {
             try {
                 List<AssistantPolicy.Entry> previous = EncryptedChatStore.load(this);
@@ -386,6 +424,11 @@ public final class AssistantActivity extends Activity {
                 if (answer != null) {
                     history.add(new AssistantPolicy.Entry("assistant", answer));
                     setStatus("AI replied via " + finalSource + " • Encrypted local history");
+                    // Same on-device speech output works for OFFLINE, CLOUD and HYBRID.
+                    if (voiceSettings.autoRead && voiceSpeaker != null) {
+                        String voiceError = voiceSpeaker.speak(answer, voiceSettings);
+                        if (voiceError != null) setStatus("AI replied • Voice: " + voiceError);
+                    }
                 } else {
                     setStatus(problem == null ? "AI could not answer." : problem);
                 }
@@ -589,6 +632,162 @@ public final class AssistantActivity extends Activity {
             }).show();
     }
 
+    private void updateVoiceButtons() {
+        if (voiceAutoButton != null)
+            voiceAutoButton.setText(voiceSettings.autoRead ? "AUTO VOICE: ON" : "AUTO VOICE: OFF");
+        if (voicePlayButton != null)
+            voicePlayButton.setText(voiceSpeaker != null && voiceSpeaker.isPlaying()
+                ? "STOP VOICE" : "READ LAST");
+    }
+
+    private void toggleAutoVoice() {
+        if (closing) return;
+        if (!voiceSettings.autoRead &&
+            (voiceSpeaker == null || !voiceSpeaker.isReady())) {
+            setStatus("No on-device English voice available. Tap CHOOSE VOICE for instructions.");
+            return;
+        }
+        VoiceSettings updated = new VoiceSettings(!voiceSettings.autoRead,
+            voiceSettings.voiceName, voiceSettings.rate, voiceSettings.pitch);
+        try {
+            updated.save(this);
+            voiceSettings = updated;
+            if (!updated.autoRead && voiceSpeaker != null) voiceSpeaker.stop();
+            updateVoiceButtons();
+            setStatus(updated.autoRead
+                ? "Auto-read ON • Replies from local and cloud AI will be spoken."
+                : "Auto-read OFF • No automatic speech.");
+        } catch (Exception error) {
+            setStatus("Could not save voice preference.");
+        }
+    }
+
+    private void readLastOrStop() {
+        if (voiceSpeaker == null || closing) return;
+        if (voiceSpeaker.isPlaying()) {
+            voiceSpeaker.stop();
+            setStatus("Speech stopped.");
+            return;
+        }
+        String latest = null;
+        for (int i = history.size() - 1; i >= 0; i--) {
+            AssistantPolicy.Entry item = history.get(i);
+            if ("assistant".equals(item.role)) { latest = item.text; break; }
+        }
+        if (latest == null) {
+            setStatus("No AI response to read yet.");
+            return;
+        }
+        String error = voiceSpeaker.speak(latest, voiceSettings);
+        if (error != null) setStatus(error);
+        else setStatus("Reading the latest AI reply aloud on this phone.");
+    }
+
+    private void showVoiceOptions() {
+        if (closing) return;
+        if (voiceSpeaker == null || !voiceSpeaker.isReady()) {
+            new AlertDialog.Builder(this)
+                .setTitle("Install an on-device voice")
+                .setMessage("Northern Circuit AI uses Android's installed English text-to-speech voices. " +
+                    "Go to phone Settings and search for 'Text-to-speech', then install an " +
+                    "offline English voice. Return here and reopen CHOOSE VOICE. " +
+                    "No separate voice subscription or microphone permission is needed.")
+                .setPositiveButton("OK", null).show();
+            return;
+        }
+        final List<Voice> options = voiceSpeaker.availableVoices();
+        final ArrayList<String> names = new ArrayList<>();
+        int selectedIndex = 0;
+        String selectedName = voiceSpeaker.selectedVoiceName(voiceSettings);
+        for (int i = 0; i < options.size(); i++) {
+            Voice voice = options.get(i);
+            names.add(voice.getLocale().toLanguageTag() + "  •  " + voice.getName());
+            if (voice.getName().equals(selectedName)) selectedIndex = i;
+        }
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(17), dp(12), dp(17), dp(5));
+        scroll.addView(panel);
+        panel.addView(label("Choose one of your phone's installed on-device English voices. " +
+            "Available voices depend on the Android speech engine.", 13, TEXT, false));
+
+        Spinner picker = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(
+            this, android.R.layout.simple_spinner_dropdown_item, names);
+        picker.setAdapter(adapter);
+        picker.setSelection(selectedIndex);
+        panel.addView(picker, new LinearLayout.LayoutParams(-1, dp(55)));
+
+        TextView speedLabel = label("", 13, TEXT, true);
+        speedLabel.setPadding(0, dp(12), 0, 0);
+        panel.addView(speedLabel);
+        SeekBar speed = new SeekBar(this);
+        speed.setMax(16);
+        speed.setProgress(Math.round((voiceSettings.rate - 0.7f) * 20));
+        panel.addView(speed);
+
+        TextView pitchLabel = label("", 13, TEXT, true);
+        pitchLabel.setPadding(0, dp(9), 0, 0);
+        panel.addView(pitchLabel);
+        SeekBar pitch = new SeekBar(this);
+        pitch.setMax(16);
+        pitch.setProgress(Math.round((voiceSettings.pitch - 0.7f) * 20));
+        panel.addView(pitch);
+
+        updateVoiceSliders(speedLabel, speed, pitchLabel, pitch);
+        SeekBar.OnSeekBarChangeListener changes = new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar bar, int progress, boolean byUser) {
+                updateVoiceSliders(speedLabel, speed, pitchLabel, pitch);
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar) { }
+            @Override public void onStopTrackingTouch(SeekBar bar) { }
+        };
+        speed.setOnSeekBarChangeListener(changes);
+        pitch.setOnSeekBarChangeListener(changes);
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle("AI voice settings")
+            .setView(scroll)
+            .setNegativeButton("CANCEL", null)
+            .setNeutralButton("PREVIEW", null)
+            .setPositiveButton("SAVE", (dismiss, which) -> {
+                VoiceSettings next = selectedVoiceOptions(options, picker, speed, pitch);
+                try {
+                    next.save(this);
+                    voiceSettings = next;
+                    updateVoiceButtons();
+                    setStatus("Voice saved • Applies to both local and cloud AI.");
+                } catch (Exception error) {
+                    setStatus("Could not save the selected speech voice.");
+                }
+            })
+            .create();
+        dialog.setOnShowListener(shown ->
+            dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                VoiceSettings preview = selectedVoiceOptions(options, picker, speed, pitch);
+                String error = voiceSpeaker.speak(
+                    "Hello. I am Northern Circuit AI, your personal assistant.", preview);
+                if (error != null) setStatus(error);
+            }));
+        dialog.show();
+    }
+
+    private VoiceSettings selectedVoiceOptions(List<Voice> voices, Spinner picker,
+            SeekBar speed, SeekBar pitch) {
+        int index = Math.max(0, Math.min(voices.size() - 1, picker.getSelectedItemPosition()));
+        return new VoiceSettings(voiceSettings.autoRead, voices.get(index).getName(),
+            0.7f + speed.getProgress() / 20f, 0.7f + pitch.getProgress() / 20f);
+    }
+
+    private void updateVoiceSliders(TextView speedLabel, SeekBar speed,
+            TextView pitchLabel, SeekBar pitch) {
+        speedLabel.setText(String.format(Locale.US, "Speaking speed: %.2fx",
+            0.7f + speed.getProgress() / 20f));
+        pitchLabel.setText(String.format(Locale.US, "Pitch: %.2fx",
+            0.7f + pitch.getProgress() / 20f));
+    }
+
     private void confirmClear() {
         if (busy || closing) return;
         new AlertDialog.Builder(this)
@@ -604,6 +803,7 @@ public final class AssistantActivity extends Activity {
                         EncryptedChatStore.clear(this);
                         runOnUiThread(() -> {
                             if (closing) return;
+                            if (voiceSpeaker != null) voiceSpeaker.stop();
                             history.clear();
                             renderHistory();
                             setStatus("Encrypted chat cleared • " + cloudSettings.mode.name());
@@ -628,7 +828,7 @@ public final class AssistantActivity extends Activity {
             .setMessage("1. Install official Termux and its llama.cpp package.\n" +
                 "2. Copy the start command and paste it into Termux.\n" +
                 "3. Keep Termux running while chatting.\n" +
-                "4. Return here and tap CHECK AI.\n\n" +
+                "4. Return here and tap CHECK LOCAL.\n\n" +
                 "Default: Qwen3.5-4B Q4; RAM Plus testing starts at 8 GB.\n\n" +
                 SETUP_COMMAND)
             .setNegativeButton("CLOSE", null)
@@ -649,6 +849,7 @@ public final class AssistantActivity extends Activity {
         ++generation;
         client.cancel();
         cloudClient.cancel();
+        if (voiceSpeaker != null) voiceSpeaker.shutdown();
         worker.shutdownNow();
         super.onDestroy();
     }
