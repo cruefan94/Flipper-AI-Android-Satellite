@@ -55,7 +55,8 @@ public final class AssistantActivity extends Activity {
     private Button modeButton;
     private final ArrayList<AssistantPolicy.Entry> history = new ArrayList<>();
     private TextView status;
-    private TextView transcript;
+    private LinearLayout chatMessages;
+    private TextView tagline;
     private EditText input;
     private Button send;
     private ScrollView conversationScroll;
@@ -123,7 +124,7 @@ public final class AssistantActivity extends Activity {
         }
 
         screen.addView(label("NORTHERN CIRCUIT AI", 24, TEXT, true));
-        TextView tagline = label("YOUR PRIVATE, LOCAL AI  •  GALAXY S25", 11, ACCENT, true);
+        tagline = label("PRIVATE ON-DEVICE AI  •  GALAXY S25", 11, ACCENT, true);
         tagline.setPadding(0, dp(4), 0, dp(9));
         screen.addView(tagline);
         status = label("Loading encrypted conversation…", 12, MUTED, false);
@@ -167,12 +168,11 @@ public final class AssistantActivity extends Activity {
         conversationScroll = new ScrollView(this);
         conversationScroll.setFillViewport(true);
         conversationScroll.setBackground(background(PANEL, 14));
-        transcript = label("Your conversations stay on this device.\n\n" +
-            "Start the local model in Termux, then ask me anything.", 15, TEXT, false);
-        transcript.setPadding(dp(15), dp(16), dp(15), dp(16));
-        transcript.setLineSpacing(dp(4), 1.02f);
-        transcript.setTextIsSelectable(true);
-        conversationScroll.addView(transcript);
+        chatMessages = new LinearLayout(this);
+        chatMessages.setOrientation(LinearLayout.VERTICAL);
+        chatMessages.setPadding(dp(10), dp(10), dp(10), dp(10));
+        conversationScroll.addView(chatMessages);
+        renderHistory();
         LinearLayout.LayoutParams logParams = new LinearLayout.LayoutParams(-1, 0, 1);
         logParams.setMargins(0, 0, 0, dp(10));
         screen.addView(conversationScroll, logParams);
@@ -247,18 +247,43 @@ public final class AssistantActivity extends Activity {
     }
 
     private void renderHistory() {
+        if (chatMessages == null) return;
+        chatMessages.removeAllViews();
         if (history.isEmpty()) {
-            transcript.setText("Your conversations stay on this device.\n\n" +
-                "Start the local model in Termux, then ask me anything.");
+            TextView placeholder = label(
+                "Your encrypted conversations are stored on this phone.\n\n" +
+                "Choose OFFLINE for a local model or CLOUD for your Gemini Worker.",
+                15, TEXT, false);
+            placeholder.setPadding(dp(8), dp(10), dp(8), dp(10));
+            chatMessages.addView(placeholder);
             return;
         }
-        StringBuilder out = new StringBuilder();
-        for (AssistantPolicy.Entry item : history) {
-            out.append("user".equals(item.role) ? "YOU" : "NORTHERN CIRCUIT AI");
-            out.append("\n").append(item.text).append("\n\n");
+        for (AssistantPolicy.Entry entry : history) {
+            boolean isUser = "user".equals(entry.role);
+            LinearLayout messageGroup = new LinearLayout(this);
+            messageGroup.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams groupLayout =
+                new LinearLayout.LayoutParams(-1, -2);
+            groupLayout.setMargins(dp(3), dp(5), dp(3), dp(9));
+            chatMessages.addView(messageGroup, groupLayout);
+
+            TextView role = label(isUser ? "YOU" : "NORTHERN CIRCUIT AI",
+                11, isUser ? ACCENT : MUTED, true);
+            role.setPadding(dp(8), 0, 0, dp(5));
+            messageGroup.addView(role);
+
+            TextView message = label("", 15, TEXT, false);
+            message.setText(ChatMarkdown.render(entry.text));
+            message.setLineSpacing(dp(4), 1.06f);
+            message.setPadding(dp(13), dp(13), dp(13), dp(13));
+            message.setBackground(background(
+                isUser ? Color.rgb(32, 57, 73) : Color.rgb(32, 43, 63), 11));
+            message.setTextIsSelectable(true);
+            messageGroup.addView(message, new LinearLayout.LayoutParams(-1, -2));
         }
-        transcript.setText(out.toString());
-        conversationScroll.post(() -> conversationScroll.fullScroll(View.FOCUS_DOWN));
+        conversationScroll.post(() -> {
+            if (!closing) conversationScroll.fullScroll(View.FOCUS_DOWN);
+        });
     }
 
     private void checkServer() {
@@ -275,7 +300,7 @@ public final class AssistantActivity extends Activity {
                 if (closing) return;
                 setStatus(available
                     ? "Local server reachable. Send a question to verify model answers."
-                    : "Local server unavailable. Tap SETUP to start Qwen3.5 in Termux.");
+                    : "Local server unavailable. Tap LOCAL SETUP to start Qwen3.5 in Termux.");
                 busy = false;
                 send.setEnabled(true);
             });
@@ -374,6 +399,14 @@ public final class AssistantActivity extends Activity {
     private void updateModeButton() {
         if (modeButton != null)
             modeButton.setText("MODE: " + cloudSettings.mode.name());
+        if (tagline != null) {
+            String message = cloudSettings.mode == CloudModePolicy.Mode.OFFLINE
+                ? "PRIVATE ON-DEVICE AI  •  GALAXY S25"
+                : cloudSettings.mode == CloudModePolicy.Mode.CLOUD
+                    ? "GEMINI CLOUD AI  •  REQUESTS SENT ONLINE"
+                    : "LOCAL FIRST  •  CLOUD FALLBACK ENABLED";
+            tagline.setText(message);
+        }
     }
 
     private void saveMode(CloudModePolicy.Mode next) {
