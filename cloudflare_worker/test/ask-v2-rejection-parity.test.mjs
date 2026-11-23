@@ -61,7 +61,7 @@ test("both endpoints reject malformed JSON and reject oversized byte bodies befo
 test("v2 does not relax legacy validation of empty and control-character prompts", async () => {
   await withForbiddenProvider(async () => {
     for (const path of paths) {
-      for (const message of ["", "   ", "a\\u0000b", "a\\u001fb"]) {
+      for (const message of ["", "   ", "a\u0000b", "a\u001fb"]) {
         const response = await worker.fetch(post(path, JSON.stringify({ message })), env);
         assert.equal(response.status, 400, path + " should reject invalid prompt");
         assert.deepEqual(await response.json(), { error: "invalid_message" });
