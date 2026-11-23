@@ -1,7 +1,7 @@
 # Northern Circuit AI — Galaxy S25 offline models (development)
 
 ## Hardware direction (owner's current phone)
-- Primary phone: Samsung Galaxy S25 (Canadian SM-S931W; 12 GB RAM class).
+- Primary phone: Samsung Galaxy S25 (Canadian SM-S931W; 12 GB physical RAM class).\n- RAM Plus is enabled/configurable up to 8 GB on this phone. It uses storage-backed virtual memory, **not 8 GB additional physical RAM**. Do not count it as fast model RAM or use it to justify loading a much larger model; monitor Android memory pressure and thermals.
 - Start with **Qwen3.5-4B Q4_K_M GGUF** (approx. 2.7–3.0 GB for weights). The GGUF runtime also needs RAM for KV cache, Android and app processes.
 - If too slow, unstable, or memory-constrained, use **Qwen3.5-2B Q4_K_M** (approx. 1.3–1.5 GB).
 - Keep the already installed Qwen3-0.6B LiteRT as backup. **Do not import GGUF as .litertlm.**
