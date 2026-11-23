@@ -1116,7 +1116,7 @@ public final class AssistantActivity extends Activity {
             .setTitle("Delete every pinned memory?")
             .setMessage("This permanently deletes the separately saved facts. " +
                 "The conversation archive will remain. To erase that as well, " +
-                "use CLEAR CHAT under SETTINGS.")
+                "use DELETE ALL CONVERSATIONS under SETTINGS.")
             .setNegativeButton("KEEP", null)
             .setPositiveButton("DELETE FACTS", (d,which) -> worker.execute(() -> {
                 boolean okay = true;
@@ -1133,19 +1133,51 @@ public final class AssistantActivity extends Activity {
     private void showSettingsCenter() {
         if (closing) return;
         String[] actions = {
-            "MEMORY BANK", "CHECK LOCAL", "LOCAL SETUP", "CLOUD SETUP", "TEST CLOUD", "CLEAR CHAT"
+            "MEMORY BANK", "NEW CHAT (KEEP MEMORY)", "CHECK LOCAL", "LOCAL SETUP", "CLOUD SETUP", "TEST CLOUD", "DELETE ALL CONVERSATIONS"
         };
         new AlertDialog.Builder(this)
             .setTitle("Assistant settings")
             .setItems(actions, (dialog, index) -> {
                 if (index == 0) showMemoryCenter();
-                else if (index == 1) checkServer();
-                else if (index == 2) showSetup();
-                else if (index == 3) showCloudSetup();
-                else if (index == 4) testCloud();
+                else if (index == 1) startNewChat();
+                else if (index == 2) checkServer();
+                else if (index == 3) showSetup();
+                else if (index == 4) showCloudSetup();
+                else if (index == 5) testCloud();
                 else confirmClear();
             })
             .setNegativeButton("CLOSE", null).show();
+    }
+
+    private void startNewChat() {
+        if (busy || closing) return;
+        new AlertDialog.Builder(this)
+            .setTitle("Start a new conversation?")
+            .setMessage("The visible chat will start fresh, but all earlier " +
+                "conversations and saved facts stay encrypted in the Memory Bank " +
+                "and remain available for recall.")
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("NEW CHAT", (dialog, which) -> {
+                busy = true;
+                send.setEnabled(false);
+                worker.execute(() -> {
+                    String error = null;
+                    try { memoryStore.startNewConversation(); }
+                    catch (Exception ex) { error = "Could not start a new conversation."; }
+                    final String problem = error;
+                    runOnUiThread(() -> {
+                        if (closing) return;
+                        if (problem == null) {
+                            if (voiceSpeaker != null) voiceSpeaker.stop();
+                            history.clear();
+                            renderHistory();
+                            setStatus("New chat started • Earlier conversations preserved");
+                        } else setStatus(problem);
+                        busy = false;
+                        send.setEnabled(true);
+                    });
+                });
+            }).show();
     }
 
     private void confirmClear() {
