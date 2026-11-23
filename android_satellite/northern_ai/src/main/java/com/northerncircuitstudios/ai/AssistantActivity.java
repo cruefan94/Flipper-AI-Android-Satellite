@@ -10,6 +10,8 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.view.WindowInsets;
 import android.text.InputFilter;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -99,6 +101,22 @@ public final class AssistantActivity extends Activity {
         screen.setPadding(dp(14), dp(16), dp(14), dp(12));
         screen.setBackgroundColor(BG);
         setContentView(screen);
+        // Android 15+ enforces edge-to-edge at targetSdk 35. Own the system
+        // bars and keyboard insets to keep chat and SEND visible on the S25.
+        if (Build.VERSION.SDK_INT >= 30) {
+            getWindow().setDecorFitsSystemWindows(false);
+            screen.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(
+                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                android.graphics.Insets keyboard = insets.getInsets(WindowInsets.Type.ime());
+                int top = dp(16) + Math.max(0, bars.top);
+                int bottom = dp(12) + Math.max(bars.bottom, keyboard.bottom);
+                if (view.getPaddingTop() != top || view.getPaddingBottom() != bottom)
+                    view.setPadding(dp(14), top, dp(14), bottom);
+                return insets;
+            });
+            screen.requestApplyInsets();
+        }
 
         screen.addView(label("NORTHERN CIRCUIT AI", 24, TEXT, true));
         TextView tagline = label("YOUR PRIVATE, LOCAL AI  •  GALAXY S25", 11, ACCENT, true);
