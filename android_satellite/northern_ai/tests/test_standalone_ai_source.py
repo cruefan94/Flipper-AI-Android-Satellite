@@ -20,6 +20,15 @@ class StandaloneAiSourceTest(unittest.TestCase):
         self.assertIn('android:label="Northern Circuit AI"', MANIFEST)
         self.assertNotIn("com.flipperai.satellite", MANIFEST)
 
+    def test_launcher_uses_actual_company_emblem(self):
+        icon = ROOT / "src/main/res/drawable-nodpi/northern_circuit_company_logo.webp"
+        self.assertTrue(icon.is_file(), "The original company emblem must be packaged")
+        header = icon.read_bytes()[:16]
+        self.assertEqual(header[:4], b"RIFF")
+        self.assertEqual(header[8:12], b"WEBP")
+        self.assertIn('android:icon="@drawable/northern_circuit_company_logo"', MANIFEST)
+        self.assertIn('android:roundIcon="@drawable/northern_circuit_company_logo"', MANIFEST)
+
     def test_no_spurious_permissions_or_cloud(self):
         self.assertIn("android.permission.INTERNET", MANIFEST)
         for permission in ("BLUETOOTH", "RECORD_AUDIO", "LOCATION",
