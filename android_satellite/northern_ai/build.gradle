@@ -13,7 +13,7 @@ android {
         minSdk 26
         targetSdk 35
         versionCode northernVersionCode
-        versionName '0.2.0-cloudtest'
+        versionName '0.2.1-chatpreview'
         manifestPlaceholders = [northernAiAppLabel: 'Northern Circuit AI']
     }
     compileOptions {
@@ -22,8 +22,8 @@ android {
     }
     buildTypes {
         debug {
-            applicationIdSuffix '.cloudtest'
-            manifestPlaceholders = [northernAiAppLabel: 'Northern AI Cloud Test']
+            applicationIdSuffix '.chatpreview'
+            manifestPlaceholders = [northernAiAppLabel: 'Northern AI Chat Preview']
             minifyEnabled false
         }
     }
