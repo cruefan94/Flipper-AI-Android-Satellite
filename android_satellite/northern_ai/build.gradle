@@ -13,7 +13,7 @@ android {
         minSdk 26
         targetSdk 35
         versionCode northernVersionCode
-        versionName '0.4.0-modelhub'
+        versionName '0.5.0-s25-preview'
         manifestPlaceholders = [northernAiAppLabel: 'Northern Circuit AI']
     }
     compileOptions {
@@ -22,8 +22,8 @@ android {
     }
     buildTypes {
         debug {
-            applicationIdSuffix '.modelhub'
-            manifestPlaceholders = [northernAiAppLabel: 'Northern AI Model Hub']
+            applicationIdSuffix '.m6preview'
+            manifestPlaceholders = [northernAiAppLabel: 'Northern AI S25 Preview']
             minifyEnabled false
         }
     }
