@@ -17,6 +17,7 @@
         android:networkSecurityConfig="@xml/loopback_security"
         android:allowBackup="false"
         android:supportsRtl="true">
+        <activity android:name=".ModelsActivity" android:exported="false"/>
         <activity android:name=".AssistantActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
