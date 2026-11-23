@@ -4,6 +4,15 @@ This branch extends the independent Android Northern Circuit AI APK from PR #134
 It does not modify or merge the existing Flipper Satellite, Momentum firmware,
 Cloudflare Worker, its live configuration, or any private API secrets.
 
+## Side-by-side safety
+The isolated debug trial is packaged as
+`com.northerncircuitstudios.ai.cloudtest` and labelled
+**Northern AI Cloud Test**, so it can be installed alongside the existing
+`com.northerncircuitstudios.ai` M1 APK even if GitHub's temporary debug
+signing key differs. The two apps intentionally have separate, private
+credentials and chat history. No production app overwrite or data migration
+is claimed. This suffix is for the experimental debug build only.
+
 ## New app controls
 - **CHECK LOCAL** — checks the local llama.cpp endpoint only.
 - **LOCAL SETUP** — displays the Termux model launch command and setup guide.
