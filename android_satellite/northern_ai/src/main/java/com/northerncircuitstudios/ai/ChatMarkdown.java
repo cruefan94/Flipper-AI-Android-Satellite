@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
  */
 public final class ChatMarkdown {
     private static final Pattern BOLD = Pattern.compile("\\*\\*([^*\\n]+)\\*\\*");
-    private static final Pattern CODE = Pattern.compile("\x60([^\x60\\n]+)\x60");
+    private static final Pattern CODE = Pattern.compile("`([^`\\n]+)`");
     private static final Pattern ITALIC =
         Pattern.compile("(?<!\\*)\\*([^*\\n]+)\\*(?!\\*)");
 
