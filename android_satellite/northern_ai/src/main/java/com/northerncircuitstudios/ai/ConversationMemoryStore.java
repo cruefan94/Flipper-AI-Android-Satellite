@@ -188,6 +188,17 @@ public final class ConversationMemoryStore extends SQLiteOpenHelper {
         return out;
     }
 
+    public synchronized void editFact(long id, String value) throws Exception {
+        requireThread();
+        String text = value == null ? "" : value.trim();
+        if (text.isEmpty() || text.length() > MAX_FACT)
+            throw new IllegalArgumentException("Memory must contain 1–1200 characters.");
+        ContentValues encrypted = sealed(text);
+        if (getWritableDatabase().update("facts", encrypted, "_id=?",
+            new String[]{Long.toString(id)}) != 1)
+            throw new IllegalStateException("Memory entry no longer exists.");
+    }
+
     public synchronized boolean forget(long id) {
         requireThread();
         return getWritableDatabase().delete("facts","_id=?",
@@ -232,6 +243,7 @@ public final class ConversationMemoryStore extends SQLiteOpenHelper {
             while (c.moveToNext()) {
                 if (Thread.currentThread().isInterrupted()) return Collections.emptyList();
                 String old = unseal(c,3,4);
+                if ("user".equals(c.getString(2)) && old.equals(question)) continue;
                 String plain = old.toLowerCase(Locale.ROOT);
                 int score = 0;
                 for (String term : terms) if (plain.contains(term)) score++;
