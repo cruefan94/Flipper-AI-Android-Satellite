@@ -19,6 +19,7 @@ class EmbeddedLlmEngine(private val cacheDirectory: String) : InferenceRouter.Of
     private var selectedPath: String? = null
     private var engine: Engine? = null
     private var conversation: Conversation? = null
+    private var needsProfile = true
 
     @Synchronized
     fun configure(path: String) {
@@ -65,18 +66,22 @@ class EmbeddedLlmEngine(private val cacheDirectory: String) : InferenceRouter.Of
                 val newConversation = candidate.createConversation()
                 engine = candidate
                 conversation = newConversation
+                needsProfile = true
             } catch (t: Throwable) {
                 candidate.close()
                 throw t
             }
         }
-        val reply = checkNotNull(conversation).sendMessage(prompt).toString().trim()
+        val request = if (needsProfile) NorthernCircuitAiProfile.firstOfflineTurn(prompt) else prompt
+        val reply = checkNotNull(conversation).sendMessage(request).toString().trim()
         if (reply.isEmpty()) throw IllegalStateException("Embedded offline model returned no text")
+        needsProfile = false
         return reply
     }
 
     // Must be called on inferenceWorker if inference might be running.
     private fun releaseLoaded() {
+        needsProfile = true
         val oldConversation = conversation
         conversation = null
         val oldEngine = engine

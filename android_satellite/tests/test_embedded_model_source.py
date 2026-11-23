@@ -20,7 +20,9 @@ class EmbeddedModelSourceTests(unittest.TestCase):
         self.assertIn("new EmbeddedLlmEngine(",UI)
         self.assertIn("EngineConfig(",ENGINE)
         self.assertIn("candidate.initialize()",ENGINE)
-        self.assertIn("sendMessage(prompt)",ENGINE)
+        self.assertIn("sendMessage(request)",ENGINE)
+        self.assertIn("NorthernCircuitAiProfile.firstOfflineTurn(prompt)",ENGINE)
+        self.assertIn("needsProfile = false",ENGINE)
 
     def test_model_weights_are_imported_not_bundled(self):
         self.assertIn("Intent.ACTION_OPEN_DOCUMENT",MODELS)
