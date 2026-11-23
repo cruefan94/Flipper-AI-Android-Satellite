@@ -1,5 +1,6 @@
 // HTTPS-only Gemini proxy for the Flipper AI Android Satellite.
-// Contract: POST /ask, X-Device-Token header, {"message":"..."}, {"reply":"..."}.
+// Contract: POST /ask (legacy 127 chars), POST /ask-v2 (up to 1600 chars).
+// Both use X-Device-Token and {"message":"..."} -> {"reply":"..."}.
 // No API credentials, prompts, or device tokens are logged or stored.
 
 const HEADERS = {
@@ -64,7 +65,9 @@ export default {
     if (url.pathname === "/health" && request.method === "GET") {
       return respond(200, { ok: true, service: "flipper-ai-satellite" });
     }
-    if (url.pathname !== "/ask" || url.search) {
+    const legacy = url.pathname === "/ask";
+    const v2 = url.pathname === "/ask-v2";
+    if ((!legacy && !v2) || url.search) {
       return respond(404, { error: "not_found" });
     }
     if (request.method !== "POST") {
@@ -91,7 +94,7 @@ export default {
 
     let payload;
     try {
-      payload = JSON.parse(await readLimitedBody(request, 1024));
+      payload = JSON.parse(await readLimitedBody(request, v2 ? 8192 : 1024));
     } catch {
       return respond(400, { error: "invalid_json_or_oversized_body" });
     }
@@ -99,7 +102,7 @@ export default {
     if (
       typeof message !== "string" ||
       message.length < 1 ||
-      message.length > 127 ||
+      message.length > (v2 ? 1600 : 127) ||
       !message.trim() ||
       /[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(message)
     ) {

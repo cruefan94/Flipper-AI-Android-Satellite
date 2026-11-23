@@ -104,3 +104,69 @@ test("model access and credential errors are classified without leaking provider
     }
   } finally { globalThis.fetch = original; }
 });
+
+
+test("v2 accepts 1600-character UTF-8 messages without changing legacy /ask", async () => {
+  const original = globalThis.fetch;
+  const longPrompt = "Company background: " + "a".repeat(1600 - "Company background: ".length);
+  let captured = null;
+  globalThis.fetch = async (url, options) => {
+    captured = JSON.parse(options.body).contents[0].parts[0].text;
+    return new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: "Brand understood for this request." }] } }],
+    }), { status: 200 });
+  };
+  try {
+    const legacy = await call("/ask", env.DEVICE_TOKEN, longPrompt);
+    assert.equal(legacy.status, 400, "old Android clients keep 127-character limit");
+    assert.equal(captured, null, "legacy rejection must not invoke provider");
+    const response = await call("/ask-v2", env.DEVICE_TOKEN, longPrompt);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { reply: "Brand understood for this request." });
+    assert.equal(captured, longPrompt, "entire prompt must arrive without truncation");
+    const emoji = "😀".repeat(800);
+    const validUnicode = await call("/ask-v2", env.DEVICE_TOKEN, emoji);
+    assert.equal(validUnicode.status, 200, "1600 UTF-16 units should fit the safe byte budget");
+    assert.equal(captured, emoji);
+  } finally { globalThis.fetch = original; }
+});
+
+test("v2 rejects unauthorized users and excessive prompts before upstream", async () => {
+  const original = globalThis.fetch;
+  let upstreamCalled = false;
+  globalThis.fetch = async () => { upstreamCalled = true; throw new Error("must never fetch"); };
+  try {
+    let res = await call("/ask-v2", "invalid-device-token", "x".repeat(1500));
+    assert.equal(res.status, 401);
+    res = await call("/ask-v2", env.DEVICE_TOKEN, "x".repeat(1601));
+    assert.equal(res.status, 400);
+    res = await call("/ask-v2", env.DEVICE_TOKEN, "😀".repeat(2000));
+    assert.equal(res.status, 400);
+    res = await call("/ask-v2", env.DEVICE_TOKEN, "line" + String.fromCharCode(0) + "invalid");
+    assert.equal(res.status, 400);
+    res = await worker.fetch(new Request(base + "/ask-v2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Device-Token": env.DEVICE_TOKEN },
+      body: "{" + "a".repeat(9000) + "}",
+    }), env);
+    assert.equal(res.status, 400);
+    assert.equal(upstreamCalled, false);
+  } finally { globalThis.fetch = original; }
+});
+
+test("v2 maintains explicit method and content-type boundaries", async () => {
+  const method = await worker.fetch(new Request(base + "/ask-v2", {
+    method: "GET",
+  }), env);
+  assert.equal(method.status, 405);
+  const query = await worker.fetch(new Request(base + "/ask-v2?token=bad", {
+    method: "POST",
+  }), env);
+  assert.equal(query.status, 404);
+  const invalidType = await worker.fetch(new Request(base + "/ask-v2", {
+    method: "POST",
+    headers: { "Content-Type": "text/plain", "X-Device-Token": env.DEVICE_TOKEN },
+    body: "hello",
+  }), env);
+  assert.equal(invalidType.status, 415);
+});

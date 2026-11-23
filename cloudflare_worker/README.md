@@ -7,7 +7,8 @@ Secure, opt-in online Gemini bridge for the Android AI Satellite. This is a **se
 - HTTPS `POST https://flipper-ai-satellite.guichet-chris94.workers.dev/ask`
 - Header `X-Device-Token: <your secret token>`
 - Header `Content-Type: application/json`
-- Request: `{"message":"Hello"}` (1–127 UTF-16 code units)
+- Legacy `POST /ask`: `{"message":"Hello"}` (1–127 UTF-16 code units), unchanged for existing Flipper and Android Satellite clients
+- Extended `POST /ask-v2`: same body and device-token authorization, up to 1600 UTF-16 code units, with an 8192-byte total JSON request cap. Used by Northern Circuit AI S25 only for messages beyond 127 characters
 - Successful response: `{"reply":"Hello!"}` (less than Android's 4096-byte response limit)
 - Health check: `GET /health` (does not test the Gemini API)
 
@@ -38,3 +39,9 @@ After selecting GitHub `main`, enabling builds, and setting `cloudflare_worker` 
 ## Git-connected deployment trigger
 
 Cloudflare Git integration starts observing new commits after the repository and production branch are connected. If an earlier commit already passed GitHub Actions before the Cloudflare connection was saved, that GitHub check alone will not confirm a Worker deployment. A documentation-only commit under `cloudflare_worker/` can trigger the newly configured deployment without changing the Worker code. Confirm the resulting build and deployed commit in Cloudflare **Workers & Pages → flipper-ai-satellite → Deployments / Builds**. The runtime secrets `DEVICE_TOKEN` and `GEMINI_API_KEY` must still be configured separately before live Gemini replies will work.
+
+
+## Long-prompt rollout safety
+The new `/ask-v2` endpoint is source code only until **this Worker version is deployed by the Cloudflare account owner**. A GitHub pull request or CI success does not update `flipper-ai-satellite.guichet-chris94.workers.dev` automatically unless the user's verified Cloudflare build configuration explicitly deploys that branch. Existing `/ask` must continue to work for older clients. Test both: an authenticated short legacy prompt and an authenticated 200–500-character v2 request. Confirm that invalid tokens are rejected before any provider call. Do not publish the DEVICE_TOKEN or GEMINI_API_KEY.
+
+The endpoint sends a single message to Gemini; it does **not** provide training, persistent memory, automatic upload of previous chats, or personalized model weights. Future memory needs an explicitly user-approved private data store and user-controlled deletion. Long messages can incur Gemini token usage or cost and remain subject to provider quotas.
