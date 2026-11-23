@@ -1,6 +1,13 @@
 # Northern Circuit AI — M6 Native GGUF Inference (Termux-free)
 Created 2026-11-22; source planning baseline: M5 commit add5891b6810e14c5d6fc221d5cc77fc7def9f78.
 
+## Device lock: GALAXY S25 ONLY (owner approved)
+- First native inference target: Samsung Galaxy S25, 64-bit ARM (arm64-v8a), Android 17 on user's current test phone.
+- Native Android minimum SDK 33 (Android 13+) is acceptable for this isolated S25 experiment. Do not broaden support or spend time supporting older Android devices at this stage.
+- Keep a separate M6 development branch and test application identity; do not touch the installed M4 voice/M5 model/cloud baselines or the separate Flipper AI Satellite APK.
+- No Termux dependence is permitted in the final M6 OFFLINE path, but retain the known-good Termux build as a fallback during development.
+- Primary model Qwen3.5-4B Q4_K_M, with smaller 0.6B smoke test before moving to 2B/4B; model weights stay separately downloaded by the owner.
+
 ## Goal
 One self-contained Android application on the owner's Galaxy S25 that downloads/imports GGUF files, loads an offline model, generates and streams responses, switches models, stops/unloads inference, and optionally uses Cloud/Hybrid, without requiring Termux, root, a localhost HTTP server, or a separate inference app.
 
