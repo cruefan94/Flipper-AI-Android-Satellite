@@ -16,8 +16,8 @@ MANIFEST = (ROOT / "src/main/AndroidManifest.xml").read_text()
 
 class S25M6SourceTests(unittest.TestCase):
     def test_separate_s25_preview_identity(self):
-        self.assertIn("applicationIdSuffix '.m6preview'", GRADLE)
-        self.assertIn("'Northern AI S25 Preview'", GRADLE)
+        self.assertIn("applicationIdSuffix '.m7memory'", GRADLE)
+        self.assertIn("'Northern AI Memory Test'", GRADLE)
         self.assertIn('android:screenOrientation="portrait"', MANIFEST)
 
     def test_multiple_user_selected_models_no_broad_storage_permission(self):
