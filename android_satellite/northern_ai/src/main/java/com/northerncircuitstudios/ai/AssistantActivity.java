@@ -863,6 +863,11 @@ public final class AssistantActivity extends Activity {
             }).show();
     }
 
+    @Override protected void onResume() {
+        super.onResume();
+        updateModeButton();
+    }
+
     @Override protected void onDestroy() {
         closing = true;
         ++generation;
