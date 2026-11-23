@@ -13,7 +13,7 @@ class CloudExtendedPromptSourceTests(unittest.TestCase):
         self.assertIn("LEGACY_MAX_CLOUD_CHARS = 127", POLICY)
         self.assertIn("MAX_CLOUD_CHARS = 1600", POLICY)
         self.assertIn('open(extended ? "/ask-v2" : "/ask")', CLIENT)
-        self.assertIn('prompt.length() > CloudModePolicy.LEGACY_MAX_CLOUD_CHARS', CLIENT)
+        self.assertIn('text.length() > CloudModePolicy.LEGACY_MAX_CLOUD_CHARS', CLIENT)
 
     def test_errors_explain_deployment_not_repeated_retries(self):
         self.assertIn('if (status == 404 && extended)', CLIENT)
@@ -25,7 +25,7 @@ class CloudExtendedPromptSourceTests(unittest.TestCase):
         self.assertIn('CloudModePolicy.validateToken(token)', CLIENT)
         self.assertIn('CloudModePolicy.validateCloudPrompt(prompt)', CLIENT)
         self.assertIn('connection.setRequestProperty("X-Device-Token", token)', CLIENT)
-        self.assertIn('cloudClient.reply(question, token)', ACTIVITY)
+        self.assertIn('cloudClient.reply(question, token, allowedCloudMemory)', ACTIVITY)
         self.assertIn('CloudModePolicy.Mode.OFFLINE', ACTIVITY)
 
 if __name__ == "__main__":
