@@ -37,6 +37,15 @@ class ConversationMemoryRegressionTest(unittest.TestCase):
         self.assertIn('db.beginTransaction()', DB)
         self.assertIn("db.setTransactionSuccessful()", DB)
 
+    def test_new_chat_keeps_old_conversations(self):
+        self.assertIn("public synchronized void startNewConversation()", DB)
+        self.assertIn("putSession(db, current + 1L)", DB)
+        self.assertIn('WHERE session=', DB)
+        self.assertIn("SELECT _id,ts,role,nonce,body FROM turns ORDER BY _id DESC", DB)
+        self.assertIn('"NEW CHAT (KEEP MEMORY)"', ACT)
+        self.assertIn("memoryStore.startNewConversation()", ACT)
+        self.assertIn("New chat started • Earlier conversations preserved", ACT)
+
     def test_actual_recall_used_for_offline_and_cloud_opt_in(self):
         self.assertIn('memoryStore.relevantContext(question, 820)', ACT)
         self.assertIn('client.reply(snapshot, chosenLocalModel, remembered)', ACT)
