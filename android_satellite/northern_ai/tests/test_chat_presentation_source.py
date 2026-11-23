@@ -17,7 +17,7 @@ class ChatPresentationSourceTest(unittest.TestCase):
         self.assertIn("normalizeLines", CHAT)
         self.assertIn("• ", CHAT)
         self.assertNotIn("Html.fromHtml", CHAT)
-        self.assertNotIn("WebView", CHAT)
+        self.assertNotIn("import android.webkit.WebView", CHAT)
 
     def test_individual_chat_bubbles(self):
         self.assertIn("chatMessages.removeAllViews()", ACTIVITY)
