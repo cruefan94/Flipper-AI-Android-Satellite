@@ -40,7 +40,7 @@ public final class ChatMarkdown {
     private static void apply(SpannableStringBuilder output, Pattern pattern,
             int format, boolean monospace) {
         Matcher matcher = pattern.matcher(output.toString());
-        // End-to-start replacements preserve match indices.
+        // Recreate the matcher after each replacement to keep indices aligned.
         while (matcher.find()) {
             String inner = matcher.group(1);
             int start = matcher.start();
