@@ -3,7 +3,7 @@
     <!-- Only needed to talk to the server running on this SAME phone. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="Northern Circuit AI"
+        android:label="${northernAiAppLabel}"
         android:icon="@drawable/northern_circuit_company_logo"
         android:roundIcon="@drawable/northern_circuit_company_logo"
         android:theme="@style/NorthernAiTheme"
