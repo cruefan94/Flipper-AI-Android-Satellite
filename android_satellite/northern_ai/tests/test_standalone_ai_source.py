@@ -12,12 +12,17 @@ POLICY = (SRC / "AssistantPolicy.java").read_text()
 CLIENT = (SRC / "LocalAiClient.java").read_text()
 ACTIVITY = (SRC / "AssistantActivity.java").read_text()
 STORE = (SRC / "EncryptedChatStore.java").read_text()
+CLOUD_POLICY = (SRC / "CloudModePolicy.java").read_text()
+CLOUD_CLIENT = (SRC / "CloudAiClient.java").read_text()
+CLOUD_STORE = (SRC / "CloudSettingsStore.java").read_text()
 
 
 class StandaloneAiSourceTest(unittest.TestCase):
     def test_independent_identity(self):
         self.assertIn("applicationId 'com.northerncircuitstudios.ai'", GRADLE)
-        self.assertIn('android:label="Northern Circuit AI"', MANIFEST)
+        self.assertIn('android:label="${northernAiAppLabel}"', MANIFEST)
+        self.assertIn("applicationIdSuffix '.cloudtest'", GRADLE)
+        self.assertIn("'Northern AI Cloud Test'", GRADLE)
         self.assertNotIn("com.flipperai.satellite", MANIFEST)
 
     def test_launcher_uses_actual_company_emblem(self):
@@ -29,7 +34,7 @@ class StandaloneAiSourceTest(unittest.TestCase):
         self.assertIn('android:icon="@drawable/northern_circuit_company_logo"', MANIFEST)
         self.assertIn('android:roundIcon="@drawable/northern_circuit_company_logo"', MANIFEST)
 
-    def test_no_spurious_permissions_or_cloud(self):
+    def test_permissions_and_local_network_isolation(self):
         self.assertIn("android.permission.INTERNET", MANIFEST)
         for permission in ("BLUETOOTH", "RECORD_AUDIO", "LOCATION",
                            "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE"):
@@ -55,11 +60,31 @@ class StandaloneAiSourceTest(unittest.TestCase):
         self.assertIn("EncryptedChatStore.clear(this)", ACTIVITY)
         self.assertIn("EncryptedChatStore.save(this, snapshot)", ACTIVITY)
 
+    def test_opt_in_cloud_client_and_secret_handling(self):
+        self.assertIn("https://flipper-ai-satellite.guichet-chris94.workers.dev", CLOUD_POLICY)
+        self.assertIn("MAX_CLOUD_CHARS = 127", CLOUD_POLICY)
+        self.assertIn("Mode.OFFLINE", CLOUD_POLICY)
+        self.assertIn("Proxy.NO_PROXY", CLOUD_CLIENT)
+        self.assertIn("HttpsURLConnection", CLOUD_CLIENT)
+        self.assertIn('setInstanceFollowRedirects(false)', CLOUD_CLIENT)
+        self.assertIn('setRequestProperty("X-Device-Token", token)', CLOUD_CLIENT)
+        self.assertIn('KeyStore.getInstance("AndroidKeyStore")', CLOUD_STORE)
+        self.assertIn("AES/GCM/NoPadding", CLOUD_STORE)
+        self.assertIn("CloudSettingsStore.clear(this)", ACTIVITY)
+        self.assertIn("CloudSettingsStore.save(this, updated)", ACTIVITY)
+        self.assertIn("MODE: OFFLINE", ACTIVITY)
+        self.assertIn("CLOUD SETUP", ACTIVITY)
+        self.assertIn("TEST CLOUD", ACTIVITY)
+        self.assertIn("Choose AI mode", ACTIVITY)
+        self.assertIn("I AGREE", ACTIVITY)
+        self.assertIn("cloudClient.reply(question, token)", ACTIVITY)
+        self.assertNotIn("GEMINI_API_KEY", ACTIVITY)
+
     def test_standalone_conversation(self):
         self.assertIn("NORTHERN CIRCUIT AI", ACTIVITY)
         self.assertIn("Qwen3.5-4B-GGUF:Q4_K_M", ACTIVITY)
         self.assertIn("Local AI not running", ACTIVITY)
-        self.assertIn("Verified model response", ACTIVITY)
+        self.assertIn("AI replied via ", ACTIVITY)
         self.assertNotIn("FlipperHTTP", ACTIVITY)
 
 
