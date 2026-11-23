@@ -73,6 +73,27 @@ public final class ModelsActivity extends Activity {
         finally{finishOperation();}
       });
     });
+    SatelliteUi.sectionTitle(this,page,"NORTHERN CIRCUIT AI • GALAXY S25");
+    page.addView(SatelliteUi.text(this,
+      "Qwen3.5-4B (Q4 GGUF) is our higher-quality offline candidate for the Galaxy S25. "
+      +"Qwen3.5-2B is the lighter fallback. These GGUF models require a separate "
+      +"local llama.cpp server in Termux; they cannot be imported as LiteRT files. "
+      +"Nothing downloads until you choose to set up a model.",
+      14,SatelliteUi.MUTED,false));
+    SatelliteUi.action(this,page,"VIEW QWEN3.5-4B MODEL FILES",()->{
+      startActivity(new Intent(Intent.ACTION_VIEW,
+        Uri.parse("https://huggingface.co/ggml-org/Qwen3.5-4B-GGUF")));
+    });
+    SatelliteUi.action(this,page,"VIEW QWEN3.5-2B FALLBACK",()->{
+      startActivity(new Intent(Intent.ACTION_VIEW,
+        Uri.parse("https://huggingface.co/gguf/Qwen3.5-2B-GGUF")));
+    });
+    SatelliteUi.action(this,page,"S25 QWEN3.5 SETUP GUIDE",()->{
+      startActivity(new Intent(Intent.ACTION_VIEW,
+        Uri.parse("https://github.com/cruefan94/Flipper-AI-Android-Satellite/blob/"
+          +"feature/northern-circuit-ai-profile-v01-20261122/"
+          +"docs/NORTHERN_CIRCUIT_AI_S25_QWEN35.md")));
+    });
     SatelliteUi.sectionTitle(this,page,"QUICK INSTALL");
     page.addView(SatelliteUi.text(this,
       "Qwen3-0.6B is free (about 614 MB). Download once over Wi-Fi and verify it here. "
