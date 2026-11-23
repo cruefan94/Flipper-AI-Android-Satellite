@@ -12,7 +12,7 @@ public final class AssistantPolicy {
     public static final String LOCAL_MODELS_ENDPOINT = "http://127.0.0.1:9931/v1/models";
     public static final int MAX_INPUT_CHARS = 1600;
     public static final int MAX_STORED_ENTRIES = 30;
-    public static final int MAX_CONTEXT_CHARS = 5000;
+    public static final int MAX_CONTEXT_CHARS = 2800;
 
     public static final String SYSTEM_PROMPT =
         "You are Northern Circuit AI, an independently branded, general-purpose " +
