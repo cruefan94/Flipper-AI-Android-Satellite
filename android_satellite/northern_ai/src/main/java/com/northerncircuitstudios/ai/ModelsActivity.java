@@ -42,7 +42,7 @@ public final class ModelsActivity extends Activity {
     private static final String DOWNLOAD_FOLDER = "NorthernCircuitAI";
     private static final String ROUTER_COMMAND =
         "llama-server --models-dir \"$HOME/storage/downloads/NorthernCircuitAI\" " +
-        "--host 127.0.0.1 --port 9931 -c 2048 -t 4 --models-max 1";
+        "--host 127.0.0.1 --port 9931 -c 2048 -t 4 --models-max 1 --reasoning off";
     private static final String INIT_COMMAND = "termux-setup-storage";
     private static final String PREFS = "northern_ai_model_downloads_v1";
     private static final int IMPORT_GGUF_REQUEST = 641;
