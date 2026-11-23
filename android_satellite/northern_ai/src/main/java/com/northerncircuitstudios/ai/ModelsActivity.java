@@ -197,11 +197,11 @@ public final class ModelsActivity extends Activity {
         content.addView(setupTitle);
         content.addView(text(
             "1. If this is your first shared-storage setup, copy and run " +
-            "'termux-setup-storage' in Termux, then grant storage access.\\n" +
-            "2. Finish downloading the GGUF models here.\\n" +
-            "3. Stop any running llama-server with Ctrl+C.\\n" +
+            "'termux-setup-storage' in Termux, then grant storage access.\n" +
+            "2. Finish downloading the GGUF models here.\n" +
+            "3. Stop any running llama-server with Ctrl+C.\n" +
             "4. Copy the router command below and paste it into Termux. " +
-            "Leave Termux running.\\n" +
+            "Leave Termux running.\n" +
             "5. Return here, SCAN SERVER and select a listed model. " +
             "A downloaded file is not active until llama.cpp can load it.",
             13,MUTED));
@@ -248,13 +248,13 @@ public final class ModelsActivity extends Activity {
             free=fs.getAvailableBytes();
         } catch(Exception ignored) { }
         final String warning=free>0 && free<model.approximateBytes+350000000L
-            ? "\\n\\nLow available storage detected. Free space before downloading."
+            ? "\n\nLow available storage detected. Free space before downloading."
             : "";
         new AlertDialog.Builder(this)
             .setTitle("Download "+model.name+"?")
             .setMessage("Approximate model size: "+model.displaySize+
-                "\\nDestination: Downloads/NorthernCircuitAI/"+model.filename+
-                "\\n\\nThis large download may consume mobile data. " +
+                "\nDestination: Downloads/NorthernCircuitAI/"+model.filename+
+                "\n\nThis large download may consume mobile data. " +
                 "Use Wi-Fi if possible. Downloading does not automatically " +
                 "activate the model in Termux." + warning)
             .setNegativeButton("CANCEL",null)
