@@ -21,8 +21,8 @@ class StandaloneAiSourceTest(unittest.TestCase):
     def test_independent_identity(self):
         self.assertIn("applicationId 'com.northerncircuitstudios.ai'", GRADLE)
         self.assertIn('android:label="${northernAiAppLabel}"', MANIFEST)
-        self.assertIn("applicationIdSuffix '.modelhub'", GRADLE)
-        self.assertIn("'Northern AI Model Hub'", GRADLE)
+        self.assertIn("applicationIdSuffix '.m6preview'", GRADLE)
+        self.assertIn("'Northern AI S25 Preview'", GRADLE)
         self.assertNotIn("com.flipperai.satellite", MANIFEST)
 
     def test_launcher_uses_actual_company_emblem(self):
