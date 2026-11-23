@@ -902,11 +902,6 @@ public final class AssistantActivity extends Activity {
         };
         new AlertDialog.Builder(this)
             .setTitle("Encrypted AI Memory Bank")
-            .setMessage("Every successful chat turn is archived locally, including " +
-                "Cloud and Offline chats. Relevant excerpts help the offline model " +
-                "recall older conversations. Cloud memory sharing is OFF by default. " +
-                "This does not retrain Qwen or Gemini, and cannot recover history " +
-                "from other separately installed test applications.")
             .setItems(actions, (d, index) -> {
                 if (index == 0) showRememberFactDialog();
                 else if (index == 1) showSavedFacts();
