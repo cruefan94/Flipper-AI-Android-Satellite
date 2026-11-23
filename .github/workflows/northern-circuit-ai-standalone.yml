@@ -1,4 +1,4 @@
-name: Northern Circuit AI — isolated S25 voice preview APK
+name: Northern Circuit AI — isolated S25 model hub APK
 
 on:
   pull_request:
@@ -52,11 +52,11 @@ jobs:
           APK="android_satellite/northern_ai/build/outputs/apk/debug/northern_ai-debug.apk"
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "name='com.northerncircuitstudios.ai.voicetest'"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-label:'Northern AI Voice Test'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "name='com.northerncircuitstudios.ai.modelhub'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$APK" | grep -F "application-label:'Northern AI Model Hub'"
           SHORT_SHA="$(git rev-parse --short=8 HEAD)"
           mkdir -p out
-          cp "$APK" "out/NorthernCircuitAI-S25-M4-VoiceTest-run${{ github.run_number }}-${SHORT_SHA}-UNTESTED.apk"
+          cp "$APK" "out/NorthernCircuitAI-S25-M5-ModelHub-run${{ github.run_number }}-${SHORT_SHA}-UNTESTED.apk"
       - name: Record immutable source and APK integrity
         shell: bash
         env:
