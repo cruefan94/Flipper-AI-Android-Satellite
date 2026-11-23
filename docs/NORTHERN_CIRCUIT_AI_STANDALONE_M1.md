@@ -8,7 +8,7 @@ private app data. The existing Android Satellite and its Flipper communications
 are left intact.
 
 ## Currently implemented source
-- General-purpose text chat interface with persistent encrypted history,
+- Android standard and round launcher icons use the actual Northern Circuit Studios circular company emblem sourced from the owner's existing logo image (resized as WebP for app packaging; no redesign).\n- General-purpose text chat interface with persistent encrypted history,
   clear-history confirmation, model connection test, and explicit setup dialog.
 - On-device Qwen3.5-4B Q4 GGUF through the already supported
   `llama.cpp` OpenAI-compatible local loopback server
