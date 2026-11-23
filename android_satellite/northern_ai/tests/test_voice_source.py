@@ -53,8 +53,8 @@ class VoiceSourceTests(unittest.TestCase):
         self.assertNotIn("android.permission.BLUETOOTH", MANIFEST)
 
     def test_side_by_side_no_app_replacement(self):
-        self.assertIn("applicationIdSuffix '.modelhub'", GRADLE)
-        self.assertIn("'Northern AI Model Hub'", GRADLE)
+        self.assertIn("applicationIdSuffix '.m6preview'", GRADLE)
+        self.assertIn("'Northern AI S25 Preview'", GRADLE)
 
 
 if __name__ == "__main__":
