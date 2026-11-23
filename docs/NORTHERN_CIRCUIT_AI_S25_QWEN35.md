@@ -1,7 +1,9 @@
 # Northern Circuit AI — Galaxy S25 offline models (development)
 
 ## Hardware direction (owner's current phone)
-- Primary phone: Samsung Galaxy S25 (Canadian SM-S931W; 12 GB physical RAM class).\n- RAM Plus is enabled/configurable up to 8 GB on this phone. It uses storage-backed virtual memory, **not 8 GB additional physical RAM**. Do not count it as fast model RAM or use it to justify loading a much larger model; monitor Android memory pressure and thermals.
+- Primary phone: Samsung Galaxy S25 (Canadian SM-S931W; 12 GB physical RAM class).
+- Owner-selected initial comparison setting: **8 GB RAM Plus** (set manually in Samsung Device Care before testing; not remotely enabled by this project).
+- RAM Plus uses storage-backed virtual memory, **not 8 GB additional physical RAM**. Do not count it as fast model RAM or use it to justify loading a much larger model; monitor Android memory pressure and thermals.
 - Start with **Qwen3.5-4B Q4_K_M GGUF** (approx. 2.7–3.0 GB for weights). The GGUF runtime also needs RAM for KV cache, Android and app processes.
 - If too slow, unstable, or memory-constrained, use **Qwen3.5-2B Q4_K_M** (approx. 1.3–1.5 GB).
 - Keep the already installed Qwen3-0.6B LiteRT as backup. **Do not import GGUF as .litertlm.**
@@ -41,6 +43,59 @@
 - Runtime: https://github.com/ggml-org/llama.cpp (MIT licence).
 - Qwen3.5 weights have their own Apache-2.0 model terms; review accompanying licences before distribution.
 - All external model downloads must be user initiated; do not bundle or mirror model weights without separate vetting.
+
+## Galaxy S25 RAM Plus test bed: start at 8 GB (user-approved)
+
+**Do not modify phone settings from the AI app or automatically.** The user has
+selected 8 GB RAM Plus as the initial test configuration, but it has not been
+verified as enabled on the handset. Confirm manually in
+**Settings → Device care → Memory → RAM Plus**, select **8 GB** if available,
+and restart the phone if Samsung asks.
+
+Use the same **Qwen3.5-4B Q4_K_M** model and `llama-server` options across
+comparisons; changing models, context length, or thread count at the same time
+would invalidate an A/B comparison. Start with the existing conservative
+`-c 2048 -t 4` configuration, offline only.
+
+### Baseline sequence
+1. Record RAM Plus setting, approximate free phone storage, initial battery
+   percentage, and whether the device feels cool.
+2. Start the 4B model in Termux and confirm it generated a *real answer* in
+   Android Satellite's **MODELS → TEST LLAMA.CPP SERVER**.
+3. In Termux run this read-only benchmark (uses only 127.0.0.1; no cloud data):
+   ```sh
+   curl -fL -o "$HOME/ncs_s25_benchmark.sh" \
+     https://raw.githubusercontent.com/cruefan94/Flipper-AI-Android-Satellite/feature/northern-circuit-ai-profile-v01-20261122/android_satellite/tools/s25_local_ai_smoke_benchmark.sh
+   sh "$HOME/ncs_s25_benchmark.sh" 8
+   ```
+4. Note the three request durations in seconds, available system memory from
+   the log, final battery percentage, heat, phone responsiveness and whether
+   Android killed Termux or other apps. The system-level memory estimate is
+   not the AI process's private memory allocation.
+5. Test a general question and a moderately complex question in the chat
+   screen. Record whether its answer is coherent rather than just a canned
+   diagnostic response.
+
+### How to adjust (only after observing a real problem)
+- If 4B reliably answers and the phone stays responsive, **keep 8 GB for the
+  trial**, but don't assume the RAM Plus caused the good performance.
+- If memory pressure or background-app reloads occur, first try **Qwen3.5-2B
+  at the same 8 GB RAM Plus setting**. 2B is the planned lighter fallback.
+- If 4B runs but feels sluggish or heats the phone, test shorter requests and
+  ensure the phone is cool before rerunning. RAM Plus is not a processor speed
+  control; lowering model/context demands is more meaningful for inference.
+- If testing the *effect of RAM Plus itself*, hold model/options/tasks fixed,
+  manually select **4 GB** or a lower available setting, restart if required
+  and repeat the same test. Compare median times, reliability, thermals and
+  background app stability. A lower RAM Plus setting might perform as well or
+  better; **do not change it without the owner's consent**.
+- Do not raise the model to 8B or 20B simply because virtual RAM is available.
+  Do not run prolonged performance loops if the phone becomes hot or unstable.
+
+The helper returns HTTP status and total request time for three fixed,
+non-sensitive prompts. It does **not** verify inference quality, measure
+tokens/second or read RAM Plus automatically. A hardware check of actual model
+answers and behavior is still mandatory. No results have yet been collected.
 
 ## Evidence gates
 - [ ] Pure Java source/contract tests green
