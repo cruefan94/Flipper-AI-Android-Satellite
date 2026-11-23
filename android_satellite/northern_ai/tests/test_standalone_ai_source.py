@@ -20,7 +20,9 @@ CLOUD_STORE = (SRC / "CloudSettingsStore.java").read_text()
 class StandaloneAiSourceTest(unittest.TestCase):
     def test_independent_identity(self):
         self.assertIn("applicationId 'com.northerncircuitstudios.ai'", GRADLE)
-        self.assertIn('android:label="Northern Circuit AI"', MANIFEST)
+        self.assertIn('android:label="${northernAiAppLabel}"', MANIFEST)
+        self.assertIn("applicationIdSuffix '.cloudtest'", GRADLE)
+        self.assertIn("'Northern AI Cloud Test'", GRADLE)
         self.assertNotIn("com.flipperai.satellite", MANIFEST)
 
     def test_launcher_uses_actual_company_emblem(self):
