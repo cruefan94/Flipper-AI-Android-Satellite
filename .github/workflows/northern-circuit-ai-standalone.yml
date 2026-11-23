@@ -71,7 +71,7 @@ jobs:
           report = {
               'source_sha': os.environ['EXPECTED_SHA'],
               'apk_sha256': hashlib.sha256(apk.read_bytes()).hexdigest(),
-              'package_id': 'com.northerncircuitstudios.ai.cloudtest',
+              'package_id': 'com.northerncircuitstudios.ai.voicetest',
               'model_weights_bundled': False,
               'hardware_inference_verified': False,
               'scope': 'source tests and independently-installable debug APK only',
@@ -82,7 +82,7 @@ jobs:
       - name: Upload standalone AI APK
         uses: actions/upload-artifact@v4
         with:
-          name: NorthernCircuitAI-S25-M2-CloudTest-${{ github.run_number }}-${{ github.sha }}-UNTESTED
+          name: NorthernCircuitAI-S25-M4-VoiceTest-${{ github.run_number }}-${{ github.sha }}-UNTESTED
           path: out/
           if-no-files-found: error
           retention-days: 14
