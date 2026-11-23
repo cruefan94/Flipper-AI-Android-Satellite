@@ -41,6 +41,15 @@ public final class LocalAiClient {
     }
 
     public String reply(List<AssistantPolicy.Entry> conversation) throws Exception {
+        return reply(conversation, "");
+    }
+
+    /** A router model ID is supplied only after user selection in ModelsActivity. */
+    public String reply(List<AssistantPolicy.Entry> conversation, String chosenModel)
+            throws Exception {
+        String model = chosenModel == null || chosenModel.isEmpty()
+            ? AssistantPolicy.MODEL_ALIAS
+            : LocalModelRegistry.validateModelId(chosenModel);
         List<AssistantPolicy.Entry> context = AssistantPolicy.recentContext(conversation);
         JSONArray messages = new JSONArray();
         messages.put(new JSONObject().put("role", "system")
@@ -48,7 +57,7 @@ public final class LocalAiClient {
         for (AssistantPolicy.Entry entry : context)
             messages.put(new JSONObject().put("role", entry.role).put("content", entry.text));
         JSONObject request = new JSONObject()
-            .put("model", AssistantPolicy.MODEL_ALIAS)
+            .put("model", model)
             .put("messages", messages)
             .put("stream", false)
             .put("max_tokens", 320)
