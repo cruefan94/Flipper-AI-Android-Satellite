@@ -24,6 +24,11 @@ class ModelHubSourceTest(unittest.TestCase):
         self.assertIn('showVoiceCenter()',ACTIVITY)
         self.assertIn('new Intent(this, ModelsActivity.class)',ACTIVITY)
 
+    def test_portrait_orientation_lock(self):
+        self.assertIn('android:name=".AssistantActivity" android:exported="true" android:screenOrientation="portrait"', MANIFEST)
+        self.assertIn('android:name=".ModelsActivity" android:exported="false" android:screenOrientation="portrait"', MANIFEST)
+        self.assertNotIn('android:configChanges=', MANIFEST)
+
     def test_download_is_explicit_and_fixed_catalog(self):
         self.assertIn("DownloadManager.Request", MODELS)
         self.assertIn("downloads.enqueue(request)",MODELS)
