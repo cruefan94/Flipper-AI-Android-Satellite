@@ -27,9 +27,14 @@ public final class CloudSettingsStore {
     public static final class Settings {
         public final CloudModePolicy.Mode mode;
         public final String token;
+        public final boolean shareMemoryWithCloud;
         public Settings(CloudModePolicy.Mode mode, String token) {
+            this(mode, token, false);
+        }
+        public Settings(CloudModePolicy.Mode mode, String token, boolean shareMemoryWithCloud) {
             this.mode = mode == null ? CloudModePolicy.Mode.OFFLINE : mode;
             this.token = token == null ? "" : token;
+            this.shareMemoryWithCloud = shareMemoryWithCloud;
         }
     }
 
@@ -75,7 +80,7 @@ public final class CloudSettingsStore {
         CloudModePolicy.Mode mode = CloudModePolicy.parseMode(data.optString("mode", "OFFLINE"));
         if (!CloudModePolicy.maySendToCloud(mode, token))
             mode = CloudModePolicy.Mode.OFFLINE;
-        return new Settings(mode, token);
+        return new Settings(mode, token, data.optBoolean("shareMemoryWithCloud", false));
     }
 
     public static synchronized void save(Context context, Settings settings) throws Exception {
@@ -85,7 +90,8 @@ public final class CloudSettingsStore {
         if (settings.mode != CloudModePolicy.Mode.OFFLINE && token.isEmpty())
             throw new IllegalArgumentException("Set your Worker device token first.");
         JSONObject data = new JSONObject()
-            .put("mode", settings.mode.name()).put("token", token);
+            .put("mode", settings.mode.name()).put("token", token)
+            .put("shareMemoryWithCloud", settings.shareMemoryWithCloud);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, key(), new SecureRandom());
         byte[] ciphertext = cipher.doFinal(

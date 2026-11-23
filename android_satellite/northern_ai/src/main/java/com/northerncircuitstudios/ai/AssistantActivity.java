@@ -56,6 +56,7 @@ public final class AssistantActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final LocalAiClient client = new LocalAiClient();
     private final CloudAiClient cloudClient = new CloudAiClient();
+    private ConversationMemoryStore memoryStore;
     private CloudSettingsStore.Settings cloudSettings =
         new CloudSettingsStore.Settings(CloudModePolicy.Mode.OFFLINE, "");
     private Button modeButton;
@@ -119,6 +120,7 @@ public final class AssistantActivity extends Activity {
         screen.setPadding(dp(14), dp(16), dp(14), dp(12));
         screen.setBackgroundColor(BG);
         setContentView(screen);
+        memoryStore = new ConversationMemoryStore(this);
         // Android 15+ enforces edge-to-edge at targetSdk 35. Own the system
         // bars and keyboard insets to keep chat and SEND visible on the S25.
         if (Build.VERSION.SDK_INT >= 30) {
@@ -224,7 +226,9 @@ public final class AssistantActivity extends Activity {
         });
         worker.execute(() -> {
             try {
-                List<AssistantPolicy.Entry> previous = EncryptedChatStore.load(this);
+                memoryStore.migrateLegacy(this);
+                List<AssistantPolicy.Entry> previous = memoryStore.recent(30);
+                long archivedCount = memoryStore.countTurns();
                 CloudSettingsStore.Settings loaded;
                 boolean settingsCorrupted = false;
                 try { loaded = CloudSettingsStore.load(this); }
@@ -242,7 +246,7 @@ public final class AssistantActivity extends Activity {
                     renderHistory();
                     setStatus(needsCloudReset
                         ? "Cloud settings unreadable. Tap CLOUD SETUP to remove and reset."
-                        : "Ready • " + cloudSettings.mode.name() +
+                        : "Memory Bank: " + archivedCount + " messages • " + cloudSettings.mode.name() +
                           " • " + (cloudSettings.mode == CloudModePolicy.Mode.OFFLINE
                               ? "Private local default" : "Cloud transmission enabled"));
                     busy = false;
@@ -253,7 +257,7 @@ public final class AssistantActivity extends Activity {
                     if (closing) return;
                     busy = false;
                     send.setEnabled(false);
-                    setStatus("Encrypted history cannot be opened. Use CLEAR CHAT to reset.");
+                    setStatus("Cannot open encrypted memory archive. Existing data was not erased.");
                 });
             }
         });
@@ -366,8 +370,13 @@ public final class AssistantActivity extends Activity {
             setStatus(error.getMessage());
             return;
         }
+        if (question.regionMatches(true, 0, "Remember that ", 0, 14)) {
+            rememberFromChat(question, question.substring(14).trim());
+            return;
+        }
         final CloudModePolicy.Mode mode = cloudSettings.mode;
         final String token = cloudSettings.token;
+        final boolean shareMemory = cloudSettings.shareMemoryWithCloud;
         final String chosenLocalModel = LocalModelPreferences.load(this);
         if (mode != CloudModePolicy.Mode.OFFLINE &&
             !CloudModePolicy.maySendToCloud(mode, token)) {
@@ -400,27 +409,29 @@ public final class AssistantActivity extends Activity {
             String source = "";
             try {
                 // Storage failure must never trigger a cloud request.
-                EncryptedChatStore.save(this, snapshot);
+                memoryStore.append(new AssistantPolicy.Entry("user", question));
+                final String remembered = memoryStore.relevantContext(question, 820);
+                final String allowedCloudMemory = shareMemory ? remembered : "";
                 if (mode == CloudModePolicy.Mode.CLOUD) {
-                    reply = cloudClient.reply(question, token);
-                    source = "CLOUD";
+                    reply = cloudClient.reply(question, token, allowedCloudMemory);
+                    source = shareMemory ? "CLOUD (MEMORY SHARED)" : "CLOUD";
                 } else if (mode == CloudModePolicy.Mode.HYBRID) {
                     try {
-                        reply = client.reply(snapshot, chosenLocalModel);
+                        reply = client.reply(snapshot, chosenLocalModel, remembered);
                         source = "LOCAL";
                     } catch (Exception localFailure) {
-                        // Selected HYBRID explicitly authorizes the current prompt
-                        // (never previous turns) to be transmitted if local fails.
-                        reply = cloudClient.reply(question, token);
-                        source = "CLOUD FALLBACK";
+                        // HYBRID permits cloud fallback. Historical excerpts are sent
+                        // only when the separately encrypted memory consent is enabled.
+                        reply = cloudClient.reply(question, token, allowedCloudMemory);
+                        source = shareMemory ? "CLOUD FALLBACK (MEMORY SHARED)"
+                            : "CLOUD FALLBACK";
                     }
                 } else {
-                    reply = client.reply(snapshot, chosenLocalModel);
+                    reply = client.reply(snapshot, chosenLocalModel, remembered);
                     source = "OFFLINE";
                 }
                 if (request != generation || Thread.currentThread().isInterrupted()) return;
-                snapshot.add(new AssistantPolicy.Entry("assistant", reply));
-                EncryptedChatStore.save(this, snapshot);
+                memoryStore.append(new AssistantPolicy.Entry("assistant", reply));
             } catch (Exception ex) {
                 errorMessage = ex instanceof java.net.ConnectException
                     ? (mode == CloudModePolicy.Mode.OFFLINE
@@ -480,7 +491,8 @@ public final class AssistantActivity extends Activity {
     private void saveMode(CloudModePolicy.Mode next) {
         if (busy || closing) return;
         final CloudSettingsStore.Settings updated =
-            new CloudSettingsStore.Settings(next, cloudSettings.token);
+            new CloudSettingsStore.Settings(next, cloudSettings.token,
+                cloudSettings.shareMemoryWithCloud);
         busy = true;
         send.setEnabled(false);
         worker.execute(() -> {
@@ -527,11 +539,13 @@ public final class AssistantActivity extends Activity {
                     .setTitle("Enable " + chosen.name() + " cloud requests?")
                     .setMessage(chosen == CloudModePolicy.Mode.CLOUD
                         ? "Every question will be sent over HTTPS to your Cloudflare Worker " +
-                          "and Gemini. Previous chat messages are not transmitted. " +
+                          "and Gemini. Previous chats remain private unless you " +
+                          "separately enable Memory sharing in the Memory Bank. " +
                           "Cloud service policies and charges may apply."
                         : "When the local model fails, the CURRENT question is " +
                           "automatically sent over HTTPS to your Cloudflare Worker " +
-                          "and Gemini. Previous chat messages are not transmitted. " +
+                          "and Gemini. Previous chats remain private unless you " +
+                          "separately enable Memory sharing in the Memory Bank. " +
                           "Cloud service policies and charges may apply.")
                     .setNegativeButton("CANCEL", null)
                     .setPositiveButton("I AGREE", (confirm, decision) -> saveMode(chosen))
@@ -575,7 +589,8 @@ public final class AssistantActivity extends Activity {
                 busy = true;
                 send.setEnabled(false);
                 CloudSettingsStore.Settings updated =
-                    new CloudSettingsStore.Settings(CloudModePolicy.Mode.OFFLINE, token);
+                    new CloudSettingsStore.Settings(CloudModePolicy.Mode.OFFLINE, token,
+                        cloudSettings.shareMemoryWithCloud);
                 worker.execute(() -> {
                     String problem = null;
                     try { CloudSettingsStore.save(this, updated); }
@@ -832,28 +847,346 @@ public final class AssistantActivity extends Activity {
             .setNegativeButton("CLOSE", null).show();
     }
 
+    /**
+     * "Remember that ..." is a LOCAL command. Acknowledgement is saved as a
+     * normal conversation turn; memory itself is stored as an encrypted fact.
+     * It never sends the command or the fact to Gemini by itself.
+     */
+    private void rememberFromChat(String question, String fact) {
+        if (busy || closing) return;
+        if (fact.isEmpty() || fact.length() > 1200) {
+            setStatus("Use: Remember that [fact, up to 1200 characters].");
+            return;
+        }
+        input.setText("");
+        history.add(new AssistantPolicy.Entry("user", question));
+        appendNewestMessage();
+        busy = true;
+        send.setEnabled(false);
+        setStatus("Saving this as an encrypted memory on your phone…");
+        worker.execute(() -> {
+            String problem = null;
+            String answer = "Saved to your private Memory Bank. " +
+                "You can review or delete this fact under SETTINGS → MEMORY BANK.";
+            try {
+                memoryStore.append(new AssistantPolicy.Entry("user", question));
+                memoryStore.remember(fact);
+                memoryStore.append(new AssistantPolicy.Entry("assistant", answer));
+            } catch (Exception error) {
+                problem = "Could not save the memory. Please check local storage.";
+            }
+            final String error = problem;
+            runOnUiThread(() -> {
+                if (closing) return;
+                if (error == null) {
+                    history.add(new AssistantPolicy.Entry("assistant", answer));
+                    appendNewestMessage();
+                    setStatus("Memory stored locally • Cloud not contacted");
+                } else setStatus(error);
+                busy = false;
+                send.setEnabled(true);
+            });
+        });
+    }
+
+    private void showMemoryCenter() {
+        if (closing) return;
+        String[] actions = {
+            "REMEMBER A FACT",
+            "VIEW / EDIT / FORGET SAVED FACTS",
+            "SEARCH ALL CONVERSATIONS",
+            cloudSettings.shareMemoryWithCloud
+                ? "CLOUD MEMORY SHARING: ON" : "CLOUD MEMORY SHARING: OFF",
+            "COUNT ARCHIVED MESSAGES",
+            "DELETE ALL SAVED FACTS"
+        };
+        new AlertDialog.Builder(this)
+            .setTitle("Encrypted AI Memory Bank")
+            .setItems(actions, (d, index) -> {
+                if (index == 0) showRememberFactDialog();
+                else if (index == 1) showSavedFacts();
+                else if (index == 2) searchConversations();
+                else if (index == 3) toggleCloudMemorySharing();
+                else if (index == 4) showArchiveCount();
+                else clearSavedFacts();
+            })
+            .setNegativeButton("CLOSE", null).show();
+    }
+
+    private void showRememberFactDialog() {
+        EditText field = new EditText(this);
+        field.setHint("A fact Northern Circuit AI should remember");
+        field.setSingleLine(false);
+        field.setMaxLines(6);
+        field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(1200)});
+        new AlertDialog.Builder(this)
+            .setTitle("Save a fact locally")
+            .setView(field)
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("REMEMBER", (dialog, which) -> {
+                String fact = field.getText().toString().trim();
+                if (fact.isEmpty()) { setStatus("Cannot save an empty memory."); return; }
+                worker.execute(() -> {
+                    String problem = null;
+                    try { memoryStore.remember(fact); }
+                    catch (Exception error) { problem = "Could not save this memory."; }
+                    final String issue = problem;
+                    runOnUiThread(() -> { if (!closing) setStatus(
+                        issue == null ? "Encrypted memory saved on this phone." : issue); });
+                });
+            }).show();
+    }
+
+    private void showSavedFacts() {
+        worker.execute(() -> {
+            List<ConversationMemoryStore.MemoryFact> facts = null;
+            try { facts = memoryStore.facts(); }
+            catch (Exception ignored) { }
+            final List<ConversationMemoryStore.MemoryFact> saved = facts;
+            runOnUiThread(() -> {
+                if (closing) return;
+                if (saved == null) {
+                    setStatus("Cannot read the encrypted Memory Bank.");
+                    return;
+                }
+                if (saved.isEmpty()) {
+                    new AlertDialog.Builder(this).setTitle("Saved memories")
+                        .setMessage("No explicit facts saved yet. You can say " +
+                            "'Remember that ...' or use REMEMBER A FACT.")
+                        .setPositiveButton("OK", null).show();
+                    return;
+                }
+                int shown = Math.min(50, saved.size());
+                String[] choices = new String[shown];
+                for (int i = 0; i < shown; i++) {
+                    String fact = saved.get(i).text.replace('\n',' ');
+                    choices[i] = fact.length() > 105 ? fact.substring(0,105) + "…" : fact;
+                }
+                new AlertDialog.Builder(this)
+                    .setTitle("Saved facts • " + saved.size() + " total")
+                    .setItems(choices, (d,index) -> editSavedFact(saved.get(index)))
+                    .setNegativeButton("CLOSE", null).show();
+            });
+        });
+    }
+
+    private void editSavedFact(ConversationMemoryStore.MemoryFact current) {
+        EditText field = new EditText(this);
+        field.setText(current.text);
+        field.setSingleLine(false);
+        field.setMaxLines(8);
+        field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(1200)});
+        new AlertDialog.Builder(this)
+            .setTitle("Edit or forget this memory")
+            .setView(field)
+            .setNegativeButton("CANCEL", null)
+            .setNeutralButton("FORGET", (dialog, which) ->
+                new AlertDialog.Builder(this)
+                    .setTitle("Delete this saved fact?")
+                    .setMessage("This removes the saved fact but not the " +
+                        "historical conversation it originally came from.")
+                    .setNegativeButton("KEEP", null)
+                    .setPositiveButton("FORGET", (d, value) ->
+                        worker.execute(() -> {
+                            boolean ok = false;
+                            try { ok = memoryStore.forget(current.id); }
+                            catch (Exception ignored) { }
+                            final boolean removed = ok;
+                            runOnUiThread(() -> { if (!closing) setStatus(
+                                removed ? "Saved fact forgotten." : "Unable to delete saved fact."); });
+                        })).show())
+            .setPositiveButton("SAVE EDIT", (dialog, which) -> {
+                String revised = field.getText().toString().trim();
+                if (revised.isEmpty()) { setStatus("Cannot save an empty memory."); return; }
+                worker.execute(() -> {
+                    String error = null;
+                    try { memoryStore.editFact(current.id, revised); }
+                    catch (Exception failure) { error = "Could not update saved fact."; }
+                    final String issue = error;
+                    runOnUiThread(() -> { if (!closing) setStatus(
+                        issue == null ? "Saved memory updated." : issue); });
+                });
+            }).show();
+    }
+
+    private void searchConversations() {
+        EditText field = new EditText(this);
+        field.setHint("Search every encrypted conversation");
+        field.setSingleLine(true);
+        field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(120)});
+        new AlertDialog.Builder(this).setTitle("Search conversation archive")
+            .setView(field)
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("SEARCH", (dialog, which) -> {
+                final String query = field.getText().toString().trim();
+                if (query.isEmpty()) { setStatus("Enter a search topic."); return; }
+                setStatus("Searching encrypted conversation history…");
+                worker.execute(() -> {
+                    List<ConversationMemoryStore.SearchResult> hits = null;
+                    try { hits = memoryStore.recall(query, 5); }
+                    catch (Exception ignored) { }
+                    final List<ConversationMemoryStore.SearchResult> found = hits;
+                    runOnUiThread(() -> {
+                        if (closing) return;
+                        if (found == null) {
+                            setStatus("Search failed. Encrypted history was not changed.");
+                            return;
+                        }
+                        StringBuilder summary = new StringBuilder();
+                        if (found.isEmpty()) summary.append("No matching conversation found.");
+                        for (ConversationMemoryStore.SearchResult hit : found) {
+                            if (summary.length() > 0) summary.append("\n\n");
+                            String excerpt = hit.text.replace('\n',' ');
+                            summary.append(hit.role.equals("user") ? "YOU: " : "AI: ")
+                                .append(excerpt.substring(0,Math.min(250,excerpt.length())));
+                        }
+                        new AlertDialog.Builder(this)
+                            .setTitle("Conversation search results")
+                            .setMessage(summary.toString())
+                            .setPositiveButton("DONE", null).show();
+                        setStatus("Encrypted archive search completed.");
+                    });
+                });
+            }).show();
+    }
+
+    private void showArchiveCount() {
+        worker.execute(() -> {
+            long count = -1;
+            try { count = memoryStore.countTurns(); }
+            catch (Exception ignored) { }
+            final long saved = count;
+            runOnUiThread(() -> { if (!closing) setStatus(saved >= 0
+                ? "Encrypted Memory Bank contains " + saved + " archived messages."
+                : "Cannot count archived messages."); });
+        });
+    }
+
+    private void toggleCloudMemorySharing() {
+        if (busy || closing) return;
+        if (cloudSettings.shareMemoryWithCloud) {
+            saveCloudMemorySharing(false);
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Allow Gemini to receive memory excerpts?")
+            .setMessage("When using CLOUD or HYBRID fallback, a few relevant " +
+                "earlier chat excerpts and saved facts may be transmitted to " +
+                "your Cloudflare Worker and Google Gemini with each question. " +
+                "Your full archive stays on the phone. Uploaded excerpts cannot " +
+                "be recalled from Gemini. This requires the updated /ask-v2 " +
+                "Worker for longer messages. OFFLINE never uploads memories.")
+            .setNegativeButton("KEEP PRIVATE", null)
+            .setPositiveButton("I AGREE TO SHARE", (d,which) ->
+                saveCloudMemorySharing(true)).show();
+    }
+
+    private void saveCloudMemorySharing(boolean enabled) {
+        if (busy || closing) return;
+        CloudSettingsStore.Settings updated = new CloudSettingsStore.Settings(
+            cloudSettings.mode, cloudSettings.token, enabled);
+        if (!enabled) {
+            // Disable immediately in memory before persistent write.
+            cloudSettings = updated;
+        }
+        busy = true;
+        send.setEnabled(false);
+        worker.execute(() -> {
+            String error = null;
+            try { CloudSettingsStore.save(this, updated); }
+            catch (Exception failure) { error = "Cannot save memory-sharing preference."; }
+            final String problem = error;
+            runOnUiThread(() -> {
+                if (closing) return;
+                if (problem == null) cloudSettings = updated;
+                setStatus(problem == null
+                    ? (enabled
+                        ? "Memory-sharing consent ON. Gemini may receive relevant excerpts."
+                        : "Cloud memory sharing OFF. Past chats stay private.")
+                    : problem);
+                busy = false;
+                send.setEnabled(true);
+            });
+        });
+    }
+
+    private void clearSavedFacts() {
+        if (busy || closing) return;
+        new AlertDialog.Builder(this)
+            .setTitle("Delete every pinned memory?")
+            .setMessage("This permanently deletes the separately saved facts. " +
+                "The conversation archive will remain. To erase that as well, " +
+                "use DELETE ALL CONVERSATIONS under SETTINGS.")
+            .setNegativeButton("KEEP", null)
+            .setPositiveButton("DELETE FACTS", (d,which) -> worker.execute(() -> {
+                boolean okay = true;
+                try { memoryStore.clearFacts(); }
+                catch (Exception error) { okay = false; }
+                final boolean removed = okay;
+                runOnUiThread(() -> {
+                    if (!closing) setStatus(removed ? "All pinned facts deleted." :
+                        "Could not delete all saved facts.");
+                });
+            })).show();
+    }
+
     private void showSettingsCenter() {
         if (closing) return;
         String[] actions = {
-            "CHECK LOCAL", "LOCAL SETUP", "CLOUD SETUP", "TEST CLOUD", "CLEAR CHAT"
+            "MEMORY BANK", "NEW CHAT (KEEP MEMORY)", "CHECK LOCAL", "LOCAL SETUP", "CLOUD SETUP", "TEST CLOUD", "DELETE ALL CONVERSATIONS"
         };
         new AlertDialog.Builder(this)
             .setTitle("Assistant settings")
             .setItems(actions, (dialog, index) -> {
-                if (index == 0) checkServer();
-                else if (index == 1) showSetup();
-                else if (index == 2) showCloudSetup();
-                else if (index == 3) testCloud();
+                if (index == 0) showMemoryCenter();
+                else if (index == 1) startNewChat();
+                else if (index == 2) checkServer();
+                else if (index == 3) showSetup();
+                else if (index == 4) showCloudSetup();
+                else if (index == 5) testCloud();
                 else confirmClear();
             })
             .setNegativeButton("CLOSE", null).show();
     }
 
+    private void startNewChat() {
+        if (busy || closing) return;
+        new AlertDialog.Builder(this)
+            .setTitle("Start a new conversation?")
+            .setMessage("The visible chat will start fresh, but all earlier " +
+                "conversations and saved facts stay encrypted in the Memory Bank " +
+                "and remain available for recall.")
+            .setNegativeButton("CANCEL", null)
+            .setPositiveButton("NEW CHAT", (dialog, which) -> {
+                busy = true;
+                send.setEnabled(false);
+                worker.execute(() -> {
+                    String error = null;
+                    try { memoryStore.startNewConversation(); }
+                    catch (Exception ex) { error = "Could not start a new conversation."; }
+                    final String problem = error;
+                    runOnUiThread(() -> {
+                        if (closing) return;
+                        if (problem == null) {
+                            if (voiceSpeaker != null) voiceSpeaker.stop();
+                            history.clear();
+                            renderHistory();
+                            setStatus("New chat started • Earlier conversations preserved");
+                        } else setStatus(problem);
+                        busy = false;
+                        send.setEnabled(true);
+                    });
+                });
+            }).show();
+    }
+
     private void confirmClear() {
         if (busy || closing) return;
         new AlertDialog.Builder(this)
-            .setTitle("Clear your encrypted conversation?")
-            .setMessage("This erases the saved messages from Northern Circuit AI on this device.")
+            .setTitle("Delete ALL encrypted conversations?")
+            .setMessage("This permanently deletes the entire conversation archive, " +
+                "not just recent messages. Explicit saved facts remain available " +
+                "until deleted separately in MEMORY BANK.")
             .setNegativeButton("KEEP", null)
             .setPositiveButton("CLEAR", (dialog, which) -> {
                 ++generation;
@@ -861,13 +1194,14 @@ public final class AssistantActivity extends Activity {
                 send.setEnabled(false);
                 worker.execute(() -> {
                     try {
+                        memoryStore.clearArchive();
                         EncryptedChatStore.clear(this);
                         runOnUiThread(() -> {
                             if (closing) return;
                             if (voiceSpeaker != null) voiceSpeaker.stop();
                             history.clear();
                             renderHistory();
-                            setStatus("Encrypted chat cleared • " + cloudSettings.mode.name());
+                            setStatus("Entire encrypted conversation archive deleted.");
                             busy = false;
                             send.setEnabled(true);
                         });
@@ -917,6 +1251,7 @@ public final class AssistantActivity extends Activity {
         cloudClient.cancel();
         if (voiceSpeaker != null) voiceSpeaker.shutdown();
         worker.shutdownNow();
+        if (memoryStore != null) memoryStore.close();
         super.onDestroy();
     }
 }

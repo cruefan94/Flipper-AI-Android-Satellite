@@ -15,8 +15,8 @@ GRADLE = (ROOT / "build.gradle").read_text()
 
 class ModelHubSourceTest(unittest.TestCase):
     def test_isolated_package_and_navigation(self):
-        self.assertIn("applicationIdSuffix '.m6preview'",GRADLE)
-        self.assertIn("'Northern AI S25 Preview'",GRADLE)
+        self.assertIn("applicationIdSuffix '.m7memory'",GRADLE)
+        self.assertIn("'Northern AI Memory Test'",GRADLE)
         self.assertIn('android:name=".ModelsActivity" android:exported="false"',MANIFEST)
         for marker in ('"MODELS"','"AI MODE"','"VOICE"','"SETTINGS"'):
             self.assertIn(marker,ACTIVITY)
@@ -56,7 +56,7 @@ class ModelHubSourceTest(unittest.TestCase):
         self.assertIn("LocalModelPreferences.load(this)",ACTIVITY)
         self.assertIn("LocalModelRegistry.validateModelId(chosenModel)",CLIENT)
         self.assertIn('.put("model", model)',CLIENT)
-        self.assertIn("reply = client.reply(snapshot, chosenLocalModel);",ACTIVITY)
+        self.assertIn("reply = client.reply(snapshot, chosenLocalModel, remembered);",ACTIVITY)
         self.assertIn("Context.MODE_PRIVATE",PREFS)
         self.assertIn("LocalModelPreferences.save(this,selected)",MODELS)
 

@@ -21,8 +21,8 @@ class StandaloneAiSourceTest(unittest.TestCase):
     def test_independent_identity(self):
         self.assertIn("applicationId 'com.northerncircuitstudios.ai'", GRADLE)
         self.assertIn('android:label="${northernAiAppLabel}"', MANIFEST)
-        self.assertIn("applicationIdSuffix '.m6preview'", GRADLE)
-        self.assertIn("'Northern AI S25 Preview'", GRADLE)
+        self.assertIn("applicationIdSuffix '.m7memory'", GRADLE)
+        self.assertIn("'Northern AI Memory Test'", GRADLE)
         self.assertNotIn("com.flipperai.satellite", MANIFEST)
 
     def test_launcher_uses_actual_company_emblem(self):
@@ -58,7 +58,8 @@ class StandaloneAiSourceTest(unittest.TestCase):
         self.assertIn("AES/GCM/NoPadding", STORE)
         self.assertIn("EncyptedChatStore", STORE.replace("EncryptedChatStore", "EncyptedChatStore"))
         self.assertIn("EncryptedChatStore.clear(this)", ACTIVITY)
-        self.assertIn("EncryptedChatStore.save(this, snapshot)", ACTIVITY)
+        self.assertIn("memoryStore.append(new AssistantPolicy.Entry(", ACTIVITY)
+        self.assertIn("memoryStore.migrateLegacy(this)", ACTIVITY)
 
     def test_opt_in_cloud_client_and_secret_handling(self):
         self.assertIn("https://flipper-ai-satellite.guichet-chris94.workers.dev", CLOUD_POLICY)
@@ -77,7 +78,7 @@ class StandaloneAiSourceTest(unittest.TestCase):
         self.assertIn("TEST CLOUD", ACTIVITY)
         self.assertIn("Choose AI mode", ACTIVITY)
         self.assertIn("I AGREE", ACTIVITY)
-        self.assertIn("cloudClient.reply(question, token)", ACTIVITY)
+        self.assertIn("cloudClient.reply(question, token, allowedCloudMemory)", ACTIVITY)
         self.assertNotIn("GEMINI_API_KEY", ACTIVITY)
 
     def test_standalone_conversation(self):
