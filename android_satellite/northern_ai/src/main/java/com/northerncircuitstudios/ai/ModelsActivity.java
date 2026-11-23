@@ -24,6 +24,8 @@ import android.widget.TextView;
 import android.database.Cursor;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.LinkedHashSet;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -40,9 +42,10 @@ public final class ModelsActivity extends Activity {
     private static final String DOWNLOAD_FOLDER = "NorthernCircuitAI";
     private static final String ROUTER_COMMAND =
         "llama-server --models-dir \"$HOME/storage/downloads/NorthernCircuitAI\" " +
-        "--host 127.0.0.1 --port 9931 -c 2048 -t 4 --models-max 1";
+        "--host 127.0.0.1 --port 9931 -c 2048 -t 4 --models-max 1 --reasoning off";
     private static final String INIT_COMMAND = "termux-setup-storage";
     private static final String PREFS = "northern_ai_model_downloads_v1";
+    private static final int IMPORT_GGUF_REQUEST = 641;
 
     private static final class OfferedModel {
         final String name, filename, url, displaySize, note;
@@ -76,6 +79,8 @@ public final class ModelsActivity extends Activity {
     private LinearLayout content;
     private TextView inventoryStatus;
     private TextView selectedStatus;
+    private TextView importStatus;
+    private LinearLayout importedFiles;
     private final List<TextView> downloadStatuses = new ArrayList<>();
 
     private int dp(float n) {
@@ -146,6 +151,26 @@ public final class ModelsActivity extends Activity {
         content.addView(selectedStatus);
         updateSelectedStatus();
 
+        TextView installTitle = text("IMPORT LOCAL GGUF FILES", 17, FOREGROUND);
+        installTitle.setTypeface(null, 1);
+        installTitle.setPadding(dp(5), dp(18), dp(5), dp(6));
+        content.addView(installTitle);
+        content.addView(text(
+            "Already downloaded the models? Select several .gguf files together from " +
+            "My Files, Downloads or other accessible storage. Files are copied into " +
+            "Northern Circuit AI's private model folder. Import does not yet mean " +
+            "the native model is loaded: M6 inference integration is still in progress.",
+            13, MUTED));
+        Button importButton = button("IMPORT GGUF FILES • SELECT MULTIPLE");
+        importButton.setOnClickListener(v -> openImportPicker());
+        content.addView(importButton);
+        importStatus = text("No import in progress.", 12, ACCENT);
+        content.addView(importStatus);
+        importedFiles = new LinearLayout(this);
+        importedFiles.setOrientation(LinearLayout.VERTICAL);
+        content.addView(importedFiles);
+        refreshImportedFiles();
+
         TextView section=text("AVAILABLE ON LOCAL SERVER",17,FOREGROUND);
         section.setTypeface(null,1); content.addView(section);
         inventoryStatus=text(
@@ -214,6 +239,130 @@ public final class ModelsActivity extends Activity {
         content.addView(copyStorage);
         content.addView(copyRouter);
         refreshDownloads();
+    }
+
+
+    private void openImportPicker() {
+        Intent pick = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        pick.setType("*/*");
+        pick.addCategory(Intent.CATEGORY_OPENABLE);
+        pick.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivityForResult(pick, IMPORT_GGUF_REQUEST);
+        } catch (android.content.ActivityNotFoundException exception) {
+            importStatus.setText("Android document picker is unavailable on this device.");
+        }
+    }
+
+    @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != IMPORT_GGUF_REQUEST || resultCode != RESULT_OK || data == null) return;
+        LinkedHashSet<Uri> selected = new LinkedHashSet<>();
+        ClipData multiple = data.getClipData();
+        if (multiple != null) {
+            for (int i = 0; i < multiple.getItemCount() && i < ImportedGgufStore.MAX_BATCH + 1; i++) {
+                Uri uri = multiple.getItemAt(i).getUri();
+                if (uri != null) selected.add(uri);
+            }
+        }
+        if (data.getData() != null) selected.add(data.getData());
+        if (selected.isEmpty()) {
+            importStatus.setText("No files were selected.");
+            return;
+        }
+        if (selected.size() > ImportedGgufStore.MAX_BATCH) {
+            importStatus.setText("Select at most " + ImportedGgufStore.MAX_BATCH +
+                " GGUF files per import.");
+            return;
+        }
+        final ArrayList<Uri> batch = new ArrayList<>(selected);
+        importStatus.setText("Preparing " + batch.size() + " selected GGUF file(s)…");
+        background.execute(() -> {
+            int imported = 0;
+            int rejected = 0;
+            String firstError = "";
+            for (Uri uri : batch) {
+                if (Thread.currentThread().isInterrupted()) break;
+                try {
+                    ImportedGgufStore.Item file = ImportedGgufStore.importOne(
+                        this, uri, message -> runOnUiThread(() -> {
+                            if (!destroyed) importStatus.setText(message);
+                        }));
+                    imported++;
+                    final String report = "Imported " + file.name + " (" +
+                        file.bytes / 1000000L + " MB). File not yet loaded for inference.";
+                    runOnUiThread(() -> {
+                        if (!destroyed) importStatus.setText(report);
+                    });
+                } catch (Exception error) {
+                    rejected++;
+                    if (firstError.isEmpty()) {
+                        firstError = error.getMessage() == null ? "Could not import file" :
+                            error.getMessage();
+                    }
+                }
+            }
+            final int success = imported;
+            final int failures = rejected;
+            final String detail = firstError;
+            runOnUiThread(() -> {
+                if (destroyed) return;
+                importStatus.setText("Import finished: " + success + " stored, " +
+                    failures + " rejected." +
+                    (detail.isEmpty() ? "" : " First issue: " + detail) +
+                    " Native loading is not yet enabled in this preview.");
+                refreshImportedFiles();
+            });
+        });
+    }
+
+    private void refreshImportedFiles() {
+        if (importedFiles == null) return;
+        importedFiles.removeAllViews();
+        final List<ImportedGgufStore.Item> existing;
+        try {
+            existing = ImportedGgufStore.list(this);
+        } catch (Exception error) {
+            importedFiles.addView(text("Cannot inspect imported models.", 12, MUTED));
+            return;
+        }
+        if (existing.isEmpty()) {
+            importedFiles.addView(text("No GGUF files imported in this app yet.", 12, MUTED));
+            return;
+        }
+        importedFiles.addView(text(existing.size() + " file(s) stored in private app storage. " +
+            "These files are not necessarily runnable until native inference is integrated.",
+            12, ACCENT));
+        for (ImportedGgufStore.Item model : existing) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setBackground(shape(PANEL, 10));
+            LinearLayout.LayoutParams layout = new LinearLayout.LayoutParams(-1, -2);
+            layout.setMargins(0, dp(5), 0, dp(5));
+            importedFiles.addView(row, layout);
+            row.addView(text(model.name + " • " + model.bytes / 1000000L +
+                " MB • Imported, not loaded", 13, FOREGROUND));
+            Button delete = button("DELETE LOCAL COPY");
+            row.addView(delete);
+            delete.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Delete this imported GGUF?")
+                .setMessage(model.name + "\n\nOnly this app-private copy will be deleted." +
+                    " The original file you selected will not be removed.")
+                .setNegativeButton("KEEP", null)
+                .setPositiveButton("DELETE COPY", (d, which) -> background.execute(() -> {
+                    boolean removed = false;
+                    try { removed = ImportedGgufStore.delete(this, model.name); }
+                    catch (Exception ignored) { }
+                    final boolean ok = removed;
+                    runOnUiThread(() -> {
+                        if (destroyed) return;
+                        importStatus.setText(ok ? "App copy deleted." :
+                            "Could not delete the selected app copy.");
+                        refreshImportedFiles();
+                    });
+                })).show());
+        }
     }
 
     private void copy(String value, String result) {

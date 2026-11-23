@@ -31,9 +31,11 @@ public final class CloudModePolicyTest {
             invalidToken(bad);
         CloudModePolicy.validateToken(good);
         CloudModePolicy.validateCloudPrompt("Hello cloud");
+        CloudModePolicy.validateCloudPrompt("x".repeat(128));
+        CloudModePolicy.validateCloudPrompt("x".repeat(1600));
         try {
-            CloudModePolicy.validateCloudPrompt("x".repeat(128));
-            throw new AssertionError("Worker must reject long prompts preflight");
+            CloudModePolicy.validateCloudPrompt("x".repeat(1601));
+            throw new AssertionError("Worker must reject overlong prompts preflight");
         } catch (IllegalArgumentException expected) { }
         System.out.println("Northern Circuit AI cloud consent tests passed");
     }

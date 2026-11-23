@@ -15,8 +15,8 @@ GRADLE = (ROOT / "build.gradle").read_text()
 
 class ModelHubSourceTest(unittest.TestCase):
     def test_isolated_package_and_navigation(self):
-        self.assertIn("applicationIdSuffix '.modelhub'",GRADLE)
-        self.assertIn("'Northern AI Model Hub'",GRADLE)
+        self.assertIn("applicationIdSuffix '.m6preview'",GRADLE)
+        self.assertIn("'Northern AI S25 Preview'",GRADLE)
         self.assertIn('android:name=".ModelsActivity" android:exported="false"',MANIFEST)
         for marker in ('"MODELS"','"AI MODE"','"VOICE"','"SETTINGS"'):
             self.assertIn(marker,ACTIVITY)

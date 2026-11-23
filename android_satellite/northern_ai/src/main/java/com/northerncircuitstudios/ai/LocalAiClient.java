@@ -60,8 +60,11 @@ public final class LocalAiClient {
             .put("model", model)
             .put("messages", messages)
             .put("stream", false)
-            .put("max_tokens", 320)
-            .put("temperature", 0.65);
+            .put("max_tokens", 768)
+            .put("temperature", 0.6)
+            // Ask compatible Qwen chat templates to produce the final answer directly.
+            // Some llama.cpp releases may still ignore this; never expose hidden reasoning.
+            .put("chat_template_kwargs", new JSONObject().put("enable_thinking", false));
         byte[] payload = request.toString().getBytes(StandardCharsets.UTF_8);
         if (payload.length > 24000) throw new IllegalArgumentException("Conversation context too large");
 
@@ -69,7 +72,7 @@ public final class LocalAiClient {
             .toURL().openConnection(Proxy.NO_PROXY);
         connection.setInstanceFollowRedirects(false);
         connection.setConnectTimeout(2500);
-        connection.setReadTimeout(150000);
+        connection.setReadTimeout(180000);
         connection.setRequestMethod("POST");
         connection.setDoOutput(true);
         connection.setUseCaches(false);
@@ -98,10 +101,20 @@ public final class LocalAiClient {
             JSONArray choices = json.optJSONArray("choices");
             if (choices == null || choices.length() == 0)
                 throw new IllegalStateException("Local AI returned no choices");
-            JSONObject message = choices.getJSONObject(0).optJSONObject("message");
-            String answer = message == null ? "" : message.optString("content", "").trim();
-            if (answer.isEmpty())
-                throw new IllegalStateException("Local AI returned an empty text answer");
+            JSONObject choice = choices.getJSONObject(0);
+            JSONObject message = choice.optJSONObject("message");
+            String answer = message == null || message.isNull("content")
+                ? "" : message.optString("content", "").trim();
+            if (answer.isEmpty()) {
+                String reason = choice.optString("finish_reason", "");
+                if ("length".equals(reason))
+                    throw new IllegalStateException(
+                        "Local AI used its response limit before producing a final answer. " +
+                        "Try a shorter question, reduce chat context, or disable reasoning.");
+                throw new IllegalStateException(
+                    "Local AI produced no final text. Check its Qwen reasoning setting, " +
+                    "then retry. No reply was saved.");
+            }
             if (answer.length() > 12000)
                 throw new IllegalStateException("Local AI answer exceeds history limit");
             return answer;

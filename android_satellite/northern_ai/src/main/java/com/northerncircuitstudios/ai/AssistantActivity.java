@@ -31,6 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * Independent local-first Northern Circuit AI interface.
@@ -46,7 +47,7 @@ public final class AssistantActivity extends Activity {
     private static final int ACCENT = Color.rgb(65, 199, 186);
     private static final String SETUP_COMMAND =
         "llama-server -hf ggml-org/Qwen3.5-4B-GGUF:Q4_K_M " +
-        "--alias flipper-local --host 127.0.0.1 --port 9931 -c 2048 -t 4";
+        "--alias flipper-local --host 127.0.0.1 --port 9931 -c 2048 -t 4 --reasoning off";
     private static final String GUIDE_URL =
         "https://github.com/cruefan94/Flipper-AI-Android-Satellite/blob/" +
         "feature/northern-circuit-ai-profile-v01-20261122/" +
@@ -71,8 +72,10 @@ public final class AssistantActivity extends Activity {
     private Button send;
     private ScrollView conversationScroll;
     private boolean busy = true;
+    private boolean answering = false;
     private boolean closing = false;
-    private int generation = 0;
+    private volatile int generation = 0;
+    private Future<?> activeGenerationTask;
 
     private int dp(float value) {
         return (int) (getResources().getDisplayMetrics().density * value + 0.5f);
@@ -205,7 +208,7 @@ public final class AssistantActivity extends Activity {
         LinearLayout.LayoutParams sendParams = new LinearLayout.LayoutParams(dp(80), dp(54));
         sendParams.setMargins(dp(7), 0, 0, 0);
         composer.addView(send, sendParams);
-        send.setOnClickListener(v -> ask());
+        send.setOnClickListener(v -> { if (answering) cancelAnswer(); else ask(); });
         voiceSettings = VoiceSettings.load(this);
         updateVoiceButtons();
         voiceSpeaker = new VoiceSpeaker(this, new VoiceSpeaker.Listener() {
@@ -272,32 +275,66 @@ public final class AssistantActivity extends Activity {
             chatMessages.addView(placeholder);
             return;
         }
-        for (AssistantPolicy.Entry entry : history) {
-            boolean isUser = "user".equals(entry.role);
-            LinearLayout messageGroup = new LinearLayout(this);
-            messageGroup.setOrientation(LinearLayout.VERTICAL);
-            LinearLayout.LayoutParams groupLayout =
-                new LinearLayout.LayoutParams(-1, -2);
-            groupLayout.setMargins(dp(3), dp(5), dp(3), dp(9));
-            chatMessages.addView(messageGroup, groupLayout);
+        for (AssistantPolicy.Entry entry : history) appendMessage(entry);
+        scrollToBottom();
+    }
 
-            TextView role = label(isUser ? "YOU" : "NORTHERN CIRCUIT AI",
-                11, isUser ? ACCENT : MUTED, true);
-            role.setPadding(dp(8), 0, 0, dp(5));
-            messageGroup.addView(role);
+    /** Add only the new bubble instead of rebuilding all Markdown views on every send. */
+    private void appendMessage(AssistantPolicy.Entry entry) {
+        boolean isUser = "user".equals(entry.role);
+        LinearLayout messageGroup = new LinearLayout(this);
+        messageGroup.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams groupLayout =
+            new LinearLayout.LayoutParams(-1, -2);
+        groupLayout.setMargins(dp(3), dp(5), dp(3), dp(9));
+        chatMessages.addView(messageGroup, groupLayout);
 
-            TextView message = label("", 15, TEXT, false);
-            message.setText(ChatMarkdown.render(entry.text));
-            message.setLineSpacing(dp(4), 1.06f);
-            message.setPadding(dp(13), dp(13), dp(13), dp(13));
-            message.setBackground(background(
-                isUser ? Color.rgb(32, 57, 73) : Color.rgb(32, 43, 63), 11));
-            message.setTextIsSelectable(true);
-            messageGroup.addView(message, new LinearLayout.LayoutParams(-1, -2));
-        }
+        TextView role = label(isUser ? "YOU" : "NORTHERN CIRCUIT AI",
+            11, isUser ? ACCENT : MUTED, true);
+        role.setPadding(dp(8), 0, 0, dp(5));
+        messageGroup.addView(role);
+
+        TextView message = label("", 15, TEXT, false);
+        message.setText(ChatMarkdown.render(entry.text));
+        message.setLineSpacing(dp(4), 1.06f);
+        message.setPadding(dp(13), dp(13), dp(13), dp(13));
+        message.setBackground(background(
+            isUser ? Color.rgb(32, 57, 73) : Color.rgb(32, 43, 63), 11));
+        message.setTextIsSelectable(true);
+        messageGroup.addView(message, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    private void scrollToBottom() {
         conversationScroll.post(() -> {
             if (!closing) conversationScroll.fullScroll(View.FOCUS_DOWN);
         });
+    }
+
+    private void appendNewestMessage() {
+        if (history.size() <= 1) {
+            renderHistory();
+            return;
+        }
+        if (history.size() > AssistantPolicy.MAX_STORED_ENTRIES) {
+            history.remove(0);
+            if (chatMessages.getChildCount() > 0) chatMessages.removeViewAt(0);
+        }
+        appendMessage(history.get(history.size() - 1));
+        scrollToBottom();
+    }
+
+    /** Cancel promptly on the UI thread; interrupt the worker and disconnect localhost. */
+    private void cancelAnswer() {
+        if (!answering || closing) return;
+        ++generation;
+        if (activeGenerationTask != null) activeGenerationTask.cancel(true);
+        client.cancel();
+        cloudClient.cancel();
+        answering = false;
+        busy = false;
+        send.setText("SEND");
+        send.setEnabled(true);
+        setStatus("Generation stopped. The local model may still need to finish its current token.");
     }
 
     private void checkServer() {
@@ -344,18 +381,20 @@ public final class AssistantActivity extends Activity {
 
         input.setText("");
         history.add(new AssistantPolicy.Entry("user", question));
-        renderHistory();
+        appendNewestMessage();
         final ArrayList<AssistantPolicy.Entry> snapshot =
             new ArrayList<>(AssistantPolicy.boundedHistory(history));
         final int request = ++generation;
         busy = true;
-        send.setEnabled(false);
+        answering = true;
+        send.setText("STOP");
+        send.setEnabled(true);
         setStatus(mode == CloudModePolicy.Mode.OFFLINE
             ? "Thinking locally • No cloud transmission…"
             : mode == CloudModePolicy.Mode.CLOUD
                 ? "Cloud request • Sending current message only…"
                 : "Hybrid • Trying local model; cloud fallback enabled…");
-        worker.execute(() -> {
+        activeGenerationTask = worker.submit(() -> {
             String reply = null;
             String errorMessage = null;
             String source = "";
@@ -379,6 +418,7 @@ public final class AssistantActivity extends Activity {
                     reply = client.reply(snapshot, chosenLocalModel);
                     source = "OFFLINE";
                 }
+                if (request != generation || Thread.currentThread().isInterrupted()) return;
                 snapshot.add(new AssistantPolicy.Entry("assistant", reply));
                 EncryptedChatStore.save(this, snapshot);
             } catch (Exception ex) {
@@ -400,6 +440,7 @@ public final class AssistantActivity extends Activity {
                 if (closing || request != generation) return;
                 if (answer != null) {
                     history.add(new AssistantPolicy.Entry("assistant", answer));
+                    appendNewestMessage();
                     setStatus("AI replied via " + finalSource + " • Encrypted local history");
                     // Same on-device speech output works for OFFLINE, CLOUD and HYBRID.
                     if (voiceSettings.autoRead && voiceSpeaker != null) {
@@ -409,8 +450,9 @@ public final class AssistantActivity extends Activity {
                 } else {
                     setStatus(problem == null ? "AI could not answer." : problem);
                 }
-                renderHistory();
+                answering = false;
                 busy = false;
+                send.setText("SEND");
                 send.setEnabled(true);
             });
         });
