@@ -56,6 +56,7 @@ public final class AssistantActivity extends Activity {
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private final LocalAiClient client = new LocalAiClient();
     private final CloudAiClient cloudClient = new CloudAiClient();
+    private ConversationMemoryStore memoryStore;
     private CloudSettingsStore.Settings cloudSettings =
         new CloudSettingsStore.Settings(CloudModePolicy.Mode.OFFLINE, "");
     private Button modeButton;
@@ -119,6 +120,7 @@ public final class AssistantActivity extends Activity {
         screen.setPadding(dp(14), dp(16), dp(14), dp(12));
         screen.setBackgroundColor(BG);
         setContentView(screen);
+        memoryStore = new ConversationMemoryStore(this);
         // Android 15+ enforces edge-to-edge at targetSdk 35. Own the system
         // bars and keyboard insets to keep chat and SEND visible on the S25.
         if (Build.VERSION.SDK_INT >= 30) {
@@ -224,7 +226,9 @@ public final class AssistantActivity extends Activity {
         });
         worker.execute(() -> {
             try {
-                List<AssistantPolicy.Entry> previous = EncryptedChatStore.load(this);
+                memoryStore.migrateLegacy(this);
+                List<AssistantPolicy.Entry> previous = memoryStore.recent(30);
+                long archivedCount = memoryStore.countTurns();
                 CloudSettingsStore.Settings loaded;
                 boolean settingsCorrupted = false;
                 try { loaded = CloudSettingsStore.load(this); }
@@ -242,7 +246,7 @@ public final class AssistantActivity extends Activity {
                     renderHistory();
                     setStatus(needsCloudReset
                         ? "Cloud settings unreadable. Tap CLOUD SETUP to remove and reset."
-                        : "Ready • " + cloudSettings.mode.name() +
+                        : "Memory Bank: " + archivedCount + " messages • " + cloudSettings.mode.name() +
                           " • " + (cloudSettings.mode == CloudModePolicy.Mode.OFFLINE
                               ? "Private local default" : "Cloud transmission enabled"));
                     busy = false;
@@ -253,7 +257,7 @@ public final class AssistantActivity extends Activity {
                     if (closing) return;
                     busy = false;
                     send.setEnabled(false);
-                    setStatus("Encrypted history cannot be opened. Use CLEAR CHAT to reset.");
+                    setStatus("Cannot open encrypted memory archive. Existing data was not erased.");
                 });
             }
         });
@@ -366,8 +370,13 @@ public final class AssistantActivity extends Activity {
             setStatus(error.getMessage());
             return;
         }
+        if (question.regionMatches(true, 0, "Remember that ", 0, 14)) {
+            rememberFromChat(question, question.substring(14).trim());
+            return;
+        }
         final CloudModePolicy.Mode mode = cloudSettings.mode;
         final String token = cloudSettings.token;
+        final boolean shareMemory = cloudSettings.shareMemoryWithCloud;
         final String chosenLocalModel = LocalModelPreferences.load(this);
         if (mode != CloudModePolicy.Mode.OFFLINE &&
             !CloudModePolicy.maySendToCloud(mode, token)) {
@@ -400,27 +409,29 @@ public final class AssistantActivity extends Activity {
             String source = "";
             try {
                 // Storage failure must never trigger a cloud request.
-                EncryptedChatStore.save(this, snapshot);
+                memoryStore.append(new AssistantPolicy.Entry("user", question));
+                final String remembered = memoryStore.relevantContext(question, 820);
+                final String allowedCloudMemory = shareMemory ? remembered : "";
                 if (mode == CloudModePolicy.Mode.CLOUD) {
-                    reply = cloudClient.reply(question, token);
-                    source = "CLOUD";
+                    reply = cloudClient.reply(question, token, allowedCloudMemory);
+                    source = shareMemory ? "CLOUD (MEMORY SHARED)" : "CLOUD";
                 } else if (mode == CloudModePolicy.Mode.HYBRID) {
                     try {
-                        reply = client.reply(snapshot, chosenLocalModel);
+                        reply = client.reply(snapshot, chosenLocalModel, remembered);
                         source = "LOCAL";
                     } catch (Exception localFailure) {
-                        // Selected HYBRID explicitly authorizes the current prompt
-                        // (never previous turns) to be transmitted if local fails.
-                        reply = cloudClient.reply(question, token);
-                        source = "CLOUD FALLBACK";
+                        // HYBRID permits cloud fallback. Historical excerpts are sent
+                        // only when the separately encrypted memory consent is enabled.
+                        reply = cloudClient.reply(question, token, allowedCloudMemory);
+                        source = shareMemory ? "CLOUD FALLBACK (MEMORY SHARED)"
+                            : "CLOUD FALLBACK";
                     }
                 } else {
-                    reply = client.reply(snapshot, chosenLocalModel);
+                    reply = client.reply(snapshot, chosenLocalModel, remembered);
                     source = "OFFLINE";
                 }
                 if (request != generation || Thread.currentThread().isInterrupted()) return;
-                snapshot.add(new AssistantPolicy.Entry("assistant", reply));
-                EncryptedChatStore.save(this, snapshot);
+                memoryStore.append(new AssistantPolicy.Entry("assistant", reply));
             } catch (Exception ex) {
                 errorMessage = ex instanceof java.net.ConnectException
                     ? (mode == CloudModePolicy.Mode.OFFLINE
@@ -480,7 +491,8 @@ public final class AssistantActivity extends Activity {
     private void saveMode(CloudModePolicy.Mode next) {
         if (busy || closing) return;
         final CloudSettingsStore.Settings updated =
-            new CloudSettingsStore.Settings(next, cloudSettings.token);
+            new CloudSettingsStore.Settings(next, cloudSettings.token,
+                cloudSettings.shareMemoryWithCloud);
         busy = true;
         send.setEnabled(false);
         worker.execute(() -> {
@@ -527,11 +539,13 @@ public final class AssistantActivity extends Activity {
                     .setTitle("Enable " + chosen.name() + " cloud requests?")
                     .setMessage(chosen == CloudModePolicy.Mode.CLOUD
                         ? "Every question will be sent over HTTPS to your Cloudflare Worker " +
-                          "and Gemini. Previous chat messages are not transmitted. " +
+                          "and Gemini. Previous chats remain private unless you " +
+                          "separately enable Memory sharing in the Memory Bank. " +
                           "Cloud service policies and charges may apply."
                         : "When the local model fails, the CURRENT question is " +
                           "automatically sent over HTTPS to your Cloudflare Worker " +
-                          "and Gemini. Previous chat messages are not transmitted. " +
+                          "and Gemini. Previous chats remain private unless you " +
+                          "separately enable Memory sharing in the Memory Bank. " +
                           "Cloud service policies and charges may apply.")
                     .setNegativeButton("CANCEL", null)
                     .setPositiveButton("I AGREE", (confirm, decision) -> saveMode(chosen))
@@ -575,7 +589,8 @@ public final class AssistantActivity extends Activity {
                 busy = true;
                 send.setEnabled(false);
                 CloudSettingsStore.Settings updated =
-                    new CloudSettingsStore.Settings(CloudModePolicy.Mode.OFFLINE, token);
+                    new CloudSettingsStore.Settings(CloudModePolicy.Mode.OFFLINE, token,
+                        cloudSettings.shareMemoryWithCloud);
                 worker.execute(() -> {
                     String problem = null;
                     try { CloudSettingsStore.save(this, updated); }
@@ -835,15 +850,16 @@ public final class AssistantActivity extends Activity {
     private void showSettingsCenter() {
         if (closing) return;
         String[] actions = {
-            "CHECK LOCAL", "LOCAL SETUP", "CLOUD SETUP", "TEST CLOUD", "CLEAR CHAT"
+            "MEMORY BANK", "CHECK LOCAL", "LOCAL SETUP", "CLOUD SETUP", "TEST CLOUD", "CLEAR CHAT"
         };
         new AlertDialog.Builder(this)
             .setTitle("Assistant settings")
             .setItems(actions, (dialog, index) -> {
-                if (index == 0) checkServer();
-                else if (index == 1) showSetup();
-                else if (index == 2) showCloudSetup();
-                else if (index == 3) testCloud();
+                if (index == 0) showMemoryCenter();
+                else if (index == 1) checkServer();
+                else if (index == 2) showSetup();
+                else if (index == 3) showCloudSetup();
+                else if (index == 4) testCloud();
                 else confirmClear();
             })
             .setNegativeButton("CLOSE", null).show();
@@ -852,8 +868,10 @@ public final class AssistantActivity extends Activity {
     private void confirmClear() {
         if (busy || closing) return;
         new AlertDialog.Builder(this)
-            .setTitle("Clear your encrypted conversation?")
-            .setMessage("This erases the saved messages from Northern Circuit AI on this device.")
+            .setTitle("Delete ALL encrypted conversations?")
+            .setMessage("This permanently deletes the entire conversation archive, " +
+                "not just recent messages. Explicit saved facts remain available " +
+                "until deleted separately in MEMORY BANK.")
             .setNegativeButton("KEEP", null)
             .setPositiveButton("CLEAR", (dialog, which) -> {
                 ++generation;
@@ -861,13 +879,14 @@ public final class AssistantActivity extends Activity {
                 send.setEnabled(false);
                 worker.execute(() -> {
                     try {
+                        memoryStore.clearArchive();
                         EncryptedChatStore.clear(this);
                         runOnUiThread(() -> {
                             if (closing) return;
                             if (voiceSpeaker != null) voiceSpeaker.stop();
                             history.clear();
                             renderHistory();
-                            setStatus("Encrypted chat cleared • " + cloudSettings.mode.name());
+                            setStatus("Entire encrypted conversation archive deleted.");
                             busy = false;
                             send.setEnabled(true);
                         });
@@ -917,6 +936,7 @@ public final class AssistantActivity extends Activity {
         cloudClient.cancel();
         if (voiceSpeaker != null) voiceSpeaker.shutdown();
         worker.shutdownNow();
+        if (memoryStore != null) memoryStore.close();
         super.onDestroy();
     }
 }
