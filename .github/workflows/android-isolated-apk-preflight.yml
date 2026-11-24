@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'android_satellite/**'
+      - '!android_satellite/northern_ai/**'
       - '.github/workflows/android-isolated-apk-preflight.yml'
   push:
     branches:
@@ -11,6 +12,7 @@ on:
       - ci/android-isolated-apk-pr-trigger-20261121
     paths:
       - 'android_satellite/**'
+      - '!android_satellite/northern_ai/**'
       - '.github/workflows/android-isolated-apk-preflight.yml'
 permissions:
   contents: read
