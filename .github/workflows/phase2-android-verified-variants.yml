@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'android_satellite/**'
+      - '!android_satellite/northern_ai/**'
       - '.github/workflows/phase2-android-verified-variants.yml'
   workflow_dispatch:
 
