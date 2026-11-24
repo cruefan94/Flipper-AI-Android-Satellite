@@ -1,18 +1,8 @@
 name: Cloudflare Worker contract tests
 
 on:
-  push:
-    branches:
-      - main
-      - feature/cloudflare-gemini-worker-v01
-    paths:
-      - 'cloudflare_worker/**'
-      - '.github/workflows/cloudflare-worker-tests.yml'
-  pull_request:
-    paths:
-      - 'cloudflare_worker/**'
-      - '.github/workflows/cloudflare-worker-tests.yml'
-
+  # Owner-reviewed, per-run permission required; no unattended CI jobs.
+  workflow_dispatch:
 jobs:
   test:
     runs-on: ubuntu-latest
