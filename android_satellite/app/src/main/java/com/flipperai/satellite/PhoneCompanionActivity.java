@@ -47,7 +47,6 @@ public final class PhoneCompanionActivity extends Activity {
       "AI chat: separate AI CHAT screen\n"+
       "Spoken answers: local Android text-to-speech\n"+
       "Microphone: on-device speech where supported, only after tapping TALK\n"+
-      "Radio: public internet streams on RADIO LISTENING; individual feeds unverified\n"+
       "Flipper AI BLE: connection and hardware verification remain on FLIPPER / BLE\n"+
       "GitHub: public repository viewing only; account authorization not linked",
       14,SatelliteUi.MUTED,false);

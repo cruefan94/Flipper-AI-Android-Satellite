@@ -98,11 +98,7 @@ public final class DashboardActivity extends Activity {
         ? "Model installed on this phone. Test it or change your selected AI."
         : "Install an offline AI once, then choose or test it here.",
       "INSTALL / TEST",ModelsActivity.class);
-    SatelliteUi.sectionTitle(this,content,"LISTEN & EXPLORE");
-    panelCard(content,"♫","RADIO LISTENING",
-      "Listen to permitted public radio streams and manage your favorites.",
-      "OPEN RADIO",RadioScannerActivity.class);
-    SatelliteUi.sectionTitle(this,content,"UTILITIES");
+    SatelliteUi.sectionTitle(this,content,"DEVICE STATUS & TOOLS");
     panelCard(content,"▥","PHONE COMPANION",
       "View phone battery, network and Bluetooth status.",
       "PHONE STATUS",PhoneCompanionActivity.class);
