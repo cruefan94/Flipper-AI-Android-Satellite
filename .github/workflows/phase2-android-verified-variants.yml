@@ -1,10 +1,8 @@
 name: Phase 2 Android Satellite — one tested three-variant CI bundle
 
 on:
-  pull_request:
-    paths:
-      - 'android_satellite/**'
-      - '.github/workflows/phase2-android-verified-variants.yml'
+  # Owner sign-off required before this legacy three-variant candidate is run.
+  # Not approved for integration until single-APK policy is reconciled.
   workflow_dispatch:
 
 permissions:
